@@ -494,4 +494,34 @@ def scan() -> None:
         pattern_check = "N/A"
 
     # ── Log: full checklist every scan, regardless of outcome ───────────────
-    decision = 
+    decision = f"TRADE — {trade_signal}" if trade_signal != "HOLD" else "NO TRADE — pattern conditions not met"
+    fib_check = f"{fib_zone:.5f}"
+    print(_checklist(macro_bias, bos_check, bos_bias_check, range_check, fib_check, atr_valid_check, pattern_check, decision))
+    print(
+        f"  [Detail] Structure: {structure_source} | Price: {c_last['Close']:.5f} | "
+        f"SwH: {swing_high:.5f} SwL: {swing_low:.5f}"
+    )
+
+    # ── Alert ─────────────────────────────────────────────────────────────
+    if trade_signal != "HOLD" and entry is not None:
+        msg = (
+            f"🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
+            f"*Action:* `{trade_signal}`\n"
+            f"*Bias:* `{macro_bias}` (1H EMA-100)\n"
+            f"*Structure:* `{structure_source}`\n"
+            f"*Fib 61.8% Zone:* `{fib_zone:.5f}`\n"
+            f"*SwH:* `{swing_high:.5f}` | *SwL:* `{swing_low:.5f}`\n"
+            f"*5M ATR:* `{current_atr/PIP_SIZE:.1f} pips`\n"
+            f"─────────────────────\n"
+            f"📍 *Entry:*  `{entry:.5f}`\n"
+            f"🛡️ *Stop:*   `{sl:.5f}` ({risk_pips:.1f} pips)\n"
+            f"🎯 *Target:* `{tp:.5f}` ({reward_pips:.1f} pips)\n"
+            f"📊 *RR:*     `1:{RR_RATIO}`\n"
+            f"─────────────────────\n"
+            f"⚠️ _Confirm higher-TF context before executing._"
+        )
+        send_telegram(msg)
+
+
+if __name__ == "__main__":
+    scan()

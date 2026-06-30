@@ -129,75 +129,110 @@ def find_all_fractals(df: pd.DataFrame, wing: int = 2) -> list[dict]:
     return fractals
 
 
-def detect_bos_impulse(df: pd.DataFrame, wing: int = 2) -> dict | None:
+def detect_bos_impulse(df: pd.DataFrame, wing: int = 2, atr_series: pd.Series = None,
+                        min_impulse_atr: float = 2.0) -> dict | None:
     """
-    Detects the most recent confirmed Break of Structure (BOS) and
-    returns the impulse leg that caused it.
+    Tracks market structure as a state machine, replaying fractals and
+    closes in true chronological order — not "find every BOS and keep
+    the last one found." This matters because:
 
-    Logic:
-      1. Walk through fractals chronologically.
-      2. Track the most recent swing high and swing low.
-      3. A bullish BOS = price closes above the last swing high.
-      4. A bearish BOS = price closes below the last swing low.
-      5. Once BOS confirms, the impulse leg is defined as:
-         - Bullish: from the swing LOW that preceded the break, to the
-           swing HIGH that got broken (then extended to current price
-           as the active impulse).
-         - Bearish: mirror logic.
+      1. SIGNIFICANCE FILTER: a tiny BOS inside a larger dominant impulse
+         (e.g. a 3-pip bearish poke during a strong bullish leg) should
+         NOT override the dominant trend. We only accept a BOS as a
+         genuine structure shift if its impulse range clears a minimum
+         ATR multiple — small noise breaks are ignored entirely.
 
-    Returns dict with: direction, impulse_start, impulse_end, bos_price
-    or None if no clean BOS is found.
+      2. IMPULSE EXTENSION: once a BOS is confirmed, we don't freeze the
+         impulse at the broken swing point. We continue following price
+         until either (a) an opposing BOS forms, or (b) we run out of
+         data — and we anchor the Fib to the EXTREME reached after the
+         break (highest high for bullish, lowest low for bearish), not
+         the break point itself. This matches how discretionary SMC
+         traders actually draw their Fibonacci — origin to the full
+         extent of the impulse, not origin to the structural trigger.
+
+    Returns dict with: direction, impulse_start, impulse_end (the extreme),
+    or None if no significant BOS exists in the lookback.
     """
     fractals = find_all_fractals(df, wing=wing)
     if len(fractals) < 2:
         return None
 
     closes = df["Close"].values
+    highs  = df["High"].values
+    lows   = df["Low"].values
+    n      = len(closes)
 
-    last_swing_high = None  # {"idx", "price"}
-    last_swing_low  = None
-    pending_low_before_high  = None  # tracks the low preceding a swing high (for bullish impulse start)
-    pending_high_before_low  = None  # tracks the high preceding a swing low (for bearish impulse start)
+    # Average True Range used as the significance threshold — if not
+    # supplied, fall back to a simple high-low range proxy.
+    if atr_series is not None and not atr_series.empty:
+        avg_atr = atr_series.dropna().mean()
+    else:
+        avg_atr = (df["High"] - df["Low"]).mean()
 
-    confirmed_bos = None
+    active_direction   = None   # "BULLISH" | "BEARISH" — current dominant structure
+    impulse_origin      = None  # price where the current dominant impulse started
+    impulse_origin_idx  = None
+    last_swing_high      = None
+    last_swing_low       = None
+    pending_low_before_high = None
+    pending_high_before_low = None
 
     for f in fractals:
         if f["type"] == "high":
-            # Before updating, check if this segment + subsequent price action broke the PRIOR swing low
             pending_high_before_low = f
             last_swing_high = f
         else:
             pending_low_before_high = f
             last_swing_low = f
 
-        # Check for BOS using closes AFTER this fractal's index
+        # ── Check for a fresh BULLISH BOS ────────────────────────────────
         if last_swing_high is not None:
-            future_closes = closes[last_swing_high["idx"] + 1:]
-            broke_idx_rel = next((j for j, c in enumerate(future_closes) if c > last_swing_high["price"]), None)
-            if broke_idx_rel is not None and pending_low_before_high is not None \
+            future = closes[last_swing_high["idx"] + 1:]
+            broke_rel = next((j for j, c in enumerate(future) if c > last_swing_high["price"]), None)
+            if broke_rel is not None and pending_low_before_high is not None \
                and pending_low_before_high["idx"] < last_swing_high["idx"]:
-                confirmed_bos = {
-                    "direction":      "BULLISH",
-                    "impulse_start":  pending_low_before_high["price"],   # swing low (origin)
-                    "impulse_end":    last_swing_high["price"],            # swing high (broken)
-                    "bos_price":      last_swing_high["price"],
-                    "break_idx":      last_swing_high["idx"] + 1 + broke_idx_rel,
-                }
 
+                candidate_range = last_swing_high["price"] - pending_low_before_high["price"]
+                if candidate_range >= min_impulse_atr * avg_atr:
+                    active_direction  = "BULLISH"
+                    impulse_origin     = pending_low_before_high["price"]
+                    impulse_origin_idx = pending_low_before_high["idx"]
+
+        # ── Check for a fresh BEARISH BOS ────────────────────────────────
         if last_swing_low is not None:
-            future_closes = closes[last_swing_low["idx"] + 1:]
-            broke_idx_rel = next((j for j, c in enumerate(future_closes) if c < last_swing_low["price"]), None)
-            if broke_idx_rel is not None and pending_high_before_low is not None \
+            future = closes[last_swing_low["idx"] + 1:]
+            broke_rel = next((j for j, c in enumerate(future) if c < last_swing_low["price"]), None)
+            if broke_rel is not None and pending_high_before_low is not None \
                and pending_high_before_low["idx"] < last_swing_low["idx"]:
-                confirmed_bos = {
-                    "direction":      "BEARISH",
-                    "impulse_start":  pending_high_before_low["price"],   # swing high (origin)
-                    "impulse_end":    last_swing_low["price"],             # swing low (broken)
-                    "bos_price":      last_swing_low["price"],
-                    "break_idx":      last_swing_low["idx"] + 1 + broke_idx_rel,
-                }
 
-    return confirmed_bos
+                candidate_range = pending_high_before_low["price"] - last_swing_low["price"]
+                if candidate_range >= min_impulse_atr * avg_atr:
+                    active_direction  = "BEARISH"
+                    impulse_origin     = pending_high_before_low["price"]
+                    impulse_origin_idx = pending_high_before_low["idx"]
+
+    if active_direction is None:
+        return None
+
+    # ── Extend impulse to the post-break extreme ────────────────────────
+    # Walk forward from the impulse origin to the end of the lookback and
+    # find the actual extreme reached — not just the level that triggered
+    # the BOS. This is the core fix: the Fib anchors to where the move
+    # actually ended (so far), not where it merely crossed prior structure.
+    segment_highs = highs[impulse_origin_idx:]
+    segment_lows  = lows[impulse_origin_idx:]
+
+    if active_direction == "BULLISH":
+        impulse_extreme = float(segment_highs.max())
+    else:
+        impulse_extreme = float(segment_lows.min())
+
+    return {
+        "direction":     active_direction,
+        "impulse_start": impulse_origin,
+        "impulse_end":   impulse_extreme,
+    }
 
 
 def fractal_swings(df: pd.DataFrame, wing: int = 2) -> tuple[float, float]:
@@ -259,7 +294,8 @@ def scan() -> None:
     # drawn on the actual impulse leg that broke structure — not two unrelated
     # swings that happen to be the most recent fractals in a noisy lookback.
     lookback = df_15m.tail(SWING_LOOKBACK_15)
-    bos = detect_bos_impulse(lookback, wing=FRACTAL_WING)
+    lookback_atr = atr(lookback, period=14)
+    bos = detect_bos_impulse(lookback, wing=FRACTAL_WING, atr_series=lookback_atr, min_impulse_atr=2.0)
 
     structure_source = "BOS"
     if bos is not None:
@@ -381,4 +417,4 @@ def scan() -> None:
 
 if __name__ == "__main__":
     scan()
-    
+                            

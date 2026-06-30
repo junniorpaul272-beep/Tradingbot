@@ -1,4 +1,4 @@
-            """
+ """
 GBPUSD SMC Scanner — GitHub Actions Edition
 ============================================
 - Data: Twelve Data API (800 calls/day free)

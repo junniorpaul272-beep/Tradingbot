@@ -1,10 +1,29 @@
-"""
+            """
 GBPUSD SMC Scanner — GitHub Actions Edition
 ============================================
 - Data: Twelve Data API (800 calls/day free)
 - Runner: GitHub Actions (free, never goes offline)
 - Alerts: Telegram
 - Stateless: each run is independent, no server needed
+
+CHANGELOG (this version):
+  - Structure detection now tracks the DOMINANT impulse leg (the one a
+    discretionary SMC trader would actually draw a Fib on), not just the
+    most recent external BOS. A leg stays dominant until it's invalidated
+    by an origin violation or a deep retracement — a new same-direction
+    break extends it, a smaller opposite-direction break inside it is
+    ignored as internal structure. (Merged from the earlier dominant-leg
+    state machine + the single-pass fractal ingestion from the BOS-only
+    version.)
+  - Fixed origin drift: same-direction continuations no longer reassign
+    the impulse origin — only a genuine new dominant leg does.
+  - Fixed engulfing check: was comparing body SIZE only (body_last >
+    body_prev), which let candles that don't actually cover the prior
+    candle's range pass as "engulfing." Now checks real open/close
+    containment.
+  - Every scan now prints a full checklist (bias, BOS, sync, range, ATR,
+    pattern) regardless of outcome, so a NO TRADE always shows exactly
+    which gate rejected it instead of a single opaque skip line.
 """
 
 import os
@@ -30,9 +49,10 @@ SL_MIN_PIPS    = 5
 ATR_ENGULF_MIN = 0.5
 
 # Structure params
-HTF_BIAS_MIN_BARS = 100
-SWING_LOOKBACK_15 = 48
-FRACTAL_WING      = 2
+HTF_BIAS_MIN_BARS   = 100
+SWING_LOOKBACK_15    = 48
+FRACTAL_WING         = 2
+INVALIDATION_RETRACE = 0.786   # depth at which the dominant leg is considered dead
 
 
 # ─────────────────────────────────────────────
@@ -107,9 +127,8 @@ def find_all_fractals(df: pd.DataFrame, wing: int = 2) -> list[dict]:
     """
     Finds ALL confirmed fractal swing points in chronological order,
     not just the most recent. Each entry is tagged as 'high' or 'low'.
-
-    This is the foundation for BOS detection — we need the full sequence
-    of swings to identify which one gets broken.
+    This is the raw material BOS detection walks through — the full
+    sequence of swings, not just whatever is most recent.
     """
     highs = df["High"].values
     lows  = df["Low"].values
@@ -129,33 +148,37 @@ def find_all_fractals(df: pd.DataFrame, wing: int = 2) -> list[dict]:
     return fractals
 
 
-def detect_bos_impulse(df: pd.DataFrame, wing: int = 2) -> dict | None:
+def detect_bos_impulse(
+    df: pd.DataFrame,
+    wing: int = 2,
+    invalidation_retrace: float = INVALIDATION_RETRACE,
+) -> dict | None:
     """
-    Single-pass market structure state machine that distinguishes
-    EXTERNAL structure (the dominant trend institutions are likely
-    respecting) from INTERNAL structure (minor swings/pullbacks inside
-    a single leg of that trend).
+    Tracks the DOMINANT impulse leg, not just "the latest external BOS."
 
-    Why this matters: a small BOS that merely clears the nearest fractal
-    is not the same as a BOS that clears the market's actual external
-    extreme. A retracement inside a strong bullish leg can easily form
-    an ATR-significant "small bullish BOS" without ever threatening the
-    dominant trend — a discretionary trader keeps reading that as a
-    pullback inside the larger impulse, not a new structure.
+    Every confirmed external break is a CANDIDATE leg. The dominant leg
+    only changes when the current dominant leg is INVALIDATED:
 
-    The fix: track a running EXTERNAL high and EXTERNAL low as we walk
-    forward through candles. Structure only flips when price closes
-    beyond the running external extreme — not merely beyond the most
-    recent minor fractal. Everything that happens between flips is
-    internal structure and is ignored for direction purposes.
+      - Origin violation: price trades back through the dominant leg's
+        origin point. The leg has been fully round-tripped — dead.
+      - Retracement violation: price retraces beyond `invalidation_retrace`
+        (default 78.6%) of the leg's range. A pullback into the 61.8%
+        entry zone alone does NOT invalidate the leg — only a deeper
+        retrace does.
 
-    This processes each candle exactly once (true single pass) rather
-    than repeatedly slicing/scanning the array per fractal, which keeps
-    it scalable if the lookback window is ever expanded.
+    Until invalidated, the dominant leg stays dominant even if a smaller,
+    more recent break has technically formed in the opposite direction
+    (internal structure / a pullback) or even the same direction (in
+    which case the leg just extends — its origin never moves).
 
-    Returns dict with: direction, impulse_start, impulse_end (the
-    external extreme reached so far), or None if no external BOS has
-    occurred in the lookback.
+    This is the A→B vs C→D distinction: C→D only takes over once A→B is
+    invalidated by one of the two rules above, never just because D is
+    the newest break. It's a heuristic approximation of discretionary
+    "this still looks like the same leg" judgment, not a perfect replica
+    of it.
+
+    Returns dict with: direction, impulse_start, impulse_end (current
+    extreme of the dominant leg), or None if no leg has ever qualified.
     """
     fractals = find_all_fractals(df, wing=wing)
     if len(fractals) < 2:
@@ -164,30 +187,22 @@ def detect_bos_impulse(df: pd.DataFrame, wing: int = 2) -> dict | None:
     closes = df["Close"].values
     highs  = df["High"].values
     lows   = df["Low"].values
+    n      = len(df)
 
-    # State: the currently confirmed dominant direction and the swing
-    # that originated the active impulse. None until the first external
-    # BOS is confirmed.
-    direction        = None   # "BULLISH" | "BEARISH"
-    impulse_origin    = None  # price of the swing that started the dominant leg
-    impulse_origin_idx = None
-
-    # Running external extremes — these only ratchet in the direction of
-    # the confirmed trend. A BOS must clear THESE, not just the nearest
-    # fractal, to count as a genuine structure shift.
+    # Running external extremes — used only to detect NEW candidate legs,
+    # not to immediately promote them to dominant.
     external_high = None
     external_low  = None
+    candidate_low_origin  = None
+    candidate_high_origin = None
 
-    # Candidate origins — the most recent opposite-type fractal seen,
-    # used as the impulse origin if/when a BOS confirms from here.
-    candidate_low_origin  = None  # {"idx", "price"} — low preceding a potential bullish break
-    candidate_high_origin = None  # {"idx", "price"} — high preceding a potential bearish break
+    # The currently DOMINANT leg, if any.
+    dominant = None  # {"direction", "origin", "origin_idx", "extreme"}
 
     fractal_iter = iter(fractals)
     next_fractal = next(fractal_iter, None)
 
-    for i in range(len(df)):
-        # Ingest any fractals confirmed at this index (process in order)
+    for i in range(n):
         while next_fractal is not None and next_fractal["idx"] == i:
             if next_fractal["type"] == "high":
                 candidate_high_origin = next_fractal
@@ -200,54 +215,92 @@ def detect_bos_impulse(df: pd.DataFrame, wing: int = 2) -> dict | None:
             next_fractal = next(fractal_iter, None)
 
         close = closes[i]
+        high  = highs[i]
+        low   = lows[i]
 
-        # ── Check for EXTERNAL bullish BOS: close beyond running external high ──
-        if external_high is not None and close > external_high:
-            if candidate_low_origin is not None:
-                direction           = "BULLISH"
-                impulse_origin        = candidate_low_origin["price"]
-                impulse_origin_idx    = candidate_low_origin["idx"]
-                external_high         = close   # ratchet forward immediately
-                external_low          = None    # reset opposite side; will reform after this leg
+        # ── Check invalidation of the current dominant leg FIRST ────────
+        # A leg must be invalidated before any new candidate can replace it.
+        if dominant is not None:
+            if dominant["direction"] == "BULLISH":
+                origin_violated = low <= dominant["origin"]
+                leg_range = dominant["extreme"] - dominant["origin"]
+                retrace_violated = (
+                    leg_range > 0 and
+                    (dominant["extreme"] - low) / leg_range >= invalidation_retrace
+                )
+                if origin_violated or retrace_violated:
+                    dominant = None
+            else:  # BEARISH
+                origin_violated = high >= dominant["origin"]
+                leg_range = dominant["origin"] - dominant["extreme"]
+                retrace_violated = (
+                    leg_range > 0 and
+                    (high - dominant["extreme"]) / leg_range >= invalidation_retrace
+                )
+                if origin_violated or retrace_violated:
+                    dominant = None
 
-        # ── Check for EXTERNAL bearish BOS: close beyond running external low ──
-        if external_low is not None and close < external_low:
-            if candidate_high_origin is not None:
-                direction           = "BEARISH"
-                impulse_origin        = candidate_high_origin["price"]
-                impulse_origin_idx    = candidate_high_origin["idx"]
-                external_low          = close
-                external_high         = None
+        # ── New candidate external break — only adopt as dominant if ────
+        # ── there currently is none; same-direction just extends it ─────
+        new_candidate = None
 
-        # Continuously ratchet the external extreme in the active
-        # direction so later candles must clear an updated bar, not the
-        # original break level — this keeps "external" meaningful as
-        # the leg extends.
-        if direction == "BULLISH" and external_high is not None:
-            external_high = max(external_high, highs[i])
-        if direction == "BEARISH" and external_low is not None:
-            external_low = min(external_low, lows[i])
+        if external_high is not None and close > external_high and candidate_low_origin is not None:
+            new_candidate = {
+                "direction":  "BULLISH",
+                "origin":     candidate_low_origin["price"],
+                "origin_idx": candidate_low_origin["idx"],
+                "extreme":    close,
+            }
+            external_high = close
+            external_low  = None
 
-    if direction is None:
+        if external_low is not None and close < external_low and candidate_high_origin is not None:
+            new_candidate = {
+                "direction":  "BEARISH",
+                "origin":     candidate_high_origin["price"],
+                "origin_idx": candidate_high_origin["idx"],
+                "extreme":    close,
+            }
+            external_low  = close
+            external_high = None
+
+        if new_candidate is not None:
+            if dominant is None:
+                # No dominant leg active (none ever formed, or it was
+                # just invalidated this same bar) — this candidate
+                # becomes dominant by default.
+                dominant = new_candidate
+            elif new_candidate["direction"] == dominant["direction"]:
+                # Same-direction continuation — the dominant leg
+                # extending further, not a new leg. Keep the ORIGINAL
+                # origin; the extreme ratchets below regardless.
+                pass
+            # else: opposite-direction candidate while dominant leg is
+            # still valid — internal structure (a pullback that hasn't
+            # invalidated the dominant leg). Ignored.
+
+        # Ratchet the dominant leg's extreme forward as price continues
+        if dominant is not None:
+            if dominant["direction"] == "BULLISH":
+                dominant["extreme"] = max(dominant["extreme"], high)
+            else:
+                dominant["extreme"] = min(dominant["extreme"], low)
+
+    if dominant is None:
         return None
 
-    # ── Final impulse extreme: the true high/low reached since origin ───
-    segment_highs = highs[impulse_origin_idx:]
-    segment_lows  = lows[impulse_origin_idx:]
-    impulse_extreme = float(segment_highs.max()) if direction == "BULLISH" else float(segment_lows.min())
-
     return {
-        "direction":     direction,
-        "impulse_start": impulse_origin,
-        "impulse_end":   impulse_extreme,
+        "direction":     dominant["direction"],
+        "impulse_start": dominant["origin"],
+        "impulse_end":   dominant["extreme"],
     }
 
 
 def fractal_swings(df: pd.DataFrame, wing: int = 2) -> tuple[float, float]:
     """
-    LEGACY fallback — kept only for cases where no BOS can be confirmed
-    (e.g. choppy/ranging conditions). Most recent confirmed fractal
-    swing high and low, found independently.
+    LEGACY fallback — kept only for cases where no dominant leg can be
+    confirmed (e.g. choppy/ranging conditions). Most recent confirmed
+    fractal swing high and low, found independently.
     """
     highs = df["High"].values
     lows  = df["Low"].values
@@ -269,6 +322,25 @@ def fractal_swings(df: pd.DataFrame, wing: int = 2) -> tuple[float, float]:
     return (
         last_sh if last_sh is not None else df["High"].max(),
         last_sl if last_sl is not None else df["Low"].min(),
+    )
+
+
+def _checklist(bias, bos_check, bos_bias_check, range_check, fib_check, atr_check, pattern_check, decision):
+    """
+    Full filter checklist for every scan, win or lose — so it's always
+    clear exactly which gate passed or rejected the setup, rather than
+    a single opaque skip message.
+    """
+    return (
+        f"\n"
+        f"  1H Bias:       {bias} {'✅' if bias in ('BULLISH','BEARISH') else '❌'}\n"
+        f"  BOS:           {bos_check}\n"
+        f"  BOS/Bias Sync: {bos_bias_check}\n"
+        f"  Range Filter:  {range_check}\n"
+        f"  Fib Zone:      {fib_check}\n"
+        f"  ATR Filter:    {atr_check}\n"
+        f"  Pattern Check: {pattern_check}\n"
+        f"  Decision:      {decision}\n"
     )
 
 
@@ -296,40 +368,43 @@ def scan() -> None:
     df_1h["EMA_100"] = df_1h["Close"].ewm(span=100, adjust=False).mean()
     macro_bias = "BULLISH" if df_1h["Close"].iloc[-1] > df_1h["EMA_100"].iloc[-1] else "BEARISH"
 
-    # ── Structure: BOS-Confirmed Impulse (preferred) ────────────────────────
-    # Instead of blindly taking the most recent fractal high/low independently,
-    # we now require a confirmed Break of Structure. This ensures the Fib is
-    # drawn on the actual impulse leg that broke structure — not two unrelated
-    # swings that happen to be the most recent fractals in a noisy lookback.
+    # ── Structure: Dominant Impulse Leg (preferred) ─────────────────────────
     lookback = df_15m.tail(SWING_LOOKBACK_15)
     bos = detect_bos_impulse(lookback, wing=FRACTAL_WING)
 
-    structure_source = "BOS"
-    if bos is not None:
-        # Bias must agree with the confirmed BOS direction — if they conflict,
-        # the 1H trend and 15M structure are out of sync, so we skip rather
-        # than force a trade against fresh structural evidence.
-        if (macro_bias == "BULLISH" and bos["direction"] != "BULLISH") or \
-           (macro_bias == "BEARISH" and bos["direction"] != "BEARISH"):
-            print(f"BOS direction ({bos['direction']}) conflicts with 1H bias ({macro_bias}). Skipping.")
-            return
+    bos_check         = "❌ N/A"
+    bos_bias_check    = "❌ N/A"
+    structure_source  = "FALLBACK_FRACTAL"
 
-        if bos["direction"] == "BULLISH":
-            swing_low  = bos["impulse_start"]
-            swing_high = bos["impulse_end"]
+    if bos is not None:
+        bos_check = f"{bos['direction']} {'✅' if bos['direction'] == macro_bias else '⚠️'}"
+
+        if bos["direction"] == macro_bias:
+            # Dominant leg agrees with 1H bias — use it as structure.
+            bos_bias_check    = "PASS ✅"
+            structure_source  = "BOS"
+            if bos["direction"] == "BULLISH":
+                swing_low  = bos["impulse_start"]
+                swing_high = bos["impulse_end"]
+            else:
+                swing_high = bos["impulse_start"]
+                swing_low  = bos["impulse_end"]
         else:
-            swing_high = bos["impulse_start"]
-            swing_low  = bos["impulse_end"]
+            # Dominant leg disagrees with 1H bias — useful context
+            # (counter-trend structure forming) but not a hard veto.
+            # Fall back to fractal detection rather than refusing to
+            # scan entirely.
+            bos_bias_check = "CONFLICT ⚠️ (using fallback structure)"
+            swing_high, swing_low = fractal_swings(lookback, wing=FRACTAL_WING)
     else:
-        # No clean BOS found in lookback (choppy/ranging market) — fall back
-        # to legacy fractal detection rather than refusing to scan entirely.
-        structure_source = "FALLBACK_FRACTAL"
+        bos_bias_check = "N/A (no dominant leg found)"
         swing_high, swing_low = fractal_swings(lookback, wing=FRACTAL_WING)
 
     structural_range = swing_high - swing_low
 
+    range_check = "PASS ✅" if structural_range >= (5 * PIP_SIZE) else "FAIL ❌ (range < 5 pips)"
     if structural_range < (5 * PIP_SIZE):
-        print("Range too compressed. No setup.")
+        print(_checklist(macro_bias, bos_check, bos_bias_check, range_check, "N/A", "N/A", "NO TRADE — range too compressed"))
         return
 
     # ── Fibonacci Zone ──────────────────────────────────────────────────────
@@ -342,8 +417,9 @@ def scan() -> None:
     df_5m["ATR"] = atr(df_5m, period=14)
     current_atr  = df_5m["ATR"].iloc[-1]
 
+    atr_valid_check = "PASS ✅" if (not pd.isna(current_atr) and current_atr != 0) else "FAIL ❌"
     if pd.isna(current_atr) or current_atr == 0:
-        print("ATR invalid. Skipping.")
+        print(_checklist(macro_bias, bos_check, bos_bias_check, range_check, atr_valid_check, "N/A", "NO TRADE — ATR invalid"))
         return
 
     # ── Execution Matrix ─────────────────────────────────────────────────────
@@ -351,7 +427,6 @@ def scan() -> None:
     c_last = df_5m.iloc[-1]
     c_prev = df_5m.iloc[-2]
 
-    body_prev     = abs(c_prev["Close"] - c_prev["Open"])
     body_last     = abs(c_last["Close"] - c_last["Open"])
     atr_threshold = ATR_ENGULF_MIN * current_atr
 
@@ -359,12 +434,14 @@ def scan() -> None:
     entry = sl = tp = risk_pips = reward_pips = None
 
     if macro_bias == "BULLISH":
-        lowest_wick  = min(c_prev["Low"], c_last["Low"])
-        in_zone      = lowest_wick <= fib_zone
-        bear_prev    = c_prev["Close"] < c_prev["Open"]
-        bull_last    = c_last["Close"] > c_last["Open"]
-        engulfs      = body_last > body_prev
-        real_body    = body_last > atr_threshold
+        lowest_wick = min(c_prev["Low"], c_last["Low"])
+        in_zone     = lowest_wick <= fib_zone
+        bear_prev   = c_prev["Close"] < c_prev["Open"]
+        bull_last   = c_last["Close"] > c_last["Open"]
+        # Real bullish engulf: last candle's body fully contains prev's
+        # open/close range, not just a bigger body somewhere on the chart.
+        engulfs     = c_last["Close"] >= c_prev["Open"] and c_last["Open"] <= c_prev["Close"]
+        real_body   = body_last > atr_threshold
 
         if in_zone and bear_prev and bull_last and engulfs and real_body:
             trade_signal = "BUY"
@@ -375,13 +452,24 @@ def scan() -> None:
             tp           = entry + (RR_RATIO * risk)
             risk_pips    = risk / PIP_SIZE
             reward_pips  = (RR_RATIO * risk) / PIP_SIZE
+            pattern_check = "PASS ✅"
+        else:
+            fails = []
+            if not in_zone:   fails.append("price not in discount zone")
+            if not bear_prev: fails.append("prev candle not bearish")
+            if not bull_last: fails.append("last candle not bullish")
+            if not engulfs:   fails.append("doesn't engulf prev body")
+            if not real_body: fails.append("body too small vs ATR")
+            pattern_check = f"FAIL ❌ ({', '.join(fails)})"
 
     elif macro_bias == "BEARISH":
         highest_wick = max(c_prev["High"], c_last["High"])
         in_zone      = highest_wick >= fib_zone
         bull_prev    = c_prev["Close"] > c_prev["Open"]
         bear_last    = c_last["Close"] < c_last["Open"]
-        engulfs      = body_last > body_prev
+        # Real bearish engulf: last candle's body fully contains prev's
+        # open/close range.
+        engulfs      = c_last["Open"] >= c_prev["Close"] and c_last["Close"] <= c_prev["Open"]
         real_body    = body_last > atr_threshold
 
         if in_zone and bull_prev and bear_last and engulfs and real_body:
@@ -393,35 +481,17 @@ def scan() -> None:
             tp           = entry - (RR_RATIO * risk)
             risk_pips    = risk / PIP_SIZE
             reward_pips  = (RR_RATIO * risk) / PIP_SIZE
+            pattern_check = "PASS ✅"
+        else:
+            fails = []
+            if not in_zone:   fails.append("price not in premium zone")
+            if not bull_prev: fails.append("prev candle not bullish")
+            if not bear_last: fails.append("last candle not bearish")
+            if not engulfs:   fails.append("doesn't engulf prev body")
+            if not real_body: fails.append("body too small vs ATR")
+            pattern_check = f"FAIL ❌ ({', '.join(fails)})"
+    else:
+        pattern_check = "N/A"
 
-    # ── Log ─────────────────────────────────────────────────────────────────
-    print(
-        f"Bias: {macro_bias} | Structure: {structure_source} | Price: {c_last['Close']:.5f} | "
-        f"Fib: {fib_zone:.5f} | ATR: {current_atr/PIP_SIZE:.1f}p | "
-        f"SwH: {swing_high:.5f} SwL: {swing_low:.5f} | Signal: {trade_signal}"
-    )
-
-    # ── Alert ────────────────────────────────────────────────────────────────
-    if trade_signal != "HOLD" and entry is not None:
-        msg = (
-            f"🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
-            f"*Action:* `{trade_signal}`\n"
-            f"*Bias:* `{macro_bias}` (1H EMA-100)\n"
-            f"*Structure:* `{structure_source}`\n"
-            f"*Fib 61.8% Zone:* `{fib_zone:.5f}`\n"
-            f"*SwH:* `{swing_high:.5f}` | *SwL:* `{swing_low:.5f}`\n"
-            f"*5M ATR:* `{current_atr/PIP_SIZE:.1f} pips`\n"
-            f"─────────────────────\n"
-            f"📍 *Entry:*  `{entry:.5f}`\n"
-            f"🛡️ *Stop:*   `{sl:.5f}` ({risk_pips:.1f} pips)\n"
-            f"🎯 *Target:* `{tp:.5f}` ({reward_pips:.1f} pips)\n"
-            f"📊 *RR:*     `1:{RR_RATIO}`\n"
-            f"─────────────────────\n"
-            f"⚠️ _Confirm higher-TF context before executing._"
-        )
-        send_telegram(msg)
-
-
-if __name__ == "__main__":
-    scan()
-                        
+    # ── Log: full checklist every scan, regardless of outcome ───────────────
+    decision = 

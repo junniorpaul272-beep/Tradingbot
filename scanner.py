@@ -1,10 +1,13 @@
- """
+"""
 GBPUSD SMC Scanner — GitHub Actions Edition
 ============================================
 - Data: Twelve Data API (800 calls/day free)
 - Runner: GitHub Actions (free, never goes offline)
 - Alerts: Telegram
 - Stateless: each run is independent, no server needed
+"""
+
+
 
 CHANGELOG (this version):
   - Structure detection now tracks the DOMINANT impulse leg (the one a

@@ -32,60 +32,32 @@ PIP_SIZE = 0.0001
 RR_RATIO = 3.0
 SL_ATR_MULT = 1.5
 SL_MIN_PIPS = 5
-# How big the 5M candle body must be vs current ATR to count as a "real"
-# engulfing candle rather than noise. Lowered from 0.5 - that was filtering
-# out almost everything on a pair that often makes valid moves on smaller
-# bodies. If you're still seeing zero signals over a few days, try 0.3.
-# If you start getting weak/marginal signals, push it back up toward 0.5.
 ATR_ENGULF_MIN = 0.4
 
 # Structure params
 HTF_BIAS_MIN_BARS = 100
 SWING_LOOKBACK_15 = 48
 FRACTAL_WING = 2
-INVALIDATION_RETRACE = 0.786  # depth at which the dominant leg is considered dead
+INVALIDATION_RETRACE = 0.786
 
-# --- Consolidation detection (1H) ---
-# Price-vs-EMA alone forces a BULLISH/BEARISH call even when the market
-# is just chopping sideways around the EMA. These two checks have to BOTH
-# be true for the bot to instead call it CONSOLIDATION and skip the run:
-#   - price sits within HTF_CONSOLIDATION_ATR_MULT * (1H ATR) of the EMA
-#   - the EMA itself has moved less than HTF_EMA_FLAT_THRESHOLD * (1H ATR)
-#     over the last HTF_EMA_SLOPE_BARS bars (i.e. it's flat, not sloping)
+# Consolidation detection (1H)
 HTF_EMA_SLOPE_BARS = 10
 HTF_CONSOLIDATION_ATR_MULT = 0.5
 HTF_EMA_FLAT_THRESHOLD = 0.15
 
-# --- Adaptive entry zone ---
-# Instead of one fixed pullback ratio, the entry zone now slides between
-# a shallow ratio (catches continuation early) and a deep ratio (waits for
-# a fuller retrace), based on whether 5M volatility is currently running
-# hot or cold relative to its own recent average. See adaptive_fib_ratio().
-FIB_ZONE_NEAR = 0.382  # shallow end - used when the market is moving fast
-FIB_ZONE_FAR = 0.618   # deep end - used when the market is calm
+# Adaptive entry zone
+FIB_ZONE_NEAR = 0.382
+FIB_ZONE_FAR = 0.618
 
-# How many times bigger than its own 20-bar average range a single candle
-# has to be before it's treated as a probable bad tick / API glitch and
-# the run is skipped rather than traded on.
+# Data sanity
 DATA_SPIKE_ATR_MULT = 8
 
-# File used to remember "I'm currently watching a setup" between runs.
-# GitHub Actions runs are stateless by default - each run starts fresh -
-# so this file gets committed back to the repo at the end of every run
-# (see the workflow yml) to carry that memory forward to the next run.
+# State memory
 STATE_FILE = "state.json"
-
-# Bounded memory: a saved leg older than this is treated as stale and
-# ignored, so the bot never leans on structure from a much earlier
-# session. It only bridges short gaps between runs, not "remember
-# everything forever".
 STATE_MAX_AGE_HOURS = 6
 
 
 def load_state():
-    """Reads the saved watch state. Returns a default 'nothing watched'
-    state if the file doesn't exist yet, can't be read, or has expired
-    past STATE_MAX_AGE_HOURS."""
     try:
         with open(STATE_FILE, "r") as f:
             state = json.load(f)
@@ -106,8 +78,6 @@ def load_state():
 
 
 def save_state(state):
-    """Writes the watch state back to disk, stamped with the current
-    time so load_state() can tell later whether it's gone stale."""
     state = dict(state)
     state["timestamp"] = datetime.now(timezone.utc).isoformat()
     try:
@@ -139,10 +109,6 @@ def send_telegram(message):
 # DATA - Twelve Data
 # -----------------------------------------------
 def fetch_ohlc(interval, outputsize=200):
-    """
-    Fetches OHLC data from Twelve Data.
-    interval: '5min' | '15min' | '1h'
-    """
     url = "https://api.twelvedata.com/time_series"
     params = {
         "symbol": PAIR,
@@ -168,7 +134,6 @@ def fetch_ohlc(interval, outputsize=200):
         "open": "Open", "high": "High", "low": "Low", "close": "Close"
     }).astype(float).sort_index()
 
-    # Drop last bar - it's the currently forming candle
     return df.iloc[:-1]
 
 
@@ -186,10 +151,6 @@ def atr(df, period=14):
 
 
 def find_all_fractals(df, wing=2):
-    """
-    Finds ALL confirmed fractal swing points in chronological order,
-    not just the most recent. Each entry is tagged as 'high' or 'low'.
-    """
     highs = df["High"].values
     lows = df["Low"].values
     n = len(highs)
@@ -209,25 +170,6 @@ def find_all_fractals(df, wing=2):
 
 
 def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
-    """
-    Tracks the DOMINANT impulse leg, not just the latest external BOS.
-
-    Every confirmed external break is a CANDIDATE leg. The dominant leg
-    only changes when the current dominant leg is INVALIDATED:
-
-      - Origin violation: price trades back through the dominant leg's
-        origin point. The leg has been fully round-tripped - dead.
-      - Retracement violation: price retraces beyond `invalidation_retrace`
-        (default 78.6%) of the leg's range.
-
-    Until invalidated, the dominant leg stays dominant even if a smaller,
-    more recent break has technically formed in the opposite direction
-    (internal structure) or the same direction (in which case the leg
-    just extends - its origin never moves).
-
-    Returns dict with: direction, impulse_start, impulse_end, or None
-    if no leg has ever qualified.
-    """
     fractals = find_all_fractals(df, wing=wing)
     if len(fractals) < 2:
         return None
@@ -241,8 +183,7 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
     external_low = None
     candidate_low_origin = None
     candidate_high_origin = None
-
-    dominant = None  # {"direction", "origin", "origin_idx", "extreme"}
+    dominant = None
 
     fractal_iter = iter(fractals)
     next_fractal = next(fractal_iter, None)
@@ -263,7 +204,6 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
         high = highs[i]
         low = lows[i]
 
-        # Check invalidation of the current dominant leg first.
         if dominant is not None:
             if dominant["direction"] == "BULLISH":
                 origin_violated = low <= dominant["origin"]
@@ -274,7 +214,7 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
                 )
                 if origin_violated or retrace_violated:
                     dominant = None
-            else:  # BEARISH
+            else:
                 origin_violated = high >= dominant["origin"]
                 leg_range = dominant["origin"] - dominant["extreme"]
                 retrace_violated = (
@@ -284,7 +224,6 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
                 if origin_violated or retrace_violated:
                     dominant = None
 
-        # New candidate external break.
         new_candidate = None
 
         if external_high is not None and close > external_high and candidate_low_origin is not None:
@@ -311,11 +250,8 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
             if dominant is None:
                 dominant = new_candidate
             elif new_candidate["direction"] == dominant["direction"]:
-                # Same-direction continuation - keep original origin.
                 pass
-            # else: opposite-direction candidate while still valid - ignored.
 
-        # Ratchet the dominant leg's extreme forward.
         if dominant is not None:
             if dominant["direction"] == "BULLISH":
                 dominant["extreme"] = max(dominant["extreme"], high)
@@ -333,10 +269,6 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
 
 
 def fractal_swings(df, wing=2):
-    """
-    LEGACY fallback - kept only for cases where no dominant leg can be
-    confirmed (e.g. choppy/ranging conditions).
-    """
     highs = df["High"].values
     lows = df["Low"].values
     n = len(highs)
@@ -363,19 +295,6 @@ def fractal_swings(df, wing=2):
 def compute_macro_bias(df_1h, slope_bars=HTF_EMA_SLOPE_BARS,
                         flat_atr_mult=HTF_CONSOLIDATION_ATR_MULT,
                         flat_slope_atr_mult=HTF_EMA_FLAT_THRESHOLD):
-    """
-    Classifies the 1H market as BULLISH, BEARISH, or CONSOLIDATION instead
-    of forcing a directional call every single run.
-
-    Two distances are measured in units of 1H ATR (so the check scales
-    with whatever volatility regime GBPUSD is currently in, rather than
-    a fixed pip distance):
-      - how far price currently sits from the EMA-100
-      - how far the EMA itself has moved over the last `slope_bars` bars
-
-    Both have to be small for the market to count as CONSOLIDATION -
-    price merely poking to one side of a flat EMA isn't a trend.
-    """
     df_1h = df_1h.copy()
     df_1h["EMA_100"] = df_1h["Close"].ewm(span=100, adjust=False).mean()
     df_1h["ATR_1H"] = atr(df_1h, period=14)
@@ -398,46 +317,17 @@ def compute_macro_bias(df_1h, slope_bars=HTF_EMA_SLOPE_BARS,
 
 
 def adaptive_fib_ratio(df_5m, current_atr, near=FIB_ZONE_NEAR, far=FIB_ZONE_FAR, lookback=50):
-    """
-    Slides the entry zone between `near` (shallow) and `far` (deep) based
-    on whether 5M volatility is currently running hot or cold relative to
-    its own recent average, instead of using one fixed ratio for every
-    market condition.
-
-    expansion = current_atr / (average 5M ATR over the last `lookback` bars)
-      - expansion > 1: price is moving faster than usual right now (often
-        the start of a fresh impulsive leg) -> lean toward the shallow
-        ratio so a continuation isn't missed waiting for a deep retrace
-        a fast market may never give.
-      - expansion < 1: volatility is calm/below-average -> lean toward
-        the deep ratio and wait for a fuller pullback, since there's
-        less urgency.
-    """
     avg_atr = df_5m["ATR"].rolling(lookback, min_periods=10).mean().iloc[-1]
     if pd.isna(avg_atr) or avg_atr == 0 or pd.isna(current_atr):
         return (near + far) / 2
 
     expansion = current_atr / avg_atr
-    expansion = max(0.5, min(2.0, expansion))  # clip to a sane band
-    t = (expansion - 0.5) / (2.0 - 0.5)  # 0 (calm) .. 1 (hot)
+    expansion = max(0.5, min(2.0, expansion))
+    t = (expansion - 0.5) / (2.0 - 0.5)
     return far - (t * (far - near))
 
 
 def fallback_structure(lookback_df, macro_bias, state, wing=2):
-    """
-    Used whenever no fresh dominant leg can be confirmed inside the
-    current (short) lookback window.
-
-    First choice: the bounded memory carried over from a previous run
-    (state.json). If it's recent enough (see STATE_MAX_AGE_HOURS) and
-    matches the current bias, that's a real leg the bot already tracked -
-    it's just fallen outside this run's short lookback slice, not gone.
-
-    Only drops to the older plain-fractal-swing fallback if there's no
-    usable memory either.
-
-    Returns (swing_high, swing_low, structure_source_label).
-    """
     if (
         state.get("status") == "ACTIVE_LEG"
         and state.get("direction") == macro_bias
@@ -454,15 +344,6 @@ def fallback_structure(lookback_df, macro_bias, state, wing=2):
 
 
 def data_looks_sane(df, label, max_spike_mult=DATA_SPIKE_ATR_MULT):
-    """
-    Lightweight guard against bad ticks / API glitches. This doesn't try
-    to clean the data - it just refuses to trade on a candle that looks
-    physically implausible (NaNs, non-positive prices, or a single bar's
-    range many times larger than its recent neighbors). Note this can
-    also occasionally flag a real, legitimate high-impact-news candle -
-    that's an acceptable trade-off for a bot that should rather skip a
-    run than act on garbage data.
-    """
     if df is None or df.empty:
         return False
 
@@ -478,32 +359,48 @@ def data_looks_sane(df, label, max_spike_mult=DATA_SPIKE_ATR_MULT):
     avg_range = bar_range.rolling(20, min_periods=5).mean()
     spike = bar_range > (avg_range * max_spike_mult)
     if spike.tail(5).any():
-        print("[DATA WARNING] " + label + ": possible bad tick (abnormal candle range) in recent bars.")
+        print("[DATA WARNING] " + label + ": possible bad tick in recent bars.")
         return False
 
     return True
 
 
 def _checklist(bias, bos_check, bos_bias_check, range_check, fib_check, atr_check, pattern_check, decision):
-    """
-    Full filter checklist for every scan, win or lose.
-    """
-    lines = []
-    lines.append("")
-    if bias in ("BULLISH", "BEARISH"):
-        bias_suffix = " OK"
+    """Prints the full filter checklist every scan with emojis."""
+    def fmt(val):
+        s = str(val)
+        if "PASS" in s or "OK" in s or "BULLISH" in s or "BEARISH" in s:
+            return s + " ✅"
+        elif "FAIL" in s or "CONFLICT" in s or "invalid" in s or "compressed" in s:
+            return s + " ❌"
+        elif "WARN" in s or "fallback" in s.lower() or "memory" in s.lower() or "fractal" in s.lower():
+            return s + " ⚠️"
+        elif "N/A" in s or "CONSOLIDATION" in s or "no BOS" in s.lower() or "no dominant" in s.lower():
+            return s + " ➖"
+        return s
+
+    bias_line = str(bias)
+    if bias == "BULLISH":
+        bias_line += " ✅"
+    elif bias == "BEARISH":
+        bias_line += " ✅"
     elif bias == "CONSOLIDATION":
-        bias_suffix = " (flat)"
+        bias_line += " ➖ (flat — no edge)"
     else:
-        bias_suffix = " X"
-    lines.append("  1H Bias:       " + str(bias) + bias_suffix)
-    lines.append("  BOS:           " + str(bos_check))
-    lines.append("  BOS/Bias Sync: " + str(bos_bias_check))
-    lines.append("  Range Filter:  " + str(range_check))
-    lines.append("  Fib Zone:      " + str(fib_check))
-    lines.append("  ATR Filter:    " + str(atr_check))
-    lines.append("  Pattern Check: " + str(pattern_check))
-    lines.append("  Decision:      " + str(decision))
+        bias_line += " ❌"
+
+    lines = [
+        "",
+        "  1H Bias:       " + bias_line,
+        "  BOS:           " + fmt(bos_check),
+        "  BOS/Bias Sync: " + fmt(bos_bias_check),
+        "  Range Filter:  " + fmt(range_check),
+        "  Fib Zone:      " + str(fib_check),
+        "  ATR Filter:    " + fmt(atr_check),
+        "  Pattern Check: " + fmt(pattern_check),
+        "  ─────────────────────────────────────",
+        "  Decision:      " + str(decision),
+    ]
     return "\n".join(lines)
 
 
@@ -523,7 +420,7 @@ def scan():
         return
 
     if not (data_looks_sane(df_5m, "5min") and data_looks_sane(df_15m, "15min") and data_looks_sane(df_1h, "1h")):
-        print("Data sanity check failed. Skipping this run rather than trading on it.")
+        print("Data sanity check failed. Skipping this run.")
         return
 
     if len(df_1h) < HTF_BIAS_MIN_BARS:
@@ -531,12 +428,11 @@ def scan():
         return
 
     state = load_state()
-
     macro_bias = compute_macro_bias(df_1h)
 
     if macro_bias == "CONSOLIDATION":
         print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", "N/A", "N/A",
-                          "NO TRADE - 1H is consolidating (no directional edge)"))
+                          "NO TRADE — 1H is consolidating (no directional edge)"))
         return
 
     df_5m["ATR"] = atr(df_5m, period=14)
@@ -544,14 +440,15 @@ def scan():
 
     atr_valid_check = "PASS" if (not pd.isna(current_atr) and current_atr != 0) else "FAIL"
     if pd.isna(current_atr) or current_atr == 0:
-        print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", atr_valid_check, "N/A", "NO TRADE - ATR invalid"))
+        print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", atr_valid_check, "N/A",
+                          "NO TRADE — ATR invalid"))
         return
 
     lookback = df_15m.tail(SWING_LOOKBACK_15)
     bos = detect_bos_impulse(lookback, wing=FRACTAL_WING)
 
-    bos_check = "X N/A"
-    bos_bias_check = "X N/A"
+    bos_check = "N/A"
+    bos_bias_check = "N/A"
 
     if bos is not None:
         bos_check = bos["direction"] + (" OK" if bos["direction"] == macro_bias else " WARN")
@@ -565,9 +462,6 @@ def scan():
             else:
                 swing_high = bos["impulse_start"]
                 swing_low = bos["impulse_end"]
-            # Remember this leg so a future run that can't redetect it
-            # within its short lookback window can still pick it up -
-            # bounded by STATE_MAX_AGE_HOURS so it can't go stale forever.
             save_state({
                 "status": "ACTIVE_LEG",
                 "direction": bos["direction"],
@@ -585,7 +479,8 @@ def scan():
 
     range_check = "PASS" if structural_range >= (5 * PIP_SIZE) else "FAIL (range < 5 pips)"
     if structural_range < (5 * PIP_SIZE):
-        print(_checklist(macro_bias, bos_check, bos_bias_check, range_check, "N/A", atr_valid_check, "N/A", "NO TRADE - range too compressed"))
+        print(_checklist(macro_bias, bos_check, bos_bias_check, range_check, "N/A", atr_valid_check, "N/A",
+                          "NO TRADE — range too compressed"))
         return
 
     fib_ratio = adaptive_fib_ratio(df_5m, current_atr)
@@ -625,16 +520,11 @@ def scan():
             pattern_check = "PASS"
         else:
             fails = []
-            if not in_zone:
-                fails.append("price not in discount zone")
-            if not bear_prev:
-                fails.append("prev candle not bearish")
-            if not bull_last:
-                fails.append("last candle not bullish")
-            if not engulfs:
-                fails.append("doesn't engulf prev body")
-            if not real_body:
-                fails.append("body too small vs ATR")
+            if not in_zone:    fails.append("price not in discount zone")
+            if not bear_prev:  fails.append("prev candle not bearish")
+            if not bull_last:  fails.append("last candle not bullish")
+            if not engulfs:    fails.append("doesn't engulf prev body")
+            if not real_body:  fails.append("body too small vs ATR")
             pattern_check = "FAIL (" + ", ".join(fails) + ")"
 
     elif macro_bias == "BEARISH":
@@ -657,19 +547,15 @@ def scan():
             pattern_check = "PASS"
         else:
             fails = []
-            if not in_zone:
-                fails.append("price not in premium zone")
-            if not bull_prev:
-                fails.append("prev candle not bullish")
-            if not bear_last:
-                fails.append("last candle not bearish")
-            if not engulfs:
-                fails.append("doesn't engulf prev body")
-            if not real_body:
-                fails.append("body too small vs ATR")
+            if not in_zone:    fails.append("price not in premium zone")
+            if not bull_prev:  fails.append("prev candle not bullish")
+            if not bear_last:  fails.append("last candle not bearish")
+            if not engulfs:    fails.append("doesn't engulf prev body")
+            if not real_body:  fails.append("body too small vs ATR")
+            pattern_check = "FAIL (" + ", ".join(fails) + ")"
             pattern_check = "FAIL (" + ", ".join(fails) + ")"
 
-    decision = ("TRADE - " + trade_signal) if trade_signal != "HOLD" else "NO TRADE - pattern conditions not met"
+    decision = ("🚨 SIGNAL — " + trade_signal) if trade_signal != "HOLD" else "NO TRADE — pattern conditions not met"
     print(_checklist(macro_bias, bos_check, bos_bias_check, range_check, fib_check, atr_valid_check, pattern_check, decision))
     print(
         "  [Detail] Structure: " + structure_source +
@@ -681,21 +567,22 @@ def scan():
     )
 
     if trade_signal != "HOLD" and entry is not None:
+        direction_emoji = "📈" if trade_signal == "BUY" else "📉"
         msg = (
-            "SMC SIGNAL - GBPUSD\n\n"
-            "Action: " + trade_signal + "\n"
-            "Bias: " + macro_bias + " (1H EMA-100)\n"
-            "Structure: " + structure_source + "\n"
-            "Fib Zone (adaptive {:.1f}%): {:.5f}\n".format(fib_ratio * 100, fib_zone) +
-            "SwH: {:.5f} | SwL: {:.5f}\n".format(swing_high, swing_low) +
-            "5M ATR: {:.1f} pips\n".format(current_atr / PIP_SIZE) +
-            "---------------------\n"
-            "Entry:  {:.5f}\n".format(entry) +
-            "Stop:   {:.5f} ({:.1f} pips)\n".format(sl, risk_pips) +
-            "Target: {:.5f} ({:.1f} pips)\n".format(tp, reward_pips) +
-            "RR:     1:" + str(RR_RATIO) + "\n"
-            "---------------------\n"
-            "Confirm higher-TF context before executing."
+            "🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
+            + direction_emoji + " *Action:* `" + trade_signal + "`\n"
+            "📊 *Bias:* `" + macro_bias + "` (1H EMA-100)\n"
+            "🏗 *Structure:* `" + structure_source + "`\n"
+            "🎯 *Fib Zone* _(adaptive {:.1f}%):_ `{:.5f}`\n".format(fib_ratio * 100, fib_zone) +
+            "📐 *SwH:* `{:.5f}` | *SwL:* `{:.5f}`\n".format(swing_high, swing_low) +
+            "⚡ *5M ATR:* `{:.1f} pips`\n".format(current_atr / PIP_SIZE) +
+            "─────────────────────\n"
+            "📍 *Entry:*  `{:.5f}`\n".format(entry) +
+            "🛡 *Stop:*   `{:.5f}` _({:.1f} pips)_\n".format(sl, risk_pips) +
+            "🏆 *Target:* `{:.5f}` _({:.1f} pips)_\n".format(tp, reward_pips) +
+            "⚖️ *RR:*     `1:" + str(RR_RATIO) + "`\n"
+            "─────────────────────\n"
+            "⚠️ _Confirm higher-TF context before executing._"
         )
         send_telegram(msg)
 

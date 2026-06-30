@@ -1,0 +1,30 @@
+name: GBPUSD SMC Scanner
+
+on:
+  schedule:
+    - cron: '0,5,10,15,20,25,30,35,40,45,50,55 8-13 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests pandas numpy
+
+      - name: Run scanner
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TWELVE_DATA_KEY:  ${{ secrets.TWELVE_DATA_KEY }}
+        run: python scanner.py

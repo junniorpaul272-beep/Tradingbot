@@ -103,10 +103,108 @@ def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     return tr.ewm(span=period, adjust=False).mean()
 
 
+def find_all_fractals(df: pd.DataFrame, wing: int = 2) -> list[dict]:
+    """
+    Finds ALL confirmed fractal swing points in chronological order,
+    not just the most recent. Each entry is tagged as 'high' or 'low'.
+
+    This is the foundation for BOS detection — we need the full sequence
+    of swings to identify which one gets broken.
+    """
+    highs = df["High"].values
+    lows  = df["Low"].values
+    n     = len(highs)
+    fractals = []
+
+    for i in range(wing, n - wing):
+        window_h = list(highs[i - wing:i]) + list(highs[i + 1:i + wing + 1])
+        if all(highs[i] > h for h in window_h):
+            fractals.append({"idx": i, "type": "high", "price": highs[i], "time": df.index[i]})
+
+        window_l = list(lows[i - wing:i]) + list(lows[i + 1:i + wing + 1])
+        if all(lows[i] < l for l in window_l):
+            fractals.append({"idx": i, "type": "low", "price": lows[i], "time": df.index[i]})
+
+    fractals.sort(key=lambda f: f["idx"])
+    return fractals
+
+
+def detect_bos_impulse(df: pd.DataFrame, wing: int = 2) -> dict | None:
+    """
+    Detects the most recent confirmed Break of Structure (BOS) and
+    returns the impulse leg that caused it.
+
+    Logic:
+      1. Walk through fractals chronologically.
+      2. Track the most recent swing high and swing low.
+      3. A bullish BOS = price closes above the last swing high.
+      4. A bearish BOS = price closes below the last swing low.
+      5. Once BOS confirms, the impulse leg is defined as:
+         - Bullish: from the swing LOW that preceded the break, to the
+           swing HIGH that got broken (then extended to current price
+           as the active impulse).
+         - Bearish: mirror logic.
+
+    Returns dict with: direction, impulse_start, impulse_end, bos_price
+    or None if no clean BOS is found.
+    """
+    fractals = find_all_fractals(df, wing=wing)
+    if len(fractals) < 2:
+        return None
+
+    closes = df["Close"].values
+
+    last_swing_high = None  # {"idx", "price"}
+    last_swing_low  = None
+    pending_low_before_high  = None  # tracks the low preceding a swing high (for bullish impulse start)
+    pending_high_before_low  = None  # tracks the high preceding a swing low (for bearish impulse start)
+
+    confirmed_bos = None
+
+    for f in fractals:
+        if f["type"] == "high":
+            # Before updating, check if this segment + subsequent price action broke the PRIOR swing low
+            pending_high_before_low = f
+            last_swing_high = f
+        else:
+            pending_low_before_high = f
+            last_swing_low = f
+
+        # Check for BOS using closes AFTER this fractal's index
+        if last_swing_high is not None:
+            future_closes = closes[last_swing_high["idx"] + 1:]
+            broke_idx_rel = next((j for j, c in enumerate(future_closes) if c > last_swing_high["price"]), None)
+            if broke_idx_rel is not None and pending_low_before_high is not None \
+               and pending_low_before_high["idx"] < last_swing_high["idx"]:
+                confirmed_bos = {
+                    "direction":      "BULLISH",
+                    "impulse_start":  pending_low_before_high["price"],   # swing low (origin)
+                    "impulse_end":    last_swing_high["price"],            # swing high (broken)
+                    "bos_price":      last_swing_high["price"],
+                    "break_idx":      last_swing_high["idx"] + 1 + broke_idx_rel,
+                }
+
+        if last_swing_low is not None:
+            future_closes = closes[last_swing_low["idx"] + 1:]
+            broke_idx_rel = next((j for j, c in enumerate(future_closes) if c < last_swing_low["price"]), None)
+            if broke_idx_rel is not None and pending_high_before_low is not None \
+               and pending_high_before_low["idx"] < last_swing_low["idx"]:
+                confirmed_bos = {
+                    "direction":      "BEARISH",
+                    "impulse_start":  pending_high_before_low["price"],   # swing high (origin)
+                    "impulse_end":    last_swing_low["price"],             # swing low (broken)
+                    "bos_price":      last_swing_low["price"],
+                    "break_idx":      last_swing_low["idx"] + 1 + broke_idx_rel,
+                }
+
+    return confirmed_bos
+
+
 def fractal_swings(df: pd.DataFrame, wing: int = 2) -> tuple[float, float]:
     """
-    Most recent confirmed fractal swing high and low.
-    Walks backwards so we always get the most recent structural pivots.
+    LEGACY fallback — kept only for cases where no BOS can be confirmed
+    (e.g. choppy/ranging conditions). Most recent confirmed fractal
+    swing high and low, found independently.
     """
     highs = df["High"].values
     lows  = df["Low"].values
@@ -155,9 +253,36 @@ def scan() -> None:
     df_1h["EMA_100"] = df_1h["Close"].ewm(span=100, adjust=False).mean()
     macro_bias = "BULLISH" if df_1h["Close"].iloc[-1] > df_1h["EMA_100"].iloc[-1] else "BEARISH"
 
-    # ── Fractal Structure ───────────────────────────────────────────────────
+    # ── Structure: BOS-Confirmed Impulse (preferred) ────────────────────────
+    # Instead of blindly taking the most recent fractal high/low independently,
+    # we now require a confirmed Break of Structure. This ensures the Fib is
+    # drawn on the actual impulse leg that broke structure — not two unrelated
+    # swings that happen to be the most recent fractals in a noisy lookback.
     lookback = df_15m.tail(SWING_LOOKBACK_15)
-    swing_high, swing_low = fractal_swings(lookback, wing=FRACTAL_WING)
+    bos = detect_bos_impulse(lookback, wing=FRACTAL_WING)
+
+    structure_source = "BOS"
+    if bos is not None:
+        # Bias must agree with the confirmed BOS direction — if they conflict,
+        # the 1H trend and 15M structure are out of sync, so we skip rather
+        # than force a trade against fresh structural evidence.
+        if (macro_bias == "BULLISH" and bos["direction"] != "BULLISH") or \
+           (macro_bias == "BEARISH" and bos["direction"] != "BEARISH"):
+            print(f"BOS direction ({bos['direction']}) conflicts with 1H bias ({macro_bias}). Skipping.")
+            return
+
+        if bos["direction"] == "BULLISH":
+            swing_low  = bos["impulse_start"]
+            swing_high = bos["impulse_end"]
+        else:
+            swing_high = bos["impulse_start"]
+            swing_low  = bos["impulse_end"]
+    else:
+        # No clean BOS found in lookback (choppy/ranging market) — fall back
+        # to legacy fractal detection rather than refusing to scan entirely.
+        structure_source = "FALLBACK_FRACTAL"
+        swing_high, swing_low = fractal_swings(lookback, wing=FRACTAL_WING)
+
     structural_range = swing_high - swing_low
 
     if structural_range < (5 * PIP_SIZE):
@@ -228,7 +353,7 @@ def scan() -> None:
 
     # ── Log ─────────────────────────────────────────────────────────────────
     print(
-        f"Bias: {macro_bias} | Price: {c_last['Close']:.5f} | "
+        f"Bias: {macro_bias} | Structure: {structure_source} | Price: {c_last['Close']:.5f} | "
         f"Fib: {fib_zone:.5f} | ATR: {current_atr/PIP_SIZE:.1f}p | "
         f"SwH: {swing_high:.5f} SwL: {swing_low:.5f} | Signal: {trade_signal}"
     )
@@ -239,6 +364,7 @@ def scan() -> None:
             f"🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
             f"*Action:* `{trade_signal}`\n"
             f"*Bias:* `{macro_bias}` (1H EMA-100)\n"
+            f"*Structure:* `{structure_source}`\n"
             f"*Fib 61.8% Zone:* `{fib_zone:.5f}`\n"
             f"*SwH:* `{swing_high:.5f}` | *SwL:* `{swing_low:.5f}`\n"
             f"*5M ATR:* `{current_atr/PIP_SIZE:.1f} pips`\n"
@@ -255,3 +381,4 @@ def scan() -> None:
 
 if __name__ == "__main__":
     scan()
+    

@@ -58,6 +58,16 @@ ENGULF_TOLERANCE_PIPS = 1    # engulf body overlap: 1 pip of leniency on contain
 
 # Liquidity sweep detection
 SWEEP_LOOKBACK_CANDLES = 3   # 3×5M = 1×15M candle — sweep must resolve within one 15M bar
+SWEEP_MAX_DISTANCE_PIPS = 6  # a sweep only counts toward in_zone if the actual entry
+                              # price (c_last close) is still within this many pips of
+                              # the zone. Without this, sweep_valid had no distance limit
+                              # at all - a confirmed sweep 3 candles ago would validate
+                              # an entry candle that had since drifted arbitrarily far
+                              # from the zone, at a worse price with a tighter effective
+                              # stop than the setup was meant to have. Sits between
+                              # ZONE_TOLERANCE_PIPS (3, for direct touches) and
+                              # WATCHING_EXIT_PIPS (8, a slower multi-scan give-up
+                              # threshold) since a sweep already proved the level once.
 
 # WATCHING state — two-stage alert system
 WATCHING_TTL_MINUTES  = 15   # auto-clear if no confirmation within this window (= one 15M bar)
@@ -740,9 +750,14 @@ def scan():
     if macro_bias == "BULLISH":
         lowest_wick    = min(c_prev["Low"], c_last["Low"])
         # Direct touch: wick at or below zone (+ tolerance buffer)
-        # Sweep touch: confirmed liquidity sweep in the last 3 candles
+        # Sweep touch: confirmed liquidity sweep in the last 3 candles, but
+        # only if the entry candle hasn't since drifted too far from the
+        # zone - a sweep proves the level, it doesn't excuse chasing price
+        # far away from it afterward.
         in_zone_direct = lowest_wick <= fib_zone + zone_tol
-        in_zone        = in_zone_direct or sweep_valid
+        sweep_distance_ok = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
+        sweep_usable   = sweep_valid and sweep_distance_ok
+        in_zone        = in_zone_direct or sweep_usable
         bear_prev      = c_prev["Close"] < c_prev["Open"]
         bull_last      = c_last["Close"] > c_last["Open"]
         # 1 pip of leniency on body containment — near-perfect engulfs pass
@@ -762,11 +777,15 @@ def scan():
             tp            = entry + (RR_RATIO * risk)
             risk_pips     = risk / PIP_SIZE
             reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-            pattern_check = "PASS" + (" (post-sweep entry)" if sweep_valid and not in_zone_direct else "")
+            pattern_check = "PASS" + (" (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
             stats["pattern_passed"] += 1
         else:
             fails = []
-            if not in_zone:    fails.append("price not in discount zone (no direct touch or sweep)")
+            if not in_zone:
+                if sweep_valid and not sweep_distance_ok:
+                    fails.append("sweep confirmed but price drifted too far from zone")
+                else:
+                    fails.append("price not in discount zone (no direct touch or sweep)")
             if not bear_prev:  fails.append("prev candle not bearish")
             if not bull_last:  fails.append("last candle not bullish")
             if not engulfs:    fails.append("doesn't engulf prev body")
@@ -776,9 +795,12 @@ def scan():
     elif macro_bias == "BEARISH":
         highest_wick   = max(c_prev["High"], c_last["High"])
         # Direct touch: wick at or above zone (- tolerance buffer)
-        # Sweep touch: confirmed liquidity sweep in the last 3 candles
+        # Sweep touch: confirmed liquidity sweep in the last 3 candles, but
+        # only if the entry candle hasn't since drifted too far from the zone.
         in_zone_direct = highest_wick >= fib_zone - zone_tol
-        in_zone        = in_zone_direct or sweep_valid
+        sweep_distance_ok = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
+        sweep_usable   = sweep_valid and sweep_distance_ok
+        in_zone        = in_zone_direct or sweep_usable
         bull_prev      = c_prev["Close"] > c_prev["Open"]
         bear_last      = c_last["Close"] < c_last["Open"]
         # 1 pip of leniency on body containment
@@ -798,11 +820,15 @@ def scan():
             tp            = entry - (RR_RATIO * risk)
             risk_pips     = risk / PIP_SIZE
             reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-            pattern_check = "PASS" + (" (post-sweep entry)" if sweep_valid and not in_zone_direct else "")
+            pattern_check = "PASS" + (" (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
             stats["pattern_passed"] += 1
         else:
             fails = []
-            if not in_zone:    fails.append("price not in premium zone (no direct touch or sweep)")
+            if not in_zone:
+                if sweep_valid and not sweep_distance_ok:
+                    fails.append("sweep confirmed but price drifted too far from zone")
+                else:
+                    fails.append("price not in premium zone (no direct touch or sweep)")
             if not bull_prev:  fails.append("prev candle not bullish")
             if not bear_last:  fails.append("last candle not bearish")
             if not engulfs:    fails.append("doesn't engulf prev body")
@@ -911,7 +937,7 @@ def scan():
 
             stats["signals_sent"] += 1
             direction_emoji = "📈" if trade_signal == "BUY" else "📉"
-            zone_tag        = " _(liquidity sweep)_" if sweep_valid and not in_zone_direct else ""
+            zone_tag        = " _(liquidity sweep)_" if sweep_usable and not in_zone_direct else ""
             confirm_tag     = "\n✅ _Zone was pre-flagged — entry confirmed._" if was_watching else ""
 
             msg = (

@@ -52,6 +52,27 @@ FIB_ZONE_FAR = 0.618
 # Data sanity
 DATA_SPIKE_ATR_MULT = 8
 
+# Margin of error — small pip buffers so near-misses don't get rejected for noise
+ZONE_TOLERANCE_PIPS   = 3    # fib zone: wick can be this many pips shy of the level
+ENGULF_TOLERANCE_PIPS = 1    # engulf body overlap: 1 pip of leniency on containment
+
+# Liquidity sweep detection
+SWEEP_LOOKBACK_CANDLES = 3   # 3×5M = 1×15M candle — sweep must resolve within one 15M bar
+
+# WATCHING state — two-stage alert system
+WATCHING_TTL_MINUTES  = 15   # auto-clear if no confirmation within this window (= one 15M bar)
+WATCHING_EXIT_PIPS    = 8    # auto-clear if price runs this many pips away from the zone,
+                              # in the direction of the original leg, without confirming.
+                              # e.g. bullish watching at 1.32300 - if price rallies to
+                              # 1.32380+ without ever printing the reversal candle, the
+                              # pullback was missed and chasing from here is a worse trade.
+                              # Distinct from the 15M close-through guard below, which
+                              # catches the zone failing in the OPPOSITE direction.
+
+# Signal cooldown — suppress duplicate entry alerts
+SIGNAL_COOLDOWN_PIPS  = 5
+SIGNAL_COOLDOWN_HOURS = 0.5  # 30 minutes
+
 # State memory
 STATE_FILE = "state.json"
 STATE_MAX_AGE_HOURS = 6
@@ -103,6 +124,7 @@ _STATS_DEFAULTS = {
     "bos_conflict":       0,
     "no_structure":       0,
     "fib_reached":        0,
+    "watching_alerts":    0,
     "pattern_passed":     0,
     "signals_sent":       0,
     "first_scan":         None,
@@ -161,6 +183,7 @@ def format_stats_summary(stats):
         f"⚠️ BOS conflict:         `{stats['bos_conflict']}` ({pct(stats['bos_conflict'])})",
         f"❌ No structure:         `{stats['no_structure']}` ({pct(stats['no_structure'])})",
         f"🎯 Fib zone reached:     `{stats['fib_reached']}` ({pct(stats['fib_reached'])})",
+        f"👀 Watching alerts:      `{stats['watching_alerts']}` ({pct(stats['watching_alerts'])})",
         f"✅ Pattern passed:       `{stats['pattern_passed']}` ({pct(stats['pattern_passed'])})",
         f"🚨 Signals sent:         `{stats['signals_sent']}` ({pct(stats['signals_sent'])})",
         "─────────────────────",
@@ -170,10 +193,12 @@ def format_stats_summary(stats):
     if n > 20:
         if stats["fib_reached"] == 0:
             lines.append("⚠️ _Fib zone never reached — price not pulling back to zone._")
+        elif stats["watching_alerts"] == 0:
+            lines.append("⚠️ _Zone reached but WATCHING never triggered — check zone logic._")
         elif stats["pattern_passed"] == 0:
             lines.append("⚠️ _Pattern never passes — engulf filter may be too tight._")
         elif stats["signals_sent"] == 0 and stats["pattern_passed"] > 0:
-            lines.append("⚠️ _Pattern passes but no signals — check ATR body threshold._")
+            lines.append("⚠️ _Pattern passes but no signals — check cooldown or ATR threshold._")
         else:
             lines.append("✅ _Funnel behaving as expected._")
 
@@ -436,6 +461,77 @@ def fallback_structure(lookback_df, macro_bias, state, wing=2):
     return sh, sl, "FALLBACK_FRACTAL"
 
 
+def detect_liquidity_sweep(df_5m, df_15m, fib_zone, macro_bias,
+                            lookback_candles=SWEEP_LOOKBACK_CANDLES):
+    """
+    Checks whether a liquidity sweep into the fib zone occurred within
+    the last `lookback_candles` closed 5M bars (not counting c_last or c_prev,
+    since those are already handled by the direct zone check).
+
+    A valid sweep requires two things:
+      1. A 5M candle wicked through the zone but CLOSED back on the correct
+         side — price hunted liquidity below/above the zone but rejected it.
+      2. The last closed 15M candle also closed on the correct side — meaning
+         at the 15M level it was only a wick, not a close through. This is the
+         15M confirmation the user identified: 3×5M = 1×15M, so if the 15M
+         didn't close through the zone, the sweep was just a wick on the higher
+         timeframe and the zone is still institutionally respected.
+
+    Returns (swept: bool, label: str) for use in the checklist and in_zone logic.
+    """
+    # Candles before c_prev — the sweep would have happened here, with c_prev
+    # and c_last being the post-sweep reaction candles we're trading off.
+    recent = df_5m.iloc[-(lookback_candles + 2):-2]
+
+    if macro_bias == "BULLISH":
+        # Wick below zone, close above it
+        swept = recent[(recent["Low"] < fib_zone) & (recent["Close"] > fib_zone)]
+        if swept.empty:
+            return False, "no sweep"
+        # 15M close confirmation: last closed 15M must have closed above zone
+        if df_15m.iloc[-1]["Close"] <= fib_zone:
+            return False, "15M closed below zone"
+        return True, "SWEEP CONFIRMED ✅"
+
+    else:  # BEARISH
+        # Wick above zone, close below it
+        swept = recent[(recent["High"] > fib_zone) & (recent["Close"] < fib_zone)]
+        if swept.empty:
+            return False, "no sweep"
+        # 15M close confirmation: last closed 15M must have closed below zone
+        if df_15m.iloc[-1]["Close"] >= fib_zone:
+            return False, "15M closed above zone"
+        return True, "SWEEP CONFIRMED ✅"
+
+
+def is_duplicate_signal(state, trade_signal, entry_price):
+    """
+    Returns True if this signal is too similar to the last one sent —
+    same direction, within SIGNAL_COOLDOWN_PIPS, within SIGNAL_COOLDOWN_HOURS.
+    Prevents the bot from spamming the same trade alert on consecutive scans
+    when price hasn't meaningfully moved.
+    """
+    last_dir   = state.get("last_signal_direction")
+    last_price = state.get("last_signal_price")
+    last_time  = state.get("last_signal_time")
+
+    if not (last_dir and last_price and last_time):
+        return False
+    if last_dir != trade_signal:
+        return False
+
+    try:
+        sent_at   = datetime.fromisoformat(last_time)
+        age_hours = (datetime.now(timezone.utc) - sent_at).total_seconds() / 3600
+        if age_hours > SIGNAL_COOLDOWN_HOURS:
+            return False
+    except Exception:
+        return False
+
+    pip_diff = abs(entry_price - float(last_price)) / PIP_SIZE
+    return pip_diff <= SIGNAL_COOLDOWN_PIPS
+
+
 def data_looks_sane(df, label, max_spike_mult=DATA_SPIKE_ATR_MULT):
     if df is None or df.empty:
         return False
@@ -575,12 +671,19 @@ def scan():
             else:
                 swing_high = bos["impulse_start"]
                 swing_low  = bos["impulse_end"]
-            save_state({
+            # Merge into the already-loaded state (not a fresh dict) so this
+            # doesn't wipe out watching_* fields set earlier this scan or
+            # carried over from a previous run. save_state used to be called
+            # with a brand-new dict here, which overwrote the whole file and
+            # silently dropped any active WATCHING state on the very next
+            # scan where BOS redetected - which is most scans in a trend.
+            state.update({
                 "status":        "ACTIVE_LEG",
                 "direction":     bos["direction"],
                 "impulse_start": bos["impulse_start"],
                 "impulse_end":   bos["impulse_end"],
             })
+            save_state(state)
         else:
             stats["bos_conflict"] += 1
             bos_bias_check = "CONFLICT (using fallback structure)"
@@ -609,7 +712,17 @@ def scan():
         swing_high - (fib_ratio * structural_range) if macro_bias == "BULLISH"
         else swing_low + (fib_ratio * structural_range)
     )
-    fib_check = "{:.5f} (ratio {:.1f}%)".format(fib_zone, fib_ratio * 100)
+
+    # ── Sweep detection + zone tolerance ──────────────────────────────────
+    # Run sweep check once here so both BULLISH and BEARISH branches can use it.
+    zone_tol   = ZONE_TOLERANCE_PIPS * PIP_SIZE
+    engulf_tol = ENGULF_TOLERANCE_PIPS * PIP_SIZE
+    sweep_valid, sweep_label = detect_liquidity_sweep(df_5m, df_15m, fib_zone, macro_bias)
+
+    fib_check = "{:.5f} (ratio {:.1f}%) | Zone: {}".format(
+        fib_zone, fib_ratio * 100,
+        sweep_label if sweep_valid else "—"
+    )
 
     # ── Execution Matrix ──────────────────────────────────────────────────
     c_last = df_5m.iloc[-1]
@@ -621,18 +734,24 @@ def scan():
     trade_signal  = "HOLD"
     entry = sl = tp = risk_pips = reward_pips = None
     pattern_check = "N/A"
+    in_zone       = False
+    in_zone_direct = False
 
     if macro_bias == "BULLISH":
-        lowest_wick = min(c_prev["Low"], c_last["Low"])
-        in_zone     = lowest_wick <= fib_zone
-        bear_prev   = c_prev["Close"] < c_prev["Open"]
-        bull_last   = c_last["Close"] > c_last["Open"]
-        engulfs     = (c_last["Close"] >= c_prev["Open"] and
-                       c_last["Open"]  <= c_prev["Close"])
-        real_body   = body_last > atr_threshold
+        lowest_wick    = min(c_prev["Low"], c_last["Low"])
+        # Direct touch: wick at or below zone (+ tolerance buffer)
+        # Sweep touch: confirmed liquidity sweep in the last 3 candles
+        in_zone_direct = lowest_wick <= fib_zone + zone_tol
+        in_zone        = in_zone_direct or sweep_valid
+        bear_prev      = c_prev["Close"] < c_prev["Open"]
+        bull_last      = c_last["Close"] > c_last["Open"]
+        # 1 pip of leniency on body containment — near-perfect engulfs pass
+        engulfs        = (c_last["Close"] >= c_prev["Open"] - engulf_tol and
+                          c_last["Open"]  <= c_prev["Close"] + engulf_tol)
+        real_body      = body_last > atr_threshold
 
         if in_zone:
-            stats["fib_reached"] += 1   # price made it to the zone
+            stats["fib_reached"] += 1
 
         if in_zone and bear_prev and bull_last and engulfs and real_body:
             trade_signal  = "BUY"
@@ -643,11 +762,11 @@ def scan():
             tp            = entry + (RR_RATIO * risk)
             risk_pips     = risk / PIP_SIZE
             reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-            pattern_check = "PASS"
+            pattern_check = "PASS" + (" (post-sweep entry)" if sweep_valid and not in_zone_direct else "")
             stats["pattern_passed"] += 1
         else:
             fails = []
-            if not in_zone:    fails.append("price not in discount zone")
+            if not in_zone:    fails.append("price not in discount zone (no direct touch or sweep)")
             if not bear_prev:  fails.append("prev candle not bearish")
             if not bull_last:  fails.append("last candle not bullish")
             if not engulfs:    fails.append("doesn't engulf prev body")
@@ -655,13 +774,17 @@ def scan():
             pattern_check = "FAIL (" + ", ".join(fails) + ")"
 
     elif macro_bias == "BEARISH":
-        highest_wick = max(c_prev["High"], c_last["High"])
-        in_zone      = highest_wick >= fib_zone
-        bull_prev    = c_prev["Close"] > c_prev["Open"]
-        bear_last    = c_last["Close"] < c_last["Open"]
-        engulfs      = (c_last["Open"]  >= c_prev["Close"] and
-                        c_last["Close"] <= c_prev["Open"])
-        real_body    = body_last > atr_threshold
+        highest_wick   = max(c_prev["High"], c_last["High"])
+        # Direct touch: wick at or above zone (- tolerance buffer)
+        # Sweep touch: confirmed liquidity sweep in the last 3 candles
+        in_zone_direct = highest_wick >= fib_zone - zone_tol
+        in_zone        = in_zone_direct or sweep_valid
+        bull_prev      = c_prev["Close"] > c_prev["Open"]
+        bear_last      = c_last["Close"] < c_last["Open"]
+        # 1 pip of leniency on body containment
+        engulfs        = (c_last["Open"]  >= c_prev["Close"] - engulf_tol and
+                          c_last["Close"] <= c_prev["Open"]  + engulf_tol)
+        real_body      = body_last > atr_threshold
 
         if in_zone:
             stats["fib_reached"] += 1
@@ -675,11 +798,11 @@ def scan():
             tp            = entry - (RR_RATIO * risk)
             risk_pips     = risk / PIP_SIZE
             reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-            pattern_check = "PASS"
+            pattern_check = "PASS" + (" (post-sweep entry)" if sweep_valid and not in_zone_direct else "")
             stats["pattern_passed"] += 1
         else:
             fails = []
-            if not in_zone:    fails.append("price not in premium zone")
+            if not in_zone:    fails.append("price not in premium zone (no direct touch or sweep)")
             if not bull_prev:  fails.append("prev candle not bullish")
             if not bear_last:  fails.append("last candle not bearish")
             if not engulfs:    fails.append("doesn't engulf prev body")
@@ -700,27 +823,147 @@ def scan():
         " SwL: {:.5f}".format(swing_low)
     )
 
-    # ── Signal alert ──────────────────────────────────────────────────────
+    # ── WATCHING state — invalidation check ───────────────────────────────
+    # Run this before the alert logic so we know the current watching status
+    # is still valid before deciding whether to set, keep, or clear it.
+    is_watching      = state.get("watching", False)
+    watching_zone_p  = state.get("watching_zone")
+    watching_bias_s  = state.get("watching_bias")
+    watching_set_at  = state.get("watching_set_at")
+
+    if is_watching:
+        invalidate    = False
+        inv_reason    = ""
+
+        # Guard 1: TTL — 15 min = one 15M candle. If no confirmation by then,
+        # the zone touch is stale and the setup is dead.
+        if watching_set_at:
+            try:
+                set_at  = datetime.fromisoformat(watching_set_at)
+                age_min = (datetime.now(timezone.utc) - set_at).total_seconds() / 60
+                if age_min > WATCHING_TTL_MINUTES:
+                    invalidate = True
+                    inv_reason = "TTL expired ({:.0f} min)".format(age_min)
+            except Exception:
+                invalidate = True
+                inv_reason = "invalid watching timestamp"
+
+        # Guard 2: 15M close through the zone — the zone structurally failed,
+        # not just a wick. Same logic as the sweep confirmation check, inverted:
+        # if the 15M candle CLOSED on the wrong side, the zone is gone.
+        if not invalidate and watching_zone_p and watching_bias_s:
+            wz             = float(watching_zone_p)
+            last_15m_close = df_15m.iloc[-1]["Close"]
+            if watching_bias_s == "BULLISH" and last_15m_close < wz:
+                invalidate = True
+                inv_reason = "15M closed below zone ({:.5f})".format(last_15m_close)
+            elif watching_bias_s == "BEARISH" and last_15m_close > wz:
+                invalidate = True
+                inv_reason = "15M closed above zone ({:.5f})".format(last_15m_close)
+
+        # Guard 3: Zone exit — price has run away from the zone, in the
+        # direction of the original leg, by more than WATCHING_EXIT_PIPS
+        # without the pattern ever confirming. The pullback window has
+        # passed - this is a dead setup, not a live one, even though
+        # nothing structurally "broke" (Guard 2 wouldn't catch this since
+        # price never closed through the zone the wrong way).
+        if not invalidate and watching_zone_p and watching_bias_s:
+            wz            = float(watching_zone_p)
+            current_close = df_5m.iloc[-1]["Close"]
+            if watching_bias_s == "BULLISH":
+                drift_pips = (current_close - wz) / PIP_SIZE
+                if drift_pips > WATCHING_EXIT_PIPS:
+                    invalidate = True
+                    inv_reason = "price ran {:.1f} pips above zone — pullback missed".format(drift_pips)
+            else:  # BEARISH
+                drift_pips = (wz - current_close) / PIP_SIZE
+                if drift_pips > WATCHING_EXIT_PIPS:
+                    invalidate = True
+                    inv_reason = "price ran {:.1f} pips below zone — pullback missed".format(drift_pips)
+
+        if invalidate:
+            print("  [WATCHING] Cleared — " + inv_reason)
+            state["watching"] = False
+            state.pop("watching_zone",   None)
+            state.pop("watching_bias",   None)
+            state.pop("watching_set_at", None)
+            is_watching = False
+            save_state(state)
+
+    # ── Signal / WATCHING alert logic ─────────────────────────────────────
     if trade_signal != "HOLD" and entry is not None:
-        stats["signals_sent"] += 1
-        direction_emoji = "📈" if trade_signal == "BUY" else "📉"
-        msg = (
-            "🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
-            + direction_emoji + " *Action:* `" + trade_signal + "`\n"
-            "📊 *Bias:* `" + macro_bias + "` (1H EMA-100)\n"
-            "🏗 *Structure:* `" + structure_source + "`\n"
-            "🎯 *Fib Zone* _(adaptive {:.1f}%):_ `{:.5f}`\n".format(fib_ratio * 100, fib_zone) +
-            "📐 *SwH:* `{:.5f}` | *SwL:* `{:.5f}`\n".format(swing_high, swing_low) +
-            "⚡ *5M ATR:* `{:.1f} pips`\n".format(current_atr / PIP_SIZE) +
-            "─────────────────────\n"
-            "📍 *Entry:*  `{:.5f}`\n".format(entry) +
-            "🛡 *Stop:*   `{:.5f}` _({:.1f} pips)_\n".format(sl, risk_pips) +
-            "🏆 *Target:* `{:.5f}` _({:.1f} pips)_\n".format(tp, reward_pips) +
-            "⚖️ *RR:*     `1:" + str(RR_RATIO) + "`\n"
-            "─────────────────────\n"
-            "⚠️ _Confirm higher-TF context before executing._"
-        )
-        send_telegram(msg)
+        # CASE A: Pattern confirmed (same-scan or post-watching).
+        # Same-scan priority: if zone touched AND pattern fires in one scan,
+        # skip WATCHING entirely and go straight to Entry Confirmed.
+        if is_duplicate_signal(state, trade_signal, entry):
+            print(
+                "  [COOLDOWN] Signal suppressed — same direction within "
+                + str(SIGNAL_COOLDOWN_PIPS) + " pips / "
+                + str(int(SIGNAL_COOLDOWN_HOURS * 60)) + " min of last alert."
+            )
+        else:
+            was_watching = is_watching
+            # Clear watching state — setup resolved either way
+            state["watching"] = False
+            state.pop("watching_zone",   None)
+            state.pop("watching_bias",   None)
+            state.pop("watching_set_at", None)
+
+            stats["signals_sent"] += 1
+            direction_emoji = "📈" if trade_signal == "BUY" else "📉"
+            zone_tag        = " _(liquidity sweep)_" if sweep_valid and not in_zone_direct else ""
+            confirm_tag     = "\n✅ _Zone was pre-flagged — entry confirmed._" if was_watching else ""
+
+            msg = (
+                "🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
+                + direction_emoji + " *Action:* `" + trade_signal + "`\n"
+                "📊 *Bias:* `" + macro_bias + "` (1H EMA-100)\n"
+                "🏗 *Structure:* `" + structure_source + "`\n"
+                "🎯 *Fib Zone* _(adaptive {:.1f}%):_ `{:.5f}`{}\n".format(fib_ratio * 100, fib_zone, zone_tag) +
+                "📐 *SwH:* `{:.5f}` | *SwL:* `{:.5f}`\n".format(swing_high, swing_low) +
+                "⚡ *5M ATR:* `{:.1f} pips`\n".format(current_atr / PIP_SIZE) +
+                "─────────────────────\n"
+                "📍 *Entry:*  `{:.5f}`\n".format(entry) +
+                "🛡 *Stop:*   `{:.5f}` _({:.1f} pips)_\n".format(sl, risk_pips) +
+                "🏆 *Target:* `{:.5f}` _({:.1f} pips)_\n".format(tp, reward_pips) +
+                "⚖️ *RR:*     `1:" + str(RR_RATIO) + "`\n"
+                "─────────────────────\n"
+                "⚠️ _Confirm higher-TF context before executing._"
+                + confirm_tag
+            )
+            send_telegram(msg)
+            # Save signal to state for cooldown check on next scan
+            state["last_signal_direction"] = trade_signal
+            state["last_signal_price"]     = entry
+            state["last_signal_time"]      = datetime.now(timezone.utc).isoformat()
+            save_state(state)
+
+    elif in_zone and trade_signal == "HOLD":
+        # CASE B: Price is in the zone but pattern hasn't confirmed yet.
+        if not is_watching:
+            # First time price entered this zone — set WATCHING and alert.
+            state["watching"]      = True
+            state["watching_zone"] = fib_zone
+            state["watching_bias"] = macro_bias
+            state["watching_set_at"] = datetime.now(timezone.utc).isoformat()
+            save_state(state)
+            stats["watching_alerts"] += 1
+
+            direction_word = "discount" if macro_bias == "BULLISH" else "premium"
+            watch_msg = (
+                "👀 *SMC WATCHING — GBPUSD*\n\n"
+                "📊 *Bias:* `" + macro_bias + "` | *Structure:* `" + structure_source + "`\n"
+                "🎯 *Price entered " + direction_word + " zone:* `{:.5f}`\n".format(fib_zone) +
+                "📐 *SwH:* `{:.5f}` | *SwL:* `{:.5f}`\n".format(swing_high, swing_low) +
+                "⚡ *ATR:* `{:.1f} pips`\n".format(current_atr / PIP_SIZE) +
+                "─────────────────────\n"
+                "⏳ _Waiting for engulf confirmation..._\n"
+                "_(Auto-clears in " + str(WATCHING_TTL_MINUTES) + " min or on 15M close-through)_"
+            )
+            send_telegram(watch_msg)
+            print("  [WATCHING] Set — price entered zone at {:.5f}".format(fib_zone))
+        else:
+            print("  [WATCHING] Active — price still in zone, no confirmation yet.")
 
     # ── Save stats and send periodic summary ─────────────────────────────
     save_stats(stats)
@@ -734,8 +977,8 @@ def scan():
     print(
         "  [STATS] Scans: {total_scans} | Consolidation: {consolidation_skip} | "
         "BOS conflict: {bos_conflict} | No structure: {no_structure} | "
-        "Fib reached: {fib_reached} | Pattern passed: {pattern_passed} | "
-        "Signals: {signals_sent}".format(**stats)
+        "Fib reached: {fib_reached} | Watching: {watching_alerts} | "
+        "Pattern passed: {pattern_passed} | Signals: {signals_sent}".format(**stats)
     )
 
 

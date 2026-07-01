@@ -1,11 +1,12 @@
 {
-  "total_scans": 60,
+  "total_scans": 61,
   "consolidation_skip": 0,
   "bos_conflict": 6,
   "no_structure": 0,
   "fib_reached": 17,
+  "watching_alerts": 0,
   "pattern_passed": 1,
   "signals_sent": 1,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-07-01 16:44"
+  "last_scan": "2026-07-01 18:40"
 }

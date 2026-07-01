@@ -56,6 +56,13 @@ DATA_SPIKE_ATR_MULT = 8
 STATE_FILE = "state.json"
 STATE_MAX_AGE_HOURS = 6
 
+# Funnel analytics — persists across runs in the repo
+STATS_FILE = "stats.json"
+
+# How often to send a Telegram summary (every N scans)
+# Set to 0 to disable periodic summaries entirely
+STATS_SUMMARY_EVERY = 50
+
 
 def load_state():
     try:
@@ -85,6 +92,92 @@ def save_state(state):
             json.dump(state, f)
     except Exception as e:
         print("[STATE SAVE ERROR] " + str(e))
+
+
+# -----------------------------------------------
+# FUNNEL STATS
+# -----------------------------------------------
+_STATS_DEFAULTS = {
+    "total_scans":        0,
+    "consolidation_skip": 0,
+    "bos_conflict":       0,
+    "no_structure":       0,
+    "fib_reached":        0,
+    "pattern_passed":     0,
+    "signals_sent":       0,
+    "first_scan":         None,
+    "last_scan":          None,
+}
+
+
+def load_stats():
+    try:
+        with open(STATS_FILE, "r") as f:
+            saved = json.load(f)
+        # Merge with defaults so new keys added in future versions
+        # don't cause KeyErrors on old stats files
+        stats = dict(_STATS_DEFAULTS)
+        stats.update(saved)
+        return stats
+    except Exception:
+        return dict(_STATS_DEFAULTS)
+
+
+def save_stats(stats):
+    try:
+        with open(STATS_FILE, "w") as f:
+            json.dump(stats, f, indent=2)
+    except Exception as e:
+        print("[STATS SAVE ERROR] " + str(e))
+
+
+def format_stats_summary(stats):
+    """
+    Formats the funnel breakdown exactly as requested:
+      Today's scans: 84
+      Consolidation skips: 19
+      BOS conflicts: 12
+      ...
+    Plus derived rates so you can immediately see which filter
+    is the bottleneck without doing the maths yourself.
+    """
+    n = stats["total_scans"]
+    if n == 0:
+        return "No scans recorded yet."
+
+    def pct(val):
+        return f"{val/n*100:.1f}%" if n > 0 else "—"
+
+    first = stats.get("first_scan", "?")
+    last  = stats.get("last_scan",  "?")
+
+    lines = [
+        "",
+        "📊 *SMC Scanner — Funnel Stats*",
+        f"_Period: {first} → {last}_",
+        "─────────────────────",
+        f"🔍 Total scans:          `{n}`",
+        f"➖ Consolidation skip:   `{stats['consolidation_skip']}` ({pct(stats['consolidation_skip'])})",
+        f"⚠️ BOS conflict:         `{stats['bos_conflict']}` ({pct(stats['bos_conflict'])})",
+        f"❌ No structure:         `{stats['no_structure']}` ({pct(stats['no_structure'])})",
+        f"🎯 Fib zone reached:     `{stats['fib_reached']}` ({pct(stats['fib_reached'])})",
+        f"✅ Pattern passed:       `{stats['pattern_passed']}` ({pct(stats['pattern_passed'])})",
+        f"🚨 Signals sent:         `{stats['signals_sent']}` ({pct(stats['signals_sent'])})",
+        "─────────────────────",
+    ]
+
+    # Bottleneck diagnosis
+    if n > 20:
+        if stats["fib_reached"] == 0:
+            lines.append("⚠️ _Fib zone never reached — price not pulling back to zone._")
+        elif stats["pattern_passed"] == 0:
+            lines.append("⚠️ _Pattern never passes — engulf filter may be too tight._")
+        elif stats["signals_sent"] == 0 and stats["pattern_passed"] > 0:
+            lines.append("⚠️ _Pattern passes but no signals — check ATR body threshold._")
+        else:
+            lines.append("✅ _Funnel behaving as expected._")
+
+    return "\n".join(lines)
 
 
 # -----------------------------------------------
@@ -409,115 +502,149 @@ def _checklist(bias, bos_check, bos_bias_check, range_check, fib_check, atr_chec
 # -----------------------------------------------
 def scan():
     now_utc = datetime.now(timezone.utc)
-    print("\n[" + now_utc.strftime("%H:%M UTC") + "] Scan starting...")
+    now_str = now_utc.strftime("%H:%M UTC")
+    print("\n[" + now_str + "] Scan starting...")
 
-    df_5m = fetch_ohlc("5min", outputsize=100)
+    # ── Load persistent stats ────────────────────────────────────────────
+    stats = load_stats()
+    stats["total_scans"] += 1
+    if stats["first_scan"] is None:
+        stats["first_scan"] = now_utc.strftime("%Y-%m-%d")
+    stats["last_scan"] = now_utc.strftime("%Y-%m-%d %H:%M")
+
+    # ── Fetch data ───────────────────────────────────────────────────────
+    df_5m  = fetch_ohlc("5min",  outputsize=100)
     df_15m = fetch_ohlc("15min", outputsize=SWING_LOOKBACK_15 + 10)
-    df_1h = fetch_ohlc("1h", outputsize=HTF_BIAS_MIN_BARS + 20)
+    df_1h  = fetch_ohlc("1h",    outputsize=HTF_BIAS_MIN_BARS + 20)
 
     if df_5m is None or df_15m is None or df_1h is None:
         print("Data fetch failed. Exiting.")
+        save_stats(stats)
         return
 
-    if not (data_looks_sane(df_5m, "5min") and data_looks_sane(df_15m, "15min") and data_looks_sane(df_1h, "1h")):
+    if not (data_looks_sane(df_5m, "5min") and
+            data_looks_sane(df_15m, "15min") and
+            data_looks_sane(df_1h, "1h")):
         print("Data sanity check failed. Skipping this run.")
+        save_stats(stats)
         return
 
     if len(df_1h) < HTF_BIAS_MIN_BARS:
-        print("Only " + str(len(df_1h)) + " 1H bars. Need " + str(HTF_BIAS_MIN_BARS) + ". Skipping.")
+        print("Only " + str(len(df_1h)) + " 1H bars. Need " +
+              str(HTF_BIAS_MIN_BARS) + ". Skipping.")
+        save_stats(stats)
         return
 
-    state = load_state()
+    # ── 1H Bias ──────────────────────────────────────────────────────────
+    state      = load_state()
     macro_bias = compute_macro_bias(df_1h)
 
     if macro_bias == "CONSOLIDATION":
+        stats["consolidation_skip"] += 1
+        save_stats(stats)
         print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", "N/A", "N/A",
                           "NO TRADE — 1H is consolidating (no directional edge)"))
         return
 
+    # ── ATR ───────────────────────────────────────────────────────────────
     df_5m["ATR"] = atr(df_5m, period=14)
-    current_atr = df_5m["ATR"].iloc[-1]
+    current_atr  = df_5m["ATR"].iloc[-1]
 
     atr_valid_check = "PASS" if (not pd.isna(current_atr) and current_atr != 0) else "FAIL"
     if pd.isna(current_atr) or current_atr == 0:
+        save_stats(stats)
         print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", atr_valid_check, "N/A",
                           "NO TRADE — ATR invalid"))
         return
 
-    lookback = df_15m.tail(SWING_LOOKBACK_15)
-    bos = detect_bos_impulse(lookback, wing=FRACTAL_WING)
-
-    bos_check = "N/A"
+    # ── BOS / Structure ───────────────────────────────────────────────────
+    lookback      = df_15m.tail(SWING_LOOKBACK_15)
+    bos           = detect_bos_impulse(lookback, wing=FRACTAL_WING)
+    bos_check     = "N/A"
     bos_bias_check = "N/A"
 
     if bos is not None:
         bos_check = bos["direction"] + (" OK" if bos["direction"] == macro_bias else " WARN")
 
         if bos["direction"] == macro_bias:
-            bos_bias_check = "PASS"
+            bos_bias_check   = "PASS"
             structure_source = "BOS"
             if bos["direction"] == "BULLISH":
-                swing_low = bos["impulse_start"]
+                swing_low  = bos["impulse_start"]
                 swing_high = bos["impulse_end"]
             else:
                 swing_high = bos["impulse_start"]
-                swing_low = bos["impulse_end"]
+                swing_low  = bos["impulse_end"]
             save_state({
-                "status": "ACTIVE_LEG",
-                "direction": bos["direction"],
+                "status":        "ACTIVE_LEG",
+                "direction":     bos["direction"],
                 "impulse_start": bos["impulse_start"],
-                "impulse_end": bos["impulse_end"],
+                "impulse_end":   bos["impulse_end"],
             })
         else:
+            stats["bos_conflict"] += 1
             bos_bias_check = "CONFLICT (using fallback structure)"
-            swing_high, swing_low, structure_source = fallback_structure(lookback, macro_bias, state, wing=FRACTAL_WING)
+            swing_high, swing_low, structure_source = fallback_structure(
+                lookback, macro_bias, state, wing=FRACTAL_WING)
     else:
         bos_bias_check = "N/A (no dominant leg found)"
-        swing_high, swing_low, structure_source = fallback_structure(lookback, macro_bias, state, wing=FRACTAL_WING)
+        swing_high, swing_low, structure_source = fallback_structure(
+            lookback, macro_bias, state, wing=FRACTAL_WING)
 
+    # ── Range Filter ──────────────────────────────────────────────────────
     structural_range = swing_high - swing_low
-
     range_check = "PASS" if structural_range >= (5 * PIP_SIZE) else "FAIL (range < 5 pips)"
+
     if structural_range < (5 * PIP_SIZE):
-        print(_checklist(macro_bias, bos_check, bos_bias_check, range_check, "N/A", atr_valid_check, "N/A",
+        stats["no_structure"] += 1
+        save_stats(stats)
+        print(_checklist(macro_bias, bos_check, bos_bias_check, range_check,
+                          "N/A", atr_valid_check, "N/A",
                           "NO TRADE — range too compressed"))
         return
 
+    # ── Adaptive Fib Zone ─────────────────────────────────────────────────
     fib_ratio = adaptive_fib_ratio(df_5m, current_atr)
-    fib_zone = (
+    fib_zone  = (
         swing_high - (fib_ratio * structural_range) if macro_bias == "BULLISH"
         else swing_low + (fib_ratio * structural_range)
     )
     fib_check = "{:.5f} (ratio {:.1f}%)".format(fib_zone, fib_ratio * 100)
 
+    # ── Execution Matrix ──────────────────────────────────────────────────
     c_last = df_5m.iloc[-1]
     c_prev = df_5m.iloc[-2]
 
-    body_last = abs(c_last["Close"] - c_last["Open"])
+    body_last     = abs(c_last["Close"] - c_last["Open"])
     atr_threshold = ATR_ENGULF_MIN * current_atr
 
-    trade_signal = "HOLD"
+    trade_signal  = "HOLD"
     entry = sl = tp = risk_pips = reward_pips = None
     pattern_check = "N/A"
 
     if macro_bias == "BULLISH":
         lowest_wick = min(c_prev["Low"], c_last["Low"])
-        in_zone = lowest_wick <= fib_zone
-        bear_prev = c_prev["Close"] < c_prev["Open"]
-        bull_last = c_last["Close"] > c_last["Open"]
-        engulfs = c_last["Close"] >= c_prev["Open"] and c_last["Open"] <= c_prev["Close"]
-        real_body = body_last > atr_threshold
+        in_zone     = lowest_wick <= fib_zone
+        bear_prev   = c_prev["Close"] < c_prev["Open"]
+        bull_last   = c_last["Close"] > c_last["Open"]
+        engulfs     = (c_last["Close"] >= c_prev["Open"] and
+                       c_last["Open"]  <= c_prev["Close"])
+        real_body   = body_last > atr_threshold
+
+        if in_zone:
+            stats["fib_reached"] += 1   # price made it to the zone
 
         if in_zone and bear_prev and bull_last and engulfs and real_body:
-            trade_signal = "BUY"
-            entry = c_last["Close"]
-            sl_buffer = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
-            sl = lowest_wick - sl_buffer
-            risk = entry - sl
-            tp = entry + (RR_RATIO * risk)
-            risk_pips = risk / PIP_SIZE
-            reward_pips = (RR_RATIO * risk) / PIP_SIZE
+            trade_signal  = "BUY"
+            entry         = c_last["Close"]
+            sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+            sl            = lowest_wick - sl_buffer
+            risk          = entry - sl
+            tp            = entry + (RR_RATIO * risk)
+            risk_pips     = risk / PIP_SIZE
+            reward_pips   = (RR_RATIO * risk) / PIP_SIZE
             pattern_check = "PASS"
+            stats["pattern_passed"] += 1
         else:
             fails = []
             if not in_zone:    fails.append("price not in discount zone")
@@ -529,22 +656,27 @@ def scan():
 
     elif macro_bias == "BEARISH":
         highest_wick = max(c_prev["High"], c_last["High"])
-        in_zone = highest_wick >= fib_zone
-        bull_prev = c_prev["Close"] > c_prev["Open"]
-        bear_last = c_last["Close"] < c_last["Open"]
-        engulfs = c_last["Open"] >= c_prev["Close"] and c_last["Close"] <= c_prev["Open"]
-        real_body = body_last > atr_threshold
+        in_zone      = highest_wick >= fib_zone
+        bull_prev    = c_prev["Close"] > c_prev["Open"]
+        bear_last    = c_last["Close"] < c_last["Open"]
+        engulfs      = (c_last["Open"]  >= c_prev["Close"] and
+                        c_last["Close"] <= c_prev["Open"])
+        real_body    = body_last > atr_threshold
+
+        if in_zone:
+            stats["fib_reached"] += 1
 
         if in_zone and bull_prev and bear_last and engulfs and real_body:
-            trade_signal = "SELL"
-            entry = c_last["Close"]
-            sl_buffer = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
-            sl = highest_wick + sl_buffer
-            risk = sl - entry
-            tp = entry - (RR_RATIO * risk)
-            risk_pips = risk / PIP_SIZE
-            reward_pips = (RR_RATIO * risk) / PIP_SIZE
+            trade_signal  = "SELL"
+            entry         = c_last["Close"]
+            sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+            sl            = highest_wick + sl_buffer
+            risk          = sl - entry
+            tp            = entry - (RR_RATIO * risk)
+            risk_pips     = risk / PIP_SIZE
+            reward_pips   = (RR_RATIO * risk) / PIP_SIZE
             pattern_check = "PASS"
+            stats["pattern_passed"] += 1
         else:
             fails = []
             if not in_zone:    fails.append("price not in premium zone")
@@ -553,10 +685,12 @@ def scan():
             if not engulfs:    fails.append("doesn't engulf prev body")
             if not real_body:  fails.append("body too small vs ATR")
             pattern_check = "FAIL (" + ", ".join(fails) + ")"
-            pattern_check = "FAIL (" + ", ".join(fails) + ")"
 
-    decision = ("🚨 SIGNAL — " + trade_signal) if trade_signal != "HOLD" else "NO TRADE — pattern conditions not met"
-    print(_checklist(macro_bias, bos_check, bos_bias_check, range_check, fib_check, atr_valid_check, pattern_check, decision))
+    # ── Print checklist ───────────────────────────────────────────────────
+    decision = ("🚨 SIGNAL — " + trade_signal) if trade_signal != "HOLD" \
+               else "NO TRADE — pattern conditions not met"
+    print(_checklist(macro_bias, bos_check, bos_bias_check, range_check,
+                     fib_check, atr_valid_check, pattern_check, decision))
     print(
         "  [Detail] Structure: " + structure_source +
         " | Price: {:.5f}".format(c_last["Close"]) +
@@ -566,7 +700,9 @@ def scan():
         " SwL: {:.5f}".format(swing_low)
     )
 
+    # ── Signal alert ──────────────────────────────────────────────────────
     if trade_signal != "HOLD" and entry is not None:
+        stats["signals_sent"] += 1
         direction_emoji = "📈" if trade_signal == "BUY" else "📉"
         msg = (
             "🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
@@ -585,6 +721,22 @@ def scan():
             "⚠️ _Confirm higher-TF context before executing._"
         )
         send_telegram(msg)
+
+    # ── Save stats and send periodic summary ─────────────────────────────
+    save_stats(stats)
+
+    if (STATS_SUMMARY_EVERY > 0 and
+            stats["total_scans"] % STATS_SUMMARY_EVERY == 0):
+        send_telegram(format_stats_summary(stats))
+        print("  [STATS] Periodic summary sent to Telegram.")
+
+    # Always print current funnel totals to the Actions log
+    print(
+        "  [STATS] Scans: {total_scans} | Consolidation: {consolidation_skip} | "
+        "BOS conflict: {bos_conflict} | No structure: {no_structure} | "
+        "Fib reached: {fib_reached} | Pattern passed: {pattern_passed} | "
+        "Signals: {signals_sent}".format(**stats)
+    )
 
 
 if __name__ == "__main__":

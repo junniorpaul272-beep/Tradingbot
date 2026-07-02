@@ -1230,6 +1230,14 @@ def scan():
         sweep_label if sweep_valid else "—"
     )
 
+    # c_last/c_prev are needed by the fib-staleness check right below, so
+    # they're pulled here rather than further down where they used to live -
+    # that ordering caused an UnboundLocalError any time regime_shifted or
+    # a post-spike cooldown was active, since this block ran before the
+    # variables existed yet.
+    c_last = df_5m.iloc[-1]
+    c_prev = df_5m.iloc[-2]
+
     # ── Fib zone staleness check (post-spike) ────────────────────────────
     # If a regime shift was active in any of the last few scans, verify
     # the spike candle (c_last or c_prev, whichever was more extreme)
@@ -1260,8 +1268,6 @@ def scan():
             if state.get("status") == "ACTIVE_LEG":
                 state["status"] = "STALE_POST_SPIKE"
             save_state(state)
-    c_last = df_5m.iloc[-1]
-    c_prev = df_5m.iloc[-2]
 
     body_last     = abs(c_last["Close"] - c_last["Open"])
     atr_threshold = ATR_ENGULF_MIN * current_atr

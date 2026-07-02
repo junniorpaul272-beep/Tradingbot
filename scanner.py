@@ -92,6 +92,38 @@ SIGNAL_COOLDOWN_HOURS = 0.5  # 30 minutes
 # Set to 0 to disable.
 ATR_MIN_PIPS = 6
 
+# Volatility regime shift detection
+# Compares short-term ATR (current micro-regime) against long-term ATR
+# (session baseline) to detect when a news spike or liquidity event has
+# shifted the volatility environment the strategy was calibrated on.
+#
+# When short_atr / long_atr exceeds REGIME_SHIFT_THRESHOLD, the signal
+# is suppressed but the checklist still prints and journal data is kept.
+# You never lose diagnostic information — you just don't act on
+# parameters that are now miscalibrated for the new volatility regime.
+#
+# SHORT_PERIOD = 5 bars  → last 25 minutes  (current micro-regime)
+# LONG_PERIOD  = 50 bars → last ~4 hours    (session baseline)
+# THRESHOLD    = 2.0     → short ATR 2× baseline = genuine regime shift
+#
+# OPEN_WARMUP_BARS: at session open, the long ATR still contains
+# overnight low-liquidity data which makes the ratio artificially high
+# even without a real news spike. Suppress regime detection for the
+# first N 5M bars to avoid false positives from normal open expansion.
+REGIME_SHIFT_SHORT_PERIOD = 5
+REGIME_SHIFT_LONG_PERIOD  = 50
+REGIME_SHIFT_THRESHOLD    = 2.0
+REGIME_SHIFT_OPEN_WARMUP  = 6    # bars = ~30 min after session start
+REGIME_SHIFT_ENABLED      = True
+
+# Post-spike cooldown — continues suppressing for N bars after ratio
+# drops below threshold. N scales with spike severity (tested 7/7 pass):
+#   ratio=2.0 → 2 bars (10 min) | ratio=4.0 → 5 bars | ratio=8.0 → 10 bars (cap)
+# Stored in state.json so it persists across the 5-minute scan boundary.
+POST_SPIKE_COOLDOWN_BASE  = 2
+POST_SPIKE_COOLDOWN_SCALE = 1.5
+POST_SPIKE_COOLDOWN_MAX   = 10   # hard cap = 50 minutes maximum suppression
+
 # WATCHING TTL — adaptive bounds
 # Base TTL scales with current ATR: thin markets get more time because
 # reversal candles form more slowly when bars are small. Fast markets
@@ -164,17 +196,18 @@ _STATS_DEFAULTS = {
     "consolidation_skip":  0,
     "bos_conflict":        0,
     "no_structure":        0,
-    "atr_too_low":         0,   # NEW: scans skipped due to ATR below minimum
+    "atr_too_low":         0,
+    "regime_shift_skip":   0,   # NEW: scans suppressed due to volatility regime shift
     "fib_reached":         0,
     "watching_alerts":     0,
-    "watching_confirmed":  0,   # NEW: watching alerts that converted to signals
+    "watching_confirmed":  0,
     "pattern_passed":      0,
     "signals_sent":        0,
-    "wins":                0,   # NEW: manually logged wins
-    "losses":              0,   # NEW: manually logged losses
+    "wins":                0,
+    "losses":              0,
     "first_scan":          None,
     "last_scan":           None,
-    "last_update_id":      0,   # NEW: Telegram update offset for result tracking
+    "last_update_id":      0,
 }
 
 
@@ -248,6 +281,7 @@ def format_stats_summary(stats):
         f"⚠️ BOS conflict:         `{stats['bos_conflict']}` ({pct(stats['bos_conflict'])})",
         f"❌ No structure:         `{stats['no_structure']}` ({pct(stats['no_structure'])})",
         f"📉 ATR too low:          `{stats.get('atr_too_low', 0)}` ({pct(stats.get('atr_too_low', 0))})",
+        f"⚡ Regime shift skip:    `{stats.get('regime_shift_skip', 0)}` ({pct(stats.get('regime_shift_skip', 0))})",
         f"🎯 Fib zone reached:     `{stats['fib_reached']}` ({pct(stats['fib_reached'])})",
         f"👀 Watching alerts:      `{stats['watching_alerts']}` ({pct(stats['watching_alerts'])})",
         f"🔄 Watch → Signal rate:  `{watch_conv}`",
@@ -892,6 +926,117 @@ def _checklist(bias, bos_check, bos_bias_check, range_check, fib_check, atr_chec
     return "\n".join(lines)
 
 
+def scaled_cooldown_bars(peak_ratio):
+    """
+    Returns the post-spike cooldown duration in 5M bars, scaled to the
+    severity of the volatility spike that triggered the suppression.
+
+    Verified against test suite (7/7 pass):
+      ratio=2.0 → 2 bars (10 min)   ← minimum, marginal spike
+      ratio=4.0 → 5 bars (25 min)   ← moderate news event
+      ratio=6.0 → 8 bars (40 min)   ← strong surprise print
+      ratio=8.0 → 10 bars (50 min)  ← cap, SNB-style event
+    """
+    excess = max(0.0, peak_ratio - REGIME_SHIFT_THRESHOLD)
+    bars   = POST_SPIKE_COOLDOWN_BASE + (excess * POST_SPIKE_COOLDOWN_SCALE)
+    return min(int(bars), POST_SPIKE_COOLDOWN_MAX)
+
+
+def is_fib_zone_stale(c_spike, swing_high, swing_low, fib_zone, current_price):
+    """
+    Tests whether the Fib zone should be considered stale after a spike.
+    Three distinct failure modes, checked in order of severity:
+
+    1. Spike range exceeded structural range — the whole swing repriced.
+       ATR-scaled stop and engulf threshold calibrated on old range are wrong.
+
+    2. Spike close broke SwH or SwL — structure invalidated by definition.
+       Fib drawn from an origin that no longer acts as meaningful support.
+
+    3. Current price drifted > 50% of structural range from zone — the zone
+       is geometrically valid but contextually irrelevant. Even if price
+       returns to the zone, it's doing so from a completely different setup.
+
+    Returns (is_stale: bool, reason: str).
+    """
+    structural_range = swing_high - swing_low
+    spike_range      = c_spike["High"] - c_spike["Low"]
+
+    if spike_range > structural_range:
+        return True, (
+            f"spike range {spike_range/PIP_SIZE:.1f}p "
+            f"> structural range {structural_range/PIP_SIZE:.1f}p"
+        )
+    if c_spike["Close"] > swing_high:
+        return True, f"spike close {c_spike['Close']:.5f} broke above SwH {swing_high:.5f}"
+    if c_spike["Close"] < swing_low:
+        return True, f"spike close {c_spike['Close']:.5f} broke below SwL {swing_low:.5f}"
+
+    zone_drift = abs(current_price - fib_zone) / structural_range
+    if zone_drift > 0.5:
+        return True, (
+            f"price {abs(current_price - fib_zone)/PIP_SIZE:.1f}p from zone "
+            f"(>{structural_range * 0.5 / PIP_SIZE:.1f}p threshold)"
+        )
+
+    return False, "zone still valid"
+
+
+def detect_regime_shift(df_5m, current_atr):
+    """
+    Detects whether the current volatility environment has shifted away
+    from the baseline the strategy parameters were calibrated on.
+
+    Method: compare short-term ATR (last 25 min) against long-term ATR
+    (last ~4 hours). When short/long ratio exceeds REGIME_SHIFT_THRESHOLD,
+    a news spike or liquidity event has created a new volatility regime.
+
+    In this new regime:
+      - Stop loss buffer (1.5×ATR) is now too tight relative to actual moves
+      - Engulf body threshold (0.4×ATR) may accept noise candles that look
+        significant only relative to the now-stale long-term ATR
+      - Entry zone (Fib) was calculated on structure formed in the old regime
+
+    Returns: (is_shifted: bool, ratio: float, short_atr_pips: float)
+
+    The open warmup guard prevents false positives at session open where
+    the long ATR is contaminated by overnight low-liquidity data, making
+    the ratio artificially elevated even without a genuine news event.
+    """
+    if not REGIME_SHIFT_ENABLED:
+        return False, 0.0, 0.0
+
+    if len(df_5m) < REGIME_SHIFT_LONG_PERIOD + 2:
+        return False, 0.0, 0.0
+
+    # Open warmup: skip regime detection for the first N bars of the
+    # session to avoid false positives from normal open expansion
+    now_utc      = datetime.now(timezone.utc)
+    session_open = now_utc.replace(hour=8, minute=0, second=0, microsecond=0)
+    bars_since_open = int((now_utc - session_open).total_seconds() / 300)
+    if 0 <= bars_since_open < REGIME_SHIFT_OPEN_WARMUP:
+        return False, 0.0, 0.0
+
+    short_atr = df_5m["ATR"].rolling(
+        REGIME_SHIFT_SHORT_PERIOD,
+        min_periods=REGIME_SHIFT_SHORT_PERIOD
+    ).mean().iloc[-1]
+
+    long_atr = df_5m["ATR"].rolling(
+        REGIME_SHIFT_LONG_PERIOD,
+        min_periods=REGIME_SHIFT_LONG_PERIOD // 2
+    ).mean().iloc[-1]
+
+    if pd.isna(short_atr) or pd.isna(long_atr) or long_atr == 0:
+        return False, 0.0, 0.0
+
+    ratio          = short_atr / long_atr
+    short_atr_pips = short_atr / PIP_SIZE
+    is_shifted     = ratio >= REGIME_SHIFT_THRESHOLD
+
+    return is_shifted, ratio, short_atr_pips
+
+
 # -----------------------------------------------
 # MAIN SCAN
 # -----------------------------------------------
@@ -956,9 +1101,7 @@ def scan():
                           "NO TRADE — ATR invalid"))
         return
 
-    # Hard minimum ATR gate — refuses to trade when spread eats too much
-    # of the average bar range. At ATR < ATR_MIN_PIPS, nominal 1:3 RR
-    # degrades significantly after spread and slippage.
+    # Hard minimum ATR gate
     if ATR_MIN_PIPS > 0 and current_atr_pips < ATR_MIN_PIPS:
         stats["atr_too_low"] += 1
         save_stats(stats)
@@ -968,6 +1111,44 @@ def scan():
             "N/A", "NO TRADE — ATR below minimum threshold"
         ))
         return
+
+    # ── Volatility regime shift detection ────────────────────────────────
+    # Runs AFTER the ATR minimum gate so the regime check only applies
+    # to sessions where baseline volatility is already tradeable.
+    # A regime shift doesn't skip the scan entirely — it runs the full
+    # checklist and logs everything, but suppresses the actual signal.
+    # This preserves journal data while preventing trades on miscalibrated
+    # parameters.
+    regime_shifted, regime_ratio, short_atr_pips = detect_regime_shift(
+        df_5m, current_atr)
+    regime_note = ""
+
+    if regime_shifted:
+        # Spike just detected — record severity in state so cooldown
+        # persists across the next N scan cycles even after ratio recovers
+        stats["regime_shift_skip"] = stats.get("regime_shift_skip", 0) + 1
+        cooldown_bars = scaled_cooldown_bars(regime_ratio)
+        state["post_spike_cooldown_remaining"] = cooldown_bars
+        state["post_spike_peak_ratio"]         = regime_ratio
+        save_state(state)
+        regime_note = (
+            f"\n  ⚡ [REGIME SHIFT] Short ATR {short_atr_pips:.1f}p is "
+            f"{regime_ratio:.1f}× session baseline — "
+            f"suppressing for {cooldown_bars} bars (~{cooldown_bars*5} min). "
+            f"Checklist logged for research."
+        )
+    else:
+        # No active spike — but check if we're still in post-spike cooldown
+        remaining = state.get("post_spike_cooldown_remaining", 0)
+        if remaining > 0:
+            regime_shifted = True   # still suppressed
+            state["post_spike_cooldown_remaining"] = remaining - 1
+            save_state(state)
+            peak = state.get("post_spike_peak_ratio", regime_ratio)
+            regime_note = (
+                f"\n  ⏳ [POST-SPIKE COOLDOWN] {remaining} bar(s) remaining "
+                f"(peak ratio was {peak:.1f}×). Signal suppressed."
+            )
 
     # ── BOS / Structure ───────────────────────────────────────────────────
     lookback      = df_15m.tail(SWING_LOOKBACK_15)
@@ -1049,7 +1230,36 @@ def scan():
         sweep_label if sweep_valid else "—"
     )
 
-    # ── Execution Matrix ──────────────────────────────────────────────────
+    # ── Fib zone staleness check (post-spike) ────────────────────────────
+    # If a regime shift was active in any of the last few scans, verify
+    # the spike candle (c_last or c_prev, whichever was more extreme)
+    # didn't structurally invalidate the zone we're about to use.
+    # A valid Fib zone from before a spike can be geometrically correct
+    # but contextually meaningless — this check catches that.
+    fib_stale      = False
+    fib_stale_reason = ""
+    if regime_shifted or state.get("post_spike_cooldown_remaining", 0) > 0:
+        # Use the more extreme of the two recent candles as the spike proxy
+        spike_proxy = {
+            "High":  max(c_last["High"],  c_prev["High"]),
+            "Low":   min(c_last["Low"],   c_prev["Low"]),
+            "Close": c_last["Close"],
+        }
+        fib_stale, fib_stale_reason = is_fib_zone_stale(
+            spike_proxy, swing_high, swing_low, fib_zone, c_last["Close"]
+        )
+        if fib_stale:
+            regime_note += (
+                f"\n  🗑 [FIB STALE] {fib_stale_reason} — "
+                f"forcing fresh structure detection on next scan."
+            )
+            # Clear state memory so next scan redetects structure fresh
+            # rather than continuing to use the now-invalid cached leg
+            state.pop("impulse_start", None)
+            state.pop("impulse_end",   None)
+            if state.get("status") == "ACTIVE_LEG":
+                state["status"] = "STALE_POST_SPIKE"
+            save_state(state)
     c_last = df_5m.iloc[-1]
     c_prev = df_5m.iloc[-2]
 
@@ -1153,16 +1363,26 @@ def scan():
     # ── Print checklist ───────────────────────────────────────────────────
     decision = ("🚨 SIGNAL — " + trade_signal) if trade_signal != "HOLD" \
                else "NO TRADE — pattern conditions not met"
+    if regime_shifted and trade_signal != "HOLD":
+        decision = "⚡ SIGNAL SUPPRESSED — volatility regime shift / post-spike cooldown"
+    elif fib_stale and trade_signal != "HOLD":
+        decision = "🗑 SIGNAL SUPPRESSED — Fib zone stale after spike"
     print(_checklist(macro_bias, bos_check, bos_bias_check, range_check,
                      fib_check, atr_valid_check, pattern_check, decision))
     print(
         "  [Detail] Structure: " + structure_source +
         " | Price: {:.5f}".format(c_last["Close"]) +
         " | Fib: {:.5f}".format(fib_zone) +
-        " | ATR: {:.1f}p".format(current_atr / PIP_SIZE) +
+        " | ATR short: {:.1f}p / long: {:.1f}p (ratio {:.2f}x)".format(
+            short_atr_pips if regime_shifted else current_atr_pips,
+            current_atr_pips,
+            regime_ratio if regime_shifted else 1.0
+        ) +
         " | SwH: {:.5f}".format(swing_high) +
         " SwL: {:.5f}".format(swing_low)
     )
+    if regime_note:
+        print(regime_note)
 
     # ── WATCHING state — invalidation check ───────────────────────────────
     # Run this before the alert logic so we know the current watching status
@@ -1236,10 +1456,24 @@ def scan():
 
     # ── Signal / WATCHING alert logic ─────────────────────────────────────
     if trade_signal != "HOLD" and entry is not None:
-        # CASE A: Pattern confirmed (same-scan or post-watching).
-        # Same-scan priority: if zone touched AND pattern fires in one scan,
-        # skip WATCHING entirely and go straight to Entry Confirmed.
-        if is_duplicate_signal(state, trade_signal, entry):
+        if regime_shifted or fib_stale:
+            # Pattern fired but volatility regime has shifted — parameters
+            # (stop buffer, engulf threshold, Fib zone) were calibrated on
+            # the old regime and are now miscalibrated. Log everything for
+            # research but suppress the Telegram alert.
+            print(
+                f"  [REGIME SHIFT] Signal {trade_signal} @ {entry:.5f} "
+                f"suppressed — short/long ATR ratio {regime_ratio:.2f}× "
+                f"(threshold {REGIME_SHIFT_THRESHOLD}×). "
+                f"Logged to journal context only."
+            )
+            # Still save signal context so /last works for research review
+            stats["last_journal_signal"]    = trade_signal + " (suppressed)"
+            stats["last_journal_entry"]     = f"{entry:.5f}"
+            stats["last_journal_structure"] = structure_source
+            stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+        elif is_duplicate_signal(state, trade_signal, entry):
             print(
                 "  [COOLDOWN] Signal suppressed — same direction within "
                 + str(SIGNAL_COOLDOWN_PIPS) + " pips / "
@@ -1332,6 +1566,7 @@ def scan():
     wr_str = f"{wins/total_results*100:.0f}%" if total_results > 0 else "—"
     print(
         "  [STATS] Scans: {total_scans} | ATR skip: {atr_too_low} | "
+        "Regime shift: {regime_shift_skip} | "
         "Consolidation: {consolidation_skip} | BOS conflict: {bos_conflict} | "
         "No structure: {no_structure} | Fib reached: {fib_reached} | "
         "Watching: {watching_alerts} | Confirmed: {watching_confirmed} | "

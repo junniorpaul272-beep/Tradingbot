@@ -1,6 +1,6 @@
 """
-GBPUSD SMC Scanner - GitHub Actions Edition
-============================================
+GBPUSD SMC Scanner V2 - GitHub Actions Edition
+================================================
 - Data: Twelve Data API (800 calls/day free)
 - Runner: GitHub Actions (free, never goes offline)
 - Alerts: Telegram
@@ -9,6 +9,21 @@ GBPUSD SMC Scanner - GitHub Actions Edition
   dominant leg (state.json, capped at STATE_MAX_AGE_HOURS old) so a
   run that can't redetect a leg in its short lookback window isn't
   forced to fall all the way back to weaker logic.
+
+V2 changes from V1:
+- Binary Signal/No-Signal replaced with a weighted confidence score
+  (see SCORE_WEIGHTS / compute_confidence_score). A clean reversal
+  (sweep + structure shift + fib + confirmation) outranks a valid
+  continuation missing one input, rather than the continuation being
+  hard-rejected for lacking a sweep.
+- Every state transition (WATCHING set/cleared, signal cooldown
+  released) is now caused by a market event — a new swing, a zone
+  failing, price running away, a fresh sweep — never by a clock or
+  scan count. The V1 WATCHING_TTL (a 10-25 min timer) is gone; the
+  V1 signal cooldown (30 min / 5 pips) is gone. Both are replaced by
+  structural checks: same dealing range = suppressed, new leg = fires.
+- Adaptive Fib zone and ATR gating are unchanged from V1 — reviewed
+  for this rewrite and still sound, no changes needed there.
 """
 
 import os
@@ -69,8 +84,13 @@ SWEEP_MAX_DISTANCE_PIPS = 6  # a sweep only counts toward in_zone if the actual 
                               # WATCHING_EXIT_PIPS (8, a slower multi-scan give-up
                               # threshold) since a sweep already proved the level once.
 
-# WATCHING state — two-stage alert system
-WATCHING_TTL_MINUTES  = 15   # auto-clear if no confirmation within this window (= one 15M bar)
+# WATCHING state — event-driven invalidation only (V2)
+# V1 used a clock-based TTL ("expire after 15 minutes"). V2 removes that:
+# a WATCHING setup stays alive until a MARKET EVENT invalidates it, never
+# just because time passed. The two guards that remain are both events:
+#   - the zone structurally failing (15M close-through), and
+#   - price running away from the zone without confirming.
+# Neither depends on a clock.
 WATCHING_EXIT_PIPS    = 8    # auto-clear if price runs this many pips away from the zone,
                               # in the direction of the original leg, without confirming.
                               # e.g. bullish watching at 1.32300 - if price rallies to
@@ -79,9 +99,14 @@ WATCHING_EXIT_PIPS    = 8    # auto-clear if price runs this many pips away from
                               # Distinct from the 15M close-through guard below, which
                               # catches the zone failing in the OPPOSITE direction.
 
-# Signal cooldown — suppress duplicate entry alerts
-SIGNAL_COOLDOWN_PIPS  = 5
-SIGNAL_COOLDOWN_HOURS = 0.5  # 30 minutes
+# Signal "cooldown" — V2 replaces the V1 clock (30 min) + distance (5 pip)
+# timer with a structural check: a new signal in the same direction is only
+# suppressed if it's coming from the SAME dealing range (swing high/low)
+# that produced the last signal. If a new swing/leg has formed since, it's
+# a genuinely new setup and fires regardless of how little time has passed.
+# The pip tolerance below is noise tolerance for "is this the same swing",
+# not a timer — the same role ZONE_TOLERANCE_PIPS plays elsewhere.
+STRUCTURE_MATCH_TOLERANCE_PIPS = 5
 
 # ATR minimum gate — hard floor on 5M ATR before any signal is allowed.
 # At 4 pip ATR, broker spread (1.5-2.5p) consumes 37-62% of the average
@@ -124,21 +149,48 @@ POST_SPIKE_COOLDOWN_BASE  = 2
 POST_SPIKE_COOLDOWN_SCALE = 1.5
 POST_SPIKE_COOLDOWN_MAX   = 10   # hard cap = 50 minutes maximum suppression
 
-# WATCHING TTL — adaptive bounds
-# Base TTL scales with current ATR: thin markets get more time because
-# reversal candles form more slowly when bars are small. Fast markets
-# get less time because if the zone rejects and runs, you've already
-# missed it by the time a slow TTL expires.
-WATCHING_TTL_MIN_MINUTES = 10   # floor: fastest possible expiry (high ATR)
-WATCHING_TTL_MAX_MINUTES = 25   # ceiling: slowest possible expiry (low ATR)
-WATCHING_TTL_ATR_PIVOT   = 8    # pips — ATR at which TTL = midpoint of range
-
 # STATE_MEMORY staleness guard — if current price is more than this many
 # pips away from the midpoint of the saved leg's SwH/SwL range, treat the
 # memory as stale and fall through to plain fractal detection instead.
 # Rationale: a leg saved 5H ago at completely different price levels
 # produces a geometrically valid but contextually meaningless Fib zone.
 STATE_MEMORY_MAX_DRIFT_PIPS = 80
+
+# -----------------------------------------------
+# V2 — CONFIDENCE SCORING
+# -----------------------------------------------
+# Replaces the V1 binary "Signal / No Signal" output. Every setup that
+# reaches the zone gets scored on the evidence actually present, rather
+# than being hard-rejected for missing one input (e.g. no sweep). A clean
+# reversal (sweep + CHoCH + fib + confirmation) scores higher than a
+# continuation with no sweep, but the continuation still fires if it
+# clears the ACCEPTABLE floor — the bot ranks evidence instead of
+# hard-coding a single required path.
+SCORE_WEIGHTS = {
+    "htf_bias":     20,   # directional 1H bias present (non-consolidation)
+    "liquidity":    25,   # 25 = confirmed sweep, 12 = direct touch w/ no sweep, 0 = neither
+    "structure":    20,   # 20 = fresh BOS/CHoCH aligned with bias, 10 = fallback/state-memory structure
+    "fib":          15,   # price actually reached the discount/premium zone
+    "atr":          10,   # 10 = healthy ATR, 5 = regime-shifted/thin but still tradeable
+    "session":       5,   # scan occurred inside a liquid session window
+    "confirmation":  5,   # engulf/rejection confirmation candle present
+}
+assert sum(SCORE_WEIGHTS.values()) == 100
+
+SCORE_TIER_A_PLUS   = 90
+SCORE_TIER_STRONG   = 80
+SCORE_TIER_ACCEPTABLE = 70
+# Below SCORE_TIER_ACCEPTABLE = IGNORE. This is the only place "should this
+# fire" is decided post-zone; there's no separate hard engulf gate anymore
+# because "confirmation" is just one of the seven weighed inputs.
+
+# Session windows (UTC) — used only for the scoring bonus, not as a hard
+# gate. London and New York are GBPUSD's two liquid sessions; the overlap
+# (12:00-16:00 UTC) is the most liquid window of the day.
+SESSION_WINDOWS_UTC = [
+    (7, 16),   # London
+    (12, 21),  # New York
+]
 
 # Result tracking — Telegram command to log trade outcomes manually.
 # Send "/win" or "/loss" to your bot to record the last signal's result.
@@ -616,59 +668,107 @@ def detect_liquidity_sweep(df_5m, df_15m, fib_zone, macro_bias,
         return True, "SWEEP CONFIRMED ✅"
 
 
-def is_duplicate_signal(state, trade_signal, entry_price):
+def is_duplicate_signal(state, trade_signal, swing_high, swing_low):
     """
-    Returns True if this signal is too similar to the last one sent —
-    same direction, within SIGNAL_COOLDOWN_PIPS, within SIGNAL_COOLDOWN_HOURS.
-    Prevents the bot from spamming the same trade alert on consecutive scans
-    when price hasn't meaningfully moved.
+    V2: "duplicate" is a STRUCTURAL question, not a clock/distance one.
+    A new signal in the same direction is suppressed only if it's still
+    anchored to the same dealing range (swing high/low, within noise
+    tolerance) that produced the last signal. The moment a new swing or
+    a fresh BOS/CHoCH redraws that range, this returns False regardless
+    of how many minutes or pips separate the two signals — a new leg is
+    definitionally a new setup.
     """
-    last_dir   = state.get("last_signal_direction")
-    last_price = state.get("last_signal_price")
-    last_time  = state.get("last_signal_time")
+    last_dir = state.get("last_signal_direction")
+    last_sh  = state.get("last_signal_swing_high")
+    last_sl  = state.get("last_signal_swing_low")
 
-    if not (last_dir and last_price and last_time):
+    if not (last_dir and last_sh is not None and last_sl is not None):
         return False
     if last_dir != trade_signal:
         return False
 
-    try:
-        sent_at   = datetime.fromisoformat(last_time)
-        age_hours = (datetime.now(timezone.utc) - sent_at).total_seconds() / 3600
-        if age_hours > SIGNAL_COOLDOWN_HOURS:
-            return False
-    except Exception:
-        return False
-
-    pip_diff = abs(entry_price - float(last_price)) / PIP_SIZE
-    return pip_diff <= SIGNAL_COOLDOWN_PIPS
+    tol = STRUCTURE_MATCH_TOLERANCE_PIPS * PIP_SIZE
+    same_high = abs(swing_high - float(last_sh)) <= tol
+    same_low  = abs(swing_low  - float(last_sl)) <= tol
+    return same_high and same_low
 
 
-def adaptive_watching_ttl(current_atr_pips):
+def is_active_session(now_utc, windows=SESSION_WINDOWS_UTC):
+    """Returns True if the current UTC hour falls inside a liquid session
+    window. Used only as a small scoring bonus, never as a hard gate —
+    GBPUSD trades outside London/NY too, it's just thinner."""
+    hour = now_utc.hour
+    for start, end in windows:
+        if start <= hour < end:
+            return True
+    return False
+
+
+def compute_confidence_score(macro_bias, sweep_usable, in_zone_direct,
+                              structure_source, in_zone, atr_ok, regime_shifted,
+                              session_active, confirmation_passed):
     """
-    Returns the WATCHING TTL in minutes, scaled to current 5M ATR.
+    V2 confidence score. Replaces the V1 binary Signal/No-Signal decision
+    with a weighted evaluation of the evidence actually present, so a
+    clean reversal (sweep+CHoCH+fib+confirmation) naturally outranks a
+    valid continuation missing one input (e.g. no sweep) instead of the
+    continuation being hard-rejected outright.
 
-    Fast market (ATR > pivot): shorter TTL — if the zone rejects hard,
-    the move runs fast and a long TTL just keeps a dead setup alive.
-
-    Slow market (ATR < pivot): longer TTL — reversal candles take more
-    time to form when bars are small; 15 min kills valid setups that
-    are simply developing slowly in thin conditions.
-
-    Clipped to [WATCHING_TTL_MIN_MINUTES, WATCHING_TTL_MAX_MINUTES].
+    Returns (score: int, breakdown: dict[str, int], tier: str, emoji: str).
     """
-    pivot = WATCHING_TTL_ATR_PIVOT
-    lo    = WATCHING_TTL_MIN_MINUTES
-    hi    = WATCHING_TTL_MAX_MINUTES
-    mid   = (lo + hi) / 2
+    breakdown = {}
 
-    if current_atr_pips <= 0:
-        return mid
+    # HTF Bias — full credit; CONSOLIDATION never reaches this function.
+    breakdown["htf_bias"] = SCORE_WEIGHTS["htf_bias"] if macro_bias in ("BULLISH", "BEARISH") else 0
 
-    # Linear interpolation: ATR=0 → hi, ATR=2×pivot → lo
-    t   = min(current_atr_pips / (2 * pivot), 1.0)
-    ttl = hi - t * (hi - lo)
-    return max(lo, min(hi, ttl))
+    # Liquidity — confirmed sweep beats a direct touch with no sweep,
+    # which still beats nothing (price never reached the zone at all).
+    if sweep_usable:
+        breakdown["liquidity"] = SCORE_WEIGHTS["liquidity"]
+    elif in_zone_direct:
+        breakdown["liquidity"] = SCORE_WEIGHTS["liquidity"] // 2
+    else:
+        breakdown["liquidity"] = 0
+
+    # Structure — a fresh BOS/CHoCH aligned with bias beats structure
+    # pulled from fallback/state-memory, which beats no structure.
+    if structure_source == "BOS":
+        breakdown["structure"] = SCORE_WEIGHTS["structure"]
+    elif structure_source in ("STATE_MEMORY", "FALLBACK_FRACTAL") or "memory stale" in str(structure_source):
+        breakdown["structure"] = SCORE_WEIGHTS["structure"] // 2
+    else:
+        breakdown["structure"] = 0
+
+    # Fib — did price actually reach the discount/premium zone.
+    breakdown["fib"] = SCORE_WEIGHTS["fib"] if in_zone else 0
+
+    # ATR — healthy vol beats a regime-shifted/thin reading (still logged,
+    # already passed the hard ATR_MIN_PIPS floor upstream).
+    if atr_ok and not regime_shifted:
+        breakdown["atr"] = SCORE_WEIGHTS["atr"]
+    elif atr_ok:
+        breakdown["atr"] = SCORE_WEIGHTS["atr"] // 2
+    else:
+        breakdown["atr"] = 0
+
+    # Session — bonus only, never a gate.
+    breakdown["session"] = SCORE_WEIGHTS["session"] if session_active else 0
+
+    # Confirmation candle — engulf/rejection present.
+    breakdown["confirmation"] = SCORE_WEIGHTS["confirmation"] if confirmation_passed else 0
+
+    score = sum(breakdown.values())
+
+    if score >= SCORE_TIER_A_PLUS:
+        tier, emoji = "A+ SETUP", "🟢"
+    elif score >= SCORE_TIER_STRONG:
+        tier, emoji = "STRONG SETUP", "🟢"
+    elif score >= SCORE_TIER_ACCEPTABLE:
+        tier, emoji = "ACCEPTABLE SETUP", "🟡"
+    else:
+        tier, emoji = "IGNORE", "🔴"
+
+    return score, breakdown, tier, emoji
 
 
 def check_result_commands(stats):
@@ -796,10 +896,11 @@ def check_result_commands(stats):
                     sig     = e.get("signal", "?")
                     entry_p = e.get("entry",  "?")
                     struct  = e.get("structure", "?")
+                    score_v = e.get("score", "?")
                     note_t  = e.get("note", "—")
                     lines.append(
                         f"{icon} `{e['time']}`\n"
-                        f"   {sig} @ {entry_p} | {struct}\n"
+                        f"   {sig} @ {entry_p} | {struct} | score {score_v}\n"
                         f"   📝 _{note_t}_"
                     )
                 send_telegram("\n".join(lines))
@@ -812,6 +913,7 @@ def check_result_commands(stats):
                     f"Direction: `{ctx.get('signal','?')}`\n"
                     f"Entry: `{ctx.get('entry','?')}`\n"
                     f"Structure: `{ctx.get('structure','?')}`\n"
+                    f"Score: `{ctx.get('score','?')}/100`\n"
                     f"Time: `{ctx.get('signal_time','?')}`"
                 )
             else:
@@ -829,6 +931,7 @@ def _last_signal_context(stats):
         "signal":      stats.get("last_journal_signal",    "?"),
         "entry":       stats.get("last_journal_entry",     "?"),
         "structure":   stats.get("last_journal_structure", "?"),
+        "score":       stats.get("last_journal_score",      "?"),
         "signal_time": stats.get("last_journal_time",      "?"),
     }
 
@@ -1079,6 +1182,25 @@ def scan():
     state      = load_state()
     macro_bias = compute_macro_bias(df_1h)
 
+    # WATCHING bias-mismatch guard — runs BEFORE the CONSOLIDATION early
+    # return below, and before anything else, specifically so a bias flip
+    # can't be missed. This is the third event-based WATCHING invalidator
+    # (alongside the 15M close-through and price-runaway guards further
+    # down): the bias recompute itself, done fresh from real 1H data every
+    # run, is the market event here — not a timer, not a bar count. A
+    # WATCHING state anchored to a bias that no longer holds (flipped
+    # direction, or gone flat) is stale regardless of price action.
+    if state.get("watching") and state.get("watching_bias") and state.get("watching_bias") != macro_bias:
+        print(
+            "  [WATCHING] Cleared — 1H bias moved from {} to {} (zone no longer valid)."
+            .format(state.get("watching_bias"), macro_bias)
+        )
+        state["watching"] = False
+        state.pop("watching_zone",   None)
+        state.pop("watching_bias",   None)
+        state.pop("watching_set_at", None)
+        save_state(state)
+
     if macro_bias == "CONSOLIDATION":
         stats["consolidation_skip"] += 1
         save_stats(stats)
@@ -1277,6 +1399,7 @@ def scan():
     pattern_check = "N/A"
     in_zone       = False
     in_zone_direct = False
+    score = score_breakdown = score_tier = score_emoji = None
 
     if macro_bias == "BULLISH":
         lowest_wick    = min(c_prev["Low"], c_last["Low"])
@@ -1296,21 +1419,35 @@ def scan():
                           c_last["Open"]  <= c_prev["Close"] + engulf_tol)
         real_body      = body_last > atr_threshold
 
+        confirmation_passed = bear_prev and bull_last and engulfs and real_body
+
         if in_zone:
             stats["fib_reached"] += 1
 
-        if in_zone and bear_prev and bull_last and engulfs and real_body:
-            trade_signal  = "BUY"
-            entry         = c_last["Close"]
-            sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
-            sl            = lowest_wick - sl_buffer
-            risk          = entry - sl
-            tp            = entry + (RR_RATIO * risk)
-            risk_pips     = risk / PIP_SIZE
-            reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-            pattern_check = "PASS" + (" (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
-            stats["pattern_passed"] += 1
+        if in_zone and confirmation_passed:
+            score, score_breakdown, score_tier, score_emoji = compute_confidence_score(
+                macro_bias, sweep_usable, in_zone_direct, structure_source,
+                in_zone, True, regime_shifted, is_active_session(now_utc),
+                confirmation_passed,
+            )
+            if score >= SCORE_TIER_ACCEPTABLE:
+                trade_signal  = "BUY"
+                entry         = c_last["Close"]
+                sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                sl            = lowest_wick - sl_buffer
+                risk          = entry - sl
+                tp            = entry + (RR_RATIO * risk)
+                risk_pips     = risk / PIP_SIZE
+                reward_pips   = (RR_RATIO * risk) / PIP_SIZE
+                pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
+                    " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
+                stats["pattern_passed"] += 1
+            else:
+                pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
+                    score_emoji, score, SCORE_TIER_ACCEPTABLE,
+                    ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
         else:
+            score = score_breakdown = score_tier = score_emoji = None
             fails = []
             if not in_zone:
                 if sweep_valid and not sweep_distance_ok:
@@ -1339,21 +1476,35 @@ def scan():
                           c_last["Close"] <= c_prev["Open"]  + engulf_tol)
         real_body      = body_last > atr_threshold
 
+        confirmation_passed = bull_prev and bear_last and engulfs and real_body
+
         if in_zone:
             stats["fib_reached"] += 1
 
-        if in_zone and bull_prev and bear_last and engulfs and real_body:
-            trade_signal  = "SELL"
-            entry         = c_last["Close"]
-            sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
-            sl            = highest_wick + sl_buffer
-            risk          = sl - entry
-            tp            = entry - (RR_RATIO * risk)
-            risk_pips     = risk / PIP_SIZE
-            reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-            pattern_check = "PASS" + (" (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
-            stats["pattern_passed"] += 1
+        if in_zone and confirmation_passed:
+            score, score_breakdown, score_tier, score_emoji = compute_confidence_score(
+                macro_bias, sweep_usable, in_zone_direct, structure_source,
+                in_zone, True, regime_shifted, is_active_session(now_utc),
+                confirmation_passed,
+            )
+            if score >= SCORE_TIER_ACCEPTABLE:
+                trade_signal  = "SELL"
+                entry         = c_last["Close"]
+                sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                sl            = highest_wick + sl_buffer
+                risk          = sl - entry
+                tp            = entry - (RR_RATIO * risk)
+                risk_pips     = risk / PIP_SIZE
+                reward_pips   = (RR_RATIO * risk) / PIP_SIZE
+                pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
+                    " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
+                stats["pattern_passed"] += 1
+            else:
+                pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
+                    score_emoji, score, SCORE_TIER_ACCEPTABLE,
+                    ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
         else:
+            score = score_breakdown = score_tier = score_emoji = None
             fails = []
             if not in_zone:
                 if sweep_valid and not sweep_distance_ok:
@@ -1396,29 +1547,16 @@ def scan():
     is_watching      = state.get("watching", False)
     watching_zone_p  = state.get("watching_zone")
     watching_bias_s  = state.get("watching_bias")
-    watching_set_at  = state.get("watching_set_at")
 
     if is_watching:
         invalidate    = False
         inv_reason    = ""
 
-        # Guard 1: Adaptive TTL — scales with current ATR so thin markets
-        # get more time (slow candles need more bars to confirm) and fast
-        # markets expire sooner (missed pullbacks run quickly).
-        if watching_set_at:
-            try:
-                set_at      = datetime.fromisoformat(watching_set_at)
-                age_min     = (datetime.now(timezone.utc) - set_at).total_seconds() / 60
-                ttl_minutes = adaptive_watching_ttl(current_atr_pips)
-                if age_min > ttl_minutes:
-                    invalidate = True
-                    inv_reason = "TTL expired ({:.0f}/{:.0f} min, ATR={:.1f}p)".format(
-                        age_min, ttl_minutes, current_atr_pips)
-            except Exception:
-                invalidate = True
-                inv_reason = "invalid watching timestamp"
+        # V2: no clock-based TTL. A WATCHING setup lives until a market
+        # event kills it — either of the two guards below — never because
+        # a timer ran out. (V1's "Guard 1" TTL lived here; removed.)
 
-        # Guard 2: 15M close through the zone — the zone structurally failed,
+        # Guard 1 (was Guard 2): 15M close through the zone — the zone structurally failed,
         # not just a wick. Same logic as the sweep confirmation check, inverted:
         # if the 15M candle CLOSED on the wrong side, the zone is gone.
         if not invalidate and watching_zone_p and watching_bias_s:
@@ -1431,11 +1569,11 @@ def scan():
                 invalidate = True
                 inv_reason = "15M closed above zone ({:.5f})".format(last_15m_close)
 
-        # Guard 3: Zone exit — price has run away from the zone, in the
+        # Guard 2: Zone exit — price has run away from the zone, in the
         # direction of the original leg, by more than WATCHING_EXIT_PIPS
         # without the pattern ever confirming. The pullback window has
         # passed - this is a dead setup, not a live one, even though
-        # nothing structurally "broke" (Guard 2 wouldn't catch this since
+        # nothing structurally "broke" (Guard 1 wouldn't catch this since
         # price never closed through the zone the wrong way).
         if not invalidate and watching_zone_p and watching_bias_s:
             wz            = float(watching_zone_p)
@@ -1477,13 +1615,14 @@ def scan():
             stats["last_journal_signal"]    = trade_signal + " (suppressed)"
             stats["last_journal_entry"]     = f"{entry:.5f}"
             stats["last_journal_structure"] = structure_source
+            stats["last_journal_score"]     = score
             stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-        elif is_duplicate_signal(state, trade_signal, entry):
+        elif is_duplicate_signal(state, trade_signal, swing_high, swing_low):
             print(
-                "  [COOLDOWN] Signal suppressed — same direction within "
-                + str(SIGNAL_COOLDOWN_PIPS) + " pips / "
-                + str(int(SIGNAL_COOLDOWN_HOURS * 60)) + " min of last alert."
+                "  [COOLDOWN] Signal suppressed — same direction, same dealing "
+                "range (SwH {:.5f} / SwL {:.5f}) as the last signal. Needs a new "
+                "swing/leg, not just time passing, to fire again.".format(swing_high, swing_low)
             )
         else:
             was_watching = is_watching
@@ -1501,14 +1640,19 @@ def scan():
             stats["last_journal_signal"]    = trade_signal
             stats["last_journal_entry"]     = f"{entry:.5f}"
             stats["last_journal_structure"] = structure_source
+            stats["last_journal_score"]     = score
             stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             direction_emoji = "📈" if trade_signal == "BUY" else "📉"
             zone_tag        = " _(liquidity sweep)_" if sweep_usable and not in_zone_direct else ""
             confirm_tag     = "\n✅ _Zone was pre-flagged — entry confirmed._" if was_watching else ""
+            score_lines     = "\n".join(
+                f"     {k.replace('_', ' ').title()}: {v}" for k, v in score_breakdown.items()
+            )
 
             msg = (
                 "🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
                 + direction_emoji + " *Action:* `" + trade_signal + "`\n"
+                f"{score_emoji} *Confidence:* `{score}/100 — {score_tier}`\n"
                 "📊 *Bias:* `" + macro_bias + "` (1H EMA-100)\n"
                 "🏗 *Structure:* `" + structure_source + "`\n"
                 "🎯 *Fib Zone* _(adaptive {:.1f}%):_ `{:.5f}`{}\n".format(fib_ratio * 100, fib_zone, zone_tag) +
@@ -1520,12 +1664,16 @@ def scan():
                 "🏆 *Target:* `{:.5f}` _({:.1f} pips)_\n".format(tp, reward_pips) +
                 "⚖️ *RR:*     `1:" + str(RR_RATIO) + "`\n"
                 "─────────────────────\n"
+                "*Score breakdown:*\n" + score_lines + "\n"
+                "─────────────────────\n"
                 "⚠️ _Confirm higher-TF context before executing._"
                 + confirm_tag
             )
             send_telegram(msg)
-            # Save signal to state for cooldown check on next scan
+            # Save signal to state for the structural cooldown check on next scan
             state["last_signal_direction"] = trade_signal
+            state["last_signal_swing_high"] = swing_high
+            state["last_signal_swing_low"]  = swing_low
             state["last_signal_price"]     = entry
             state["last_signal_time"]      = datetime.now(timezone.utc).isoformat()
             save_state(state)
@@ -1542,15 +1690,25 @@ def scan():
             stats["watching_alerts"] += 1
 
             direction_word = "discount" if macro_bias == "BULLISH" else "premium"
+            # Live partial score — everything except the confirmation candle,
+            # which by definition hasn't happened yet. Gives a read on how
+            # strong the setup already is while still waiting.
+            live_score, live_breakdown, live_tier, live_emoji = compute_confidence_score(
+                macro_bias, sweep_usable, in_zone_direct, structure_source,
+                in_zone, True, regime_shifted, is_active_session(now_utc),
+                confirmation_passed=False,
+            )
             watch_msg = (
                 "👀 *SMC WATCHING — GBPUSD*\n\n"
                 "📊 *Bias:* `" + macro_bias + "` | *Structure:* `" + structure_source + "`\n"
                 "🎯 *Price entered " + direction_word + " zone:* `{:.5f}`\n".format(fib_zone) +
                 "📐 *SwH:* `{:.5f}` | *SwL:* `{:.5f}`\n".format(swing_high, swing_low) +
                 "⚡ *ATR:* `{:.1f} pips`\n".format(current_atr / PIP_SIZE) +
+                f"{live_emoji} *Current score:* `{live_score}/100 ex-confirmation ({live_tier})`\n"
                 "─────────────────────\n"
                 "⏳ _Waiting for engulf confirmation..._\n"
-                "_(Auto-clears in " + str(WATCHING_TTL_MINUTES) + " min or on 15M close-through)_"
+                "_(Clears only on 15M close-through the zone, or price running "
+                + str(WATCHING_EXIT_PIPS) + "p away without confirming — no timer.)_"
             )
             send_telegram(watch_msg)
             print("  [WATCHING] Set — price entered zone at {:.5f}".format(fib_zone))

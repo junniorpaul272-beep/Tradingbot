@@ -171,9 +171,14 @@ SCORE_WEIGHTS = {
     "liquidity":    25,   # 25 = confirmed sweep, 12 = direct touch w/ no sweep, 0 = neither
     "structure":    20,   # 20 = fresh BOS/CHoCH aligned with bias, 10 = fallback/state-memory structure
     "fib":          15,   # price actually reached the discount/premium zone
-    "atr":          10,   # 10 = healthy ATR, 5 = regime-shifted/thin but still tradeable
+    "atr":           5,   # 5 = healthy ATR, 2 = regime-shifted/thin but still tradeable
     "session":       5,   # scan occurred inside a liquid session window
-    "confirmation":  5,   # engulf/rejection confirmation candle present
+    "confirmation": 10,   # engulf/rejection confirmation candle present. Raised from 5 —
+                           # a confirmed engulf is categorically stronger evidence than an
+                           # unconfirmed zone touch, so it should move the score meaningfully
+                           # rather than act as a same-tier tiebreaker. atr's weight was cut
+                           # from 10 to fund the increase (session left alone; atr's role is
+                           # partly redundant with the hard ATR_MIN_PIPS floor upstream).
 }
 assert sum(SCORE_WEIGHTS.values()) == 100
 
@@ -532,7 +537,18 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
             if dominant is None:
                 dominant = new_candidate
             elif new_candidate["direction"] == dominant["direction"]:
-                pass
+                pass  # same-direction break just extends the existing leg;
+                      # extreme is already updated unconditionally below.
+            else:
+                # Opposite-direction break while a leg was still active —
+                # this IS the CHoCH: character changed on a break of the
+                # most recent opposing swing, before the old leg was ever
+                # invalidated by origin/78.6% retrace. Promote the new leg
+                # now instead of waiting for the old leg's own invalidation
+                # to eventually catch up (which may lag several bars, or
+                # never trigger at all if price just chops below the break
+                # without also blowing through the old origin).
+                dominant = new_candidate
 
         if dominant is not None:
             if dominant["direction"] == "BULLISH":

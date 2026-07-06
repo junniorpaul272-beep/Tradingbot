@@ -238,9 +238,17 @@ def load_state():
 def save_state(state):
     state = dict(state)
     state["timestamp"] = datetime.now(timezone.utc).isoformat()
+    tmp = STATE_FILE + ".tmp"
     try:
-        with open(STATE_FILE, "w") as f:
+        with open(tmp, "w") as f:
             json.dump(state, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, STATE_FILE)  # atomic on POSIX — either the old file
+        # remains fully intact, or the new one lands complete. A kill signal
+        # (e.g. the Actions job timeout) mid-write can never leave a
+        # truncated/corrupt state.json, because the rename only happens
+        # after the full write + fsync succeeds.
     except Exception as e:
         print("[STATE SAVE ERROR] " + str(e))
 
@@ -282,9 +290,16 @@ def load_stats():
 
 
 def save_stats(stats):
+    tmp = STATS_FILE + ".tmp"
     try:
-        with open(STATS_FILE, "w") as f:
+        with open(tmp, "w") as f:
             json.dump(stats, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, STATS_FILE)  # atomic — see save_state() for rationale.
+        # This file holds wins/losses/journal, so a truncated write here is
+        # worse than for state.json: load_stats() resets to defaults on any
+        # parse failure, which would silently erase trade history.
     except Exception as e:
         print("[STATS SAVE ERROR] " + str(e))
 
@@ -816,10 +831,17 @@ def check_result_commands(stats):
     try:
         resp = requests.get(url, params={"offset": offset, "timeout": 2},
                             timeout=5).json()
-    except Exception:
+    except Exception as e:
+        print(f"  [COMMANDS] getUpdates request failed — {type(e).__name__}: {e}")
         return stats
 
-    if not resp.get("ok") or not resp.get("result"):
+    if not resp.get("ok"):
+        print(f"  [COMMANDS] getUpdates returned ok=False — {resp.get('description', 'no description')}. "
+              f"Check for a webhook conflict (bot can't use polling + webhook at once) or bad token.")
+        return stats
+
+    if not resp.get("result"):
+        # Not an error — just no new messages since the last offset.
         return stats
 
     # Ensure journal list exists
@@ -1171,6 +1193,15 @@ def scan():
         stats["first_scan"] = now_utc.strftime("%Y-%m-%d")
     stats["last_scan"] = now_utc.strftime("%Y-%m-%d %H:%M")
 
+    # ── Result command check (non-blocking) ──────────────────────────────
+    # Moved to the top of scan() — must run on EVERY invocation regardless
+    # of data fetch failures, sanity checks, or consolidation state.
+    # Previously this ran after four early-return gates further down, so
+    # /stats, /win, /loss, /journal, and /last would silently queue in
+    # Telegram and only get processed on a scan where all four gates
+    # happened to pass (e.g. not consolidating, enough bars, data sane).
+    stats = check_result_commands(stats)
+
     # ── Fetch data ───────────────────────────────────────────────────────
     df_5m  = fetch_ohlc("5min",  outputsize=100)
     df_15m = fetch_ohlc("15min", outputsize=SWING_LOOKBACK_15 + 10)
@@ -1223,9 +1254,6 @@ def scan():
         print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", "N/A", "N/A",
                           "NO TRADE — 1H is consolidating (no directional edge)"))
         return
-
-    # ── Result command check (non-blocking) ──────────────────────────────
-    stats = check_result_commands(stats)
 
     # ── ATR ───────────────────────────────────────────────────────────────
     df_5m["ATR"] = atr(df_5m, period=14)

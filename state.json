@@ -1,1 +1,1 @@
-{"status": "ACTIVE_LEG", "direction": "BULLISH", "impulse_start": 1.32744, "impulse_end": 1.33638, "watching": false, "last_signal_direction": "BUY", "last_signal_price": 1.33052, "last_signal_time": "2026-07-02T07:19:31.696580+00:00", "timestamp": "2026-07-02T12:50:23.662042+00:00"}
+{"status": "NONE", "watching": true, "watching_zone": 1.3387076086608638, "watching_bias": "BULLISH", "watching_set_at": "2026-07-07T14:15:27.307784+00:00", "timestamp": "2026-07-07T14:15:27.307795+00:00"}

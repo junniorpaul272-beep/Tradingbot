@@ -1042,6 +1042,7 @@ def _last_signal_context(stats):
         "entry":       stats.get("last_journal_entry",     "?"),
         "structure":   stats.get("last_journal_structure", "?"),
         "score":       stats.get("last_journal_score",      "?"),
+        "score_breakdown": stats.get("last_journal_score_breakdown", "?"),
         "signal_time": stats.get("last_journal_time",      "?"),
     }
 
@@ -1732,6 +1733,7 @@ def scan():
             stats["last_journal_entry"]     = f"{entry:.5f}"
             stats["last_journal_structure"] = structure_source
             stats["last_journal_score"]     = score
+            stats["last_journal_score_breakdown"] = score_breakdown
             stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             # New signal identity — any pending flip-confirmation from a
             # previous signal is now stale and must not carry over.
@@ -1760,6 +1762,7 @@ def scan():
             stats["last_journal_entry"]     = f"{entry:.5f}"
             stats["last_journal_structure"] = structure_source
             stats["last_journal_score"]     = score
+            stats["last_journal_score_breakdown"] = score_breakdown
             stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             # New signal identity — any pending flip-confirmation from a
             # previous signal is now stale and must not carry over.

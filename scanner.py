@@ -238,17 +238,9 @@ def load_state():
 def save_state(state):
     state = dict(state)
     state["timestamp"] = datetime.now(timezone.utc).isoformat()
-    tmp = STATE_FILE + ".tmp"
     try:
-        with open(tmp, "w") as f:
+        with open(STATE_FILE, "w") as f:
             json.dump(state, f)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, STATE_FILE)  # atomic on POSIX — either the old file
-        # remains fully intact, or the new one lands complete. A kill signal
-        # (e.g. the Actions job timeout) mid-write can never leave a
-        # truncated/corrupt state.json, because the rename only happens
-        # after the full write + fsync succeeds.
     except Exception as e:
         print("[STATE SAVE ERROR] " + str(e))
 
@@ -290,16 +282,9 @@ def load_stats():
 
 
 def save_stats(stats):
-    tmp = STATS_FILE + ".tmp"
     try:
-        with open(tmp, "w") as f:
+        with open(STATS_FILE, "w") as f:
             json.dump(stats, f, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, STATS_FILE)  # atomic — see save_state() for rationale.
-        # This file holds wins/losses/journal, so a truncated write here is
-        # worse than for state.json: load_stats() resets to defaults on any
-        # parse failure, which would silently erase trade history.
     except Exception as e:
         print("[STATS SAVE ERROR] " + str(e))
 
@@ -810,14 +795,37 @@ def check_result_commands(stats):
     Commands:
       /win [optional note]    — log a win,  e.g. /win clean engulf at zone
       /loss [optional note]   — log a loss, e.g. /loss news spike stopped me
-      /stats                  — get full funnel summary on demand
-      /journal                — get the last 10 trade journal entries
-      /last                   — show the last signal that was sent
+      /undo                    — reverse the last journal entry, no questions asked
+      /confirm                 — override the last result after a flip warning
+      /stats                   — get full funnel summary on demand
+      /journal                 — get the last 10 trade journal entries
+      /last                    — show the last signal that was sent
 
     Notes are stored in stats["journal"] as a list of dicts so you can
     cross-reference with the GitHub Actions checklist logs later:
-      {"time": "...", "result": "WIN", "note": "clean engulf at zone",
-       "signal": "BUY", "entry": 1.32400, "structure": "BOS"}
+      {"time": "...", "logged_at": "...", "result": "WIN",
+       "note": "clean engulf at zone", "signal": "BUY",
+       "entry": 1.32400, "structure": "BOS"}
+
+    IMPORTANT: "time" is the SIGNAL's time (when the setup actually
+    fired, i.e. last_journal_time) — NOT the moment you happened to
+    send /win or /loss. That moment is stored separately as
+    "logged_at". Session analysis should key off "time"; if it used
+    "logged_at" instead, a /loss sent two hours after the trade closed
+    would misplace it in the timeline.
+
+    Three safeguards against a fat-fingered /win vs /loss:
+      1. Cooldown per signal — once a result is logged for a signal
+         (identified by last_journal_time), a second /win or /loss for
+         the SAME signal is refused until a new signal fires. This
+         also stops _last_signal_context(stats) from silently pulling
+         the same signal context into two journal entries with
+         different results.
+      2. /undo — unconditionally reverses the most recent journal
+         entry and decrements the matching win/loss counter.
+      3. Confirmation gate — sending the opposite result within 60
+         seconds of the last logged result for the SAME signal holds
+         the write and asks for /confirm before overriding it.
 
     Uses long-poll offset (last_update_id) so each message is processed
     exactly once. Safe to call every scan.
@@ -831,22 +839,50 @@ def check_result_commands(stats):
     try:
         resp = requests.get(url, params={"offset": offset, "timeout": 2},
                             timeout=5).json()
-    except Exception as e:
-        print(f"  [COMMANDS] getUpdates request failed — {type(e).__name__}: {e}")
+    except Exception:
         return stats
 
-    if not resp.get("ok"):
-        print(f"  [COMMANDS] getUpdates returned ok=False — {resp.get('description', 'no description')}. "
-              f"Check for a webhook conflict (bot can't use polling + webhook at once) or bad token.")
-        return stats
-
-    if not resp.get("result"):
-        # Not an error — just no new messages since the last offset.
+    if not resp.get("ok") or not resp.get("result"):
         return stats
 
     # Ensure journal list exists
     if "journal" not in stats:
         stats["journal"] = []
+
+    def _log_result(stats, result, note, now_str, sig_time):
+        """Append a journal entry (keyed to the SIGNAL's time) and bump the counter."""
+        entry_ctx = _last_signal_context(stats)
+        journal_entry = {
+            "time":      sig_time,   # when the signal fired — used for session analysis
+            "logged_at": now_str,    # when you actually sent /win or /loss
+            "result":    result,
+            "note":      note or "—",
+            **entry_ctx,
+        }
+        stats["journal"].append(journal_entry)
+        stats["journal"] = stats["journal"][-100:]
+        if result == "WIN":
+            stats["wins"] = stats.get("wins", 0) + 1
+        else:
+            stats["losses"] = stats.get("losses", 0) + 1
+        # Lock this signal — no second result until a new signal fires
+        stats["result_logged_for_signal"] = sig_time
+        return stats
+
+    def _undo_last(stats):
+        """Pop the last journal entry and decrement its counter. No questions asked."""
+        j = stats.get("journal", [])
+        if not j:
+            return None
+        last = j.pop()
+        if last.get("result") == "WIN":
+            stats["wins"] = max(0, stats.get("wins", 0) - 1)
+        elif last.get("result") == "LOSS":
+            stats["losses"] = max(0, stats.get("losses", 0) - 1)
+        # Lift the per-signal lock so the same signal can be logged again
+        stats["result_logged_for_signal"] = None
+        stats.pop("pending_confirm", None)
+        return last
 
     for update in resp["result"]:
         update_id = update.get("update_id", 0)
@@ -864,59 +900,94 @@ def check_result_commands(stats):
         # Everything after the command word is the optional note
         note  = raw[len(cmd):].strip() if len(raw) > len(cmd) else ""
 
-        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        wins    = stats.get("wins",   0)
-        losses  = stats.get("losses", 0)
+        now_utc_dt = datetime.now(timezone.utc)
+        now_str    = now_utc_dt.strftime("%Y-%m-%d %H:%M UTC")
+        sig_time   = stats.get("last_journal_time", "?")
 
-        if cmd in ("/win", "win", "/w"):
-            stats["wins"] = wins + 1
-            wins          = stats["wins"]
-            total         = wins + losses
-            wr            = f"{wins/total*100:.0f}%" if total > 0 else "—"
+        if cmd in ("/win", "win", "/w", "/loss", "loss", "/l"):
+            result = "WIN" if cmd in ("/win", "win", "/w") else "LOSS"
 
-            # Journal entry — pulls last signal context from state if available
-            entry_ctx = _last_signal_context(stats)
-            journal_entry = {
-                "time":      now_str,
-                "result":    "WIN",
-                "note":      note or "—",
-                **entry_ctx,
-            }
-            stats["journal"].append(journal_entry)
-            # Keep journal to last 100 entries so stats.json doesn't grow unbounded
-            stats["journal"] = stats["journal"][-100:]
+            locked_sig = stats.get("result_logged_for_signal")
+            if locked_sig is not None and sig_time != "?" and locked_sig == sig_time:
+                # A result is already on record for THIS signal — block by default.
+                last_entry = stats["journal"][-1] if stats.get("journal") else None
+                is_flip    = last_entry is not None and last_entry.get("result") != result
+                within_60s = False
+                if last_entry is not None:
+                    try:
+                        last_logged = datetime.strptime(
+                            last_entry.get("logged_at", ""), "%Y-%m-%d %H:%M UTC"
+                        ).replace(tzinfo=timezone.utc)
+                        within_60s = (now_utc_dt - last_logged).total_seconds() <= 60
+                    except ValueError:
+                        within_60s = False
 
+                if is_flip and within_60s:
+                    stats["pending_confirm"] = {
+                        "cmd": cmd, "note": note, "sig_time": sig_time,
+                    }
+                    send_telegram(
+                        f"⚠️ *Result already logged for this signal* "
+                        f"(`{last_entry.get('result')}` at `{last_entry.get('logged_at')}`).\n"
+                        f"You just sent `{cmd}` within 60s — looks like a fat-finger flip.\n"
+                        f"Reply /confirm to override the last result, or ignore to leave it as-is."
+                    )
+                else:
+                    prior = last_entry.get('result') if last_entry else '?'
+                    prior_t = last_entry.get('logged_at') if last_entry else '?'
+                    send_telegram(
+                        f"🚫 *Result already logged for this signal* (`{prior}` at `{prior_t}`).\n"
+                        f"Use /undo to reverse it, then log again — or wait for the next signal."
+                    )
+                print(f"  [RESULT] Blocked duplicate {result} for signal @ {sig_time}.")
+                continue
+
+            stats = _log_result(stats, result, note, now_str, sig_time)
+            wins, losses = stats.get("wins", 0), stats.get("losses", 0)
+            total = wins + losses
+            wr    = f"{wins/total*100:.0f}%" if total > 0 else "—"
+            icon  = "✅" if result == "WIN" else "❌"
             note_line = f"\n📝 _{note}_" if note else ""
             send_telegram(
-                f"✅ *WIN logged*{note_line}\n"
+                f"{icon} *{result} logged*{note_line}\n"
                 f"Running record: `{wins}W / {losses}L` ({wr} win rate)\n"
                 f"_Send /journal to see recent entries._"
             )
-            print(f"  [RESULT] WIN logged. Note: '{note}'. Running: {wins}W / {losses}L")
+            print(f"  [RESULT] {result} logged. Note: '{note}'. Running: {wins}W / {losses}L")
 
-        elif cmd in ("/loss", "loss", "/l"):
-            stats["losses"] = losses + 1
-            losses          = stats["losses"]
-            total           = wins + losses
-            wr              = f"{wins/total*100:.0f}%" if total > 0 else "—"
-
-            entry_ctx = _last_signal_context(stats)
-            journal_entry = {
-                "time":   now_str,
-                "result": "LOSS",
-                "note":   note or "—",
-                **entry_ctx,
-            }
-            stats["journal"].append(journal_entry)
-            stats["journal"] = stats["journal"][-100:]
-
-            note_line = f"\n📝 _{note}_" if note else ""
+        elif cmd in ("/confirm", "confirm"):
+            pending = stats.get("pending_confirm")
+            if not pending:
+                send_telegram("_Nothing pending to confirm._")
+                continue
+            # Reverse the entry that triggered the flip warning, then log the override.
+            _undo_last(stats)
+            result = "WIN" if pending["cmd"] in ("/win", "win", "/w") else "LOSS"
+            stats = _log_result(stats, result, pending["note"], now_str, pending["sig_time"])
+            stats.pop("pending_confirm", None)
+            wins, losses = stats.get("wins", 0), stats.get("losses", 0)
+            total = wins + losses
+            wr    = f"{wins/total*100:.0f}%" if total > 0 else "—"
             send_telegram(
-                f"❌ *LOSS logged*{note_line}\n"
-                f"Running record: `{wins}W / {losses}L` ({wr} win rate)\n"
-                f"_Send /journal to see recent entries._"
+                f"🔁 *Result overridden* — now logged as `{result}`.\n"
+                f"Running record: `{wins}W / {losses}L` ({wr} win rate)"
             )
-            print(f"  [RESULT] LOSS logged. Note: '{note}'. Running: {wins}W / {losses}L")
+            print(f"  [RESULT] Override confirmed — now {result}. Running: {wins}W / {losses}L")
+
+        elif cmd in ("/undo", "undo"):
+            last = _undo_last(stats)
+            if last is None:
+                send_telegram("_Nothing to undo — journal is empty._")
+            else:
+                wins, losses = stats.get("wins", 0), stats.get("losses", 0)
+                total = wins + losses
+                wr    = f"{wins/total*100:.0f}%" if total > 0 else "—"
+                send_telegram(
+                    f"↩️ *Undone* — removed `{last.get('result','?')}` logged at "
+                    f"`{last.get('logged_at', last.get('time','?'))}`.\n"
+                    f"Running record: `{wins}W / {losses}L` ({wr} win rate)"
+                )
+            print("  [RESULT] /undo — reverted last entry.")
 
         elif cmd in ("/stats", "stats"):
             send_telegram(format_stats_summary(stats))
@@ -936,8 +1007,9 @@ def check_result_commands(stats):
                     struct  = e.get("structure", "?")
                     score_v = e.get("score", "?")
                     note_t  = e.get("note", "—")
+                    trade_time = e.get("time", "?")
                     lines.append(
-                        f"{icon} `{e['time']}`\n"
+                        f"{icon} `{trade_time}`\n"
                         f"   {sig} @ {entry_p} | {struct} | score {score_v}\n"
                         f"   📝 _{note_t}_"
                     )
@@ -1661,6 +1733,9 @@ def scan():
             stats["last_journal_structure"] = structure_source
             stats["last_journal_score"]     = score
             stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            # New signal identity — any pending flip-confirmation from a
+            # previous signal is now stale and must not carry over.
+            stats.pop("pending_confirm", None)
 
         elif is_duplicate_signal(state, trade_signal, swing_high, swing_low):
             print(
@@ -1686,6 +1761,9 @@ def scan():
             stats["last_journal_structure"] = structure_source
             stats["last_journal_score"]     = score
             stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            # New signal identity — any pending flip-confirmation from a
+            # previous signal is now stale and must not carry over.
+            stats.pop("pending_confirm", None)
             direction_emoji = "📈" if trade_signal == "BUY" else "📉"
             zone_tag        = " _(liquidity sweep)_" if sweep_usable and not in_zone_direct else ""
             confirm_tag     = "\n✅ _Zone was pre-flagged — entry confirmed._" if was_watching else ""

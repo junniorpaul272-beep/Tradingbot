@@ -419,7 +419,7 @@ def format_stats_summary(stats):
         "─────────────────────",
     ]
 
-    # Bottleneck diagnosis
+     # Bottleneck diagnosis
     if n > 20:
         atr_skips = stats.get("atr_too_low", 0)
         if atr_skips / n > 0.3:
@@ -827,6 +827,50 @@ def compute_macro_bias(df_1h, slope_bars=HTF_EMA_SLOPE_BARS,
     return "BULLISH" if close_now > ema_now else "BEARISH"
 
 
+def compute_confirmed_macro_bias(df_1h, state, wing=FRACTAL_WING):
+    """
+    Gates macro_bias behind an actual confirmed 1H swing break instead of
+    letting a single EMA-100 cross flip the whole bias.
+
+    compute_macro_bias() alone is just close-vs-EMA (with a flatness filter
+    for CONSOLIDATION) — it says nothing about whether a major swing point
+    has actually broken. That let the bias flip on one candle crossing the
+    EMA while the prior dominant leg's swing high/low was still intact,
+    which is how a SELL signal fired off a "BEARISH" bias that no real
+    1H structure had confirmed yet.
+
+    Fix: only adopt a new bias when detect_bos_impulse() finds a confirmed
+    1H break (a close beyond the last opposing fractal swing) in the SAME
+    direction the EMA has moved to. If the EMA has crossed but no matching
+    1H break exists yet, hold the last *confirmed* bias from state rather
+    than flipping — the market hasn't actually changed character yet, it's
+    just drifted across a moving average.
+    """
+    ema_bias = compute_macro_bias(df_1h)
+    if ema_bias == "CONSOLIDATION":
+        return "CONSOLIDATION"
+
+    htf_bos = detect_bos_impulse(df_1h.tail(HTF_BIAS_MIN_BARS), wing=wing)
+
+    if htf_bos is not None and htf_bos["direction"] == ema_bias:
+        # Real swing break agrees with the EMA side — bias is confirmed.
+        state["confirmed_macro_bias"] = ema_bias
+        save_state(state)
+        return ema_bias
+
+    # EMA has crossed (or a BOS exists but points the other way / hasn't
+    # broken far enough to align with EMA yet) — nothing here is a fresh,
+    # confirmed break in the EMA's new direction, so don't flip on it.
+    prior = state.get("confirmed_macro_bias")
+    if prior is not None:
+        return prior
+
+    # Cold start only (no prior confirmed bias in state yet) — fall back
+    # to the raw EMA read so the bot isn't stuck refusing to ever bias
+    # on the very first run.
+    return ema_bias
+
+
 def adaptive_fib_ratio(df_5m, current_atr, near=FIB_ZONE_NEAR, far=FIB_ZONE_FAR, lookback=50):
     avg_atr = df_5m["ATR"].rolling(lookback, min_periods=10).mean().iloc[-1]
     if pd.isna(avg_atr) or avg_atr == 0 or pd.isna(current_atr):
@@ -958,7 +1002,6 @@ def htf_bias_gate(macro_bias, proposed_direction):
     if proposed_direction != macro_bias:
         return False, f"setup direction {proposed_direction} runs against 1H bias {macro_bias}"
     return True, ""
-
 
 def compute_confidence_score(sweep_usable, in_zone_direct,
                               structure_source, in_zone, atr_ok, regime_shifted,
@@ -1703,7 +1746,7 @@ def scan():
 
     # ── 1H Bias ──────────────────────────────────────────────────────────
     state      = load_state()
-    macro_bias = compute_macro_bias(df_1h)
+    macro_bias = compute_confirmed_macro_bias(df_1h, state)
 
     # WATCHING bias-mismatch guard — runs BEFORE the CONSOLIDATION early
     # return below, and before anything else, specifically so a bias flip
@@ -1818,10 +1861,24 @@ def scan():
             })
             save_state(state)
         else:
+            # A confirmed 15M swing break exists, but it points the
+            # OPPOSITE way from macro_bias. Since macro_bias is now itself
+            # gated behind a confirmed 1H break (see
+            # compute_confirmed_macro_bias), this is a genuine structure
+            # disagreement between timeframes, not just a data gap — the
+            # old behavior of quietly falling back to weaker fractal
+            # structure and trading anyway is exactly what let a signal
+            # fire against structure that hadn't actually turned. Suppress
+            # instead: no trade until the timeframes agree again.
             stats["bos_conflict"] += 1
-            bos_bias_check = "CONFLICT (using fallback structure)"
-            swing_high, swing_low, structure_source = fallback_structure(
-                lookback, macro_bias, state, wing=FRACTAL_WING)
+            bos_bias_check = "CONFLICT — suppressed (15M structure disagrees with confirmed bias)"
+            save_stats(stats)
+            print(_checklist(
+                macro_bias, bos_check, bos_bias_check, "N/A", "N/A",
+                atr_valid_check, "N/A",
+                "NO TRADE — 15M structure conflicts with confirmed macro bias"
+            ))
+            return
     else:
         bos_bias_check = "N/A (no dominant leg found)"
         swing_high, swing_low, structure_source = fallback_structure(
@@ -1925,7 +1982,8 @@ def scan():
                 state["status"] = "STALE_POST_SPIKE"
             save_state(state)
 
-    body_last     = abs(c_last["Close"] - c_last["Open"])
+      
+  body_last     = abs(c_last["Close"] - c_last["Open"])
     atr_threshold = ATR_ENGULF_MIN * current_atr
 
     trade_signal  = "HOLD"
@@ -2194,8 +2252,8 @@ def scan():
                 "  [COOLDOWN] Signal suppressed — same direction, same dealing "
                 "range (SwH {:.5f} / SwL {:.5f}) as the last signal. Needs a new "
                 "swing/leg, not just time passing, to fire again.".format(swing_high, swing_low)
-            )
-        else:
+      )
+          else:
             was_watching = is_watching
             # Clear watching state — setup resolved either way
             state["watching"] = False

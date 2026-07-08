@@ -108,6 +108,23 @@ WATCHING_EXIT_PIPS    = 8    # auto-clear if price runs this many pips away from
 # not a timer — the same role ZONE_TOLERANCE_PIPS plays elsewhere.
 STRUCTURE_MATCH_TOLERANCE_PIPS = 5
 
+# ── Active-trade management (score freeze) ───────────────────────────────
+# Once a signal fires, the scanner stops evaluating new setups on this pair
+# entirely — no bias/zone/structure/scoring, no WATCHING messages — until
+# the open trade closes (SL/TP hit, or manual /win /loss). The score at
+# signal time is frozen into stats["active_trade"] and never recomputed;
+# what gets reported while a trade is open is trade status (P/L, distance
+# to TP/SL, time in trade), not a re-run of the confidence score. A score
+# is a pre-trade evidence read; recomputing it mid-trade and reporting the
+# drift as if it were new information is misleading — the inputs that
+# built the original number (e.g. a sweep) are historical facts about how
+# the trade was entered, not live conditions that can un-happen.
+TRADE_STATUS_UPDATE_MINUTES = 30   # minimum gap between "still open" status
+                                     # pings while a trade runs, so a live
+                                     # trade doesn't spam an update every scan.
+                                     # SL/TP-hit closes are still reported
+                                     # immediately regardless of this gap.
+
 # ATR minimum gate — hard floor on 5M ATR before any signal is allowed.
 # At 4 pip ATR, broker spread (1.5-2.5p) consumes 37-62% of the average
 # bar range, making the effective RR after spread far worse than the
@@ -398,6 +415,150 @@ def send_telegram(message):
         print("Telegram alert sent.")
     except Exception as e:
         print("[TELEGRAM ERROR] " + str(e))
+
+
+# -----------------------------------------------
+# ACTIVE-TRADE MANAGEMENT (score freeze)
+# -----------------------------------------------
+def format_trade_status(active, current_price, now_utc):
+    """
+    Trade-in-progress status message. Deliberately does NOT include a
+    recomputed confidence score — the score line here is the frozen
+    signal-time value, labeled as such, never a fresh read.
+    """
+    direction = active["direction"]
+    entry, sl, tp = active["entry"], active["sl"], active["tp"]
+    sign = 1 if direction == "BUY" else -1
+
+    pl_pips      = (current_price - entry) * sign / PIP_SIZE
+    dist_tp_pips = (tp - current_price) * sign / PIP_SIZE
+    dist_sl_pips = (current_price - sl) * sign / PIP_SIZE  # cushion left before stop
+
+    opened_at = datetime.fromisoformat(active["opened_at"])
+    elapsed   = now_utc - opened_at
+    total_min = int(elapsed.total_seconds() // 60)
+    hours, minutes = divmod(total_min, 60)
+    time_str = f"{hours}h {minutes}m" if hours else f"{minutes}m"
+
+    pl_emoji = "🟢" if pl_pips >= 0 else "🔴"
+    dir_emoji = "📈" if direction == "BUY" else "📉"
+
+    return (
+        "📊 *Trade Active — GBPUSD*\n\n"
+        f"{dir_emoji} *Direction:* `{direction}`\n"
+        f"📍 *Entry:* `{entry:.5f}`  →  *Now:* `{current_price:.5f}`\n"
+        f"{pl_emoji} *P/L:* `{pl_pips:+.1f} pips`\n"
+        f"🎯 *Distance to TP:* `{dist_tp_pips:.1f} pips`\n"
+        f"🛡 *Distance to SL:* `{dist_sl_pips:.1f} pips`\n"
+        f"⏱ *Time in trade:* `{time_str}`\n"
+        "─────────────────────\n"
+        f"_Signal-time score: {active.get('score', '?')}/100 "
+        f"({active.get('score_tier', '?')}) — frozen, not recomputed._"
+    )
+
+
+def check_trade_closed(active, c_last):
+    """
+    Checks the latest closed 5M candle's High/Low against the frozen SL/TP.
+    Returns "WIN", "LOSS", or None (still open).
+
+    If a single candle's range touches BOTH levels (a gap/spike bar), we
+    can't tell which was hit first from OHLC alone — we assume SL (the
+    worse outcome) rather than assume the better one. That's a
+    conservative approximation, not a claim about intrabar sequencing.
+    """
+    direction = active["direction"]
+    sl, tp = active["sl"], active["tp"]
+    high, low = c_last["High"], c_last["Low"]
+
+    if direction == "BUY":
+        hit_sl, hit_tp = low <= sl, high >= tp
+    else:
+        hit_sl, hit_tp = high >= sl, low <= tp
+
+    if hit_sl:
+        return "LOSS"
+    if hit_tp:
+        return "WIN"
+    return None
+
+
+def manage_active_trade(stats, df_5m, now_utc):
+    """
+    Runs BEFORE any bias/zone/scoring logic in scan(). If a trade is
+    already open on this pair, this function is the ONLY thing that runs
+    this cycle — no new signal can be generated and no score is
+    recomputed while a position is live.
+
+    Returns True if a trade is open (caller should stop scan() here after
+    saving stats), False if there is no active trade (caller proceeds
+    with normal signal detection).
+    """
+    active = stats.get("active_trade")
+    if not active:
+        return False
+
+    c_last = df_5m.iloc[-1]
+    outcome = check_trade_closed(active, c_last)
+
+    if outcome is not None:
+        # Auto-close: journal it exactly like a manual /win or /loss, then
+        # clear active_trade so normal scanning resumes next cycle.
+        exit_price = active["tp"] if outcome == "WIN" else active["sl"]
+        sign = 1 if active["direction"] == "BUY" else -1
+        pl_pips = (exit_price - active["entry"]) * sign / PIP_SIZE
+
+        if "journal" not in stats:
+            stats["journal"] = []
+        stats["journal"].append({
+            "time":      active.get("opened_at_display", "?"),
+            "logged_at": now_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            "result":    outcome,
+            "note":      "auto-closed (SL/TP hit)",
+            "signal":    active["direction"],
+            "entry":     f"{active['entry']:.5f}",
+            "structure": active.get("structure_source", "?"),
+            "score":     active.get("score", "?"),
+            "score_breakdown": active.get("score_breakdown", "?"),
+        })
+        stats["journal"] = stats["journal"][-100:]
+        if outcome == "WIN":
+            stats["wins"] = stats.get("wins", 0) + 1
+        else:
+            stats["losses"] = stats.get("losses", 0) + 1
+        # Lock this signal against a stray manual /win or /loss arriving after auto-close.
+        stats["result_logged_for_signal"] = active.get("opened_at_display")
+
+        icon = "✅" if outcome == "WIN" else "❌"
+        send_telegram(
+            f"{icon} *Trade closed — {outcome}* (auto-detected, GBPUSD)\n\n"
+            f"📍 *Entry:* `{active['entry']:.5f}`  →  *Exit:* `{exit_price:.5f}`\n"
+            f"{'🟢' if pl_pips >= 0 else '🔴'} *P/L:* `{pl_pips:+.1f} pips`\n"
+            f"_Signal-time score: {active.get('score', '?')}/100 ({active.get('score_tier', '?')})_"
+        )
+        print(f"  [TRADE] Auto-closed as {outcome} @ {exit_price:.5f} ({pl_pips:+.1f} pips).")
+        stats.pop("active_trade", None)
+        return False
+
+    # Still open — send a periodic status ping, not a rescored signal.
+    last_update = active.get("last_update_sent_at")
+    send_update = True
+    if last_update:
+        try:
+            gap = now_utc - datetime.fromisoformat(last_update)
+            send_update = gap.total_seconds() >= TRADE_STATUS_UPDATE_MINUTES * 60
+        except ValueError:
+            send_update = True
+
+    if send_update:
+        send_telegram(format_trade_status(active, c_last["Close"], now_utc))
+        active["last_update_sent_at"] = now_utc.isoformat()
+        stats["active_trade"] = active
+        print("  [TRADE] Status update sent — trade still open.")
+    else:
+        print("  [TRADE] Still open — skipping status ping (update interval not elapsed).")
+
+    return True
 
 
 # -----------------------------------------------
@@ -917,6 +1078,9 @@ def check_result_commands(stats):
             stats["losses"] = stats.get("losses", 0) + 1
         # Lock this signal — no second result until a new signal fires
         stats["result_logged_for_signal"] = sig_time
+        # Manual result overrides auto-detection — clear the active trade
+        # (if any) so trade-status pings stop and normal scanning resumes.
+        stats.pop("active_trade", None)
         return stats
 
     def _undo_last(stats):
@@ -1339,6 +1503,16 @@ def scan():
             data_looks_sane(df_15m, "15min") and
             data_looks_sane(df_1h, "1h")):
         print("Data sanity check failed. Skipping this run.")
+        save_stats(stats)
+        return
+
+    # ── Active-trade check — runs BEFORE bias/zone/scoring ────────────────
+    # If a trade is already open, this is the ONLY thing scan() does this
+    # cycle: check for SL/TP hit, or send a status ping. No new bias read,
+    # no zone/structure evaluation, no confidence score gets computed —
+    # the signal-time score stays frozen in stats["active_trade"] and is
+    # never touched again until the trade closes.
+    if manage_active_trade(stats, df_5m, now_utc):
         save_stats(stats)
         return
 
@@ -1827,6 +2001,26 @@ def scan():
             stats["last_journal_score_breakdown"] = score_breakdown
             stats["last_journal_score_warnings"]  = score_warnings
             stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+            # Freeze this signal as the active trade. From here until it
+            # closes (SL/TP hit, or manual /win /loss), scan() short-circuits
+            # at manage_active_trade() before any bias/zone/scoring logic —
+            # this score is never recomputed, and no WATCHING/new-signal
+            # message can fire for this pair while it's open.
+            stats["active_trade"] = {
+                "direction":            trade_signal,
+                "entry":                entry,
+                "sl":                   sl,
+                "tp":                   tp,
+                "score":                score,
+                "score_tier":           score_tier,
+                "score_breakdown":      score_breakdown,
+                "structure_source":     structure_source,
+                "opened_at":            datetime.now(timezone.utc).isoformat(),
+                "opened_at_display":    stats["last_journal_time"],
+                "last_update_sent_at":  None,
+            }
+
             # New signal identity — any pending flip-confirmation from a
             # previous signal is now stale and must not carry over.
             stats.pop("pending_confirm", None)

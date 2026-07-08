@@ -1,9 +1,9 @@
 {
-  "total_scans": 470,
+  "total_scans": 471,
   "consolidation_skip": 66,
   "bos_conflict": 7,
   "no_structure": 1,
-  "atr_too_low": 256,
+  "atr_too_low": 257,
   "regime_shift_skip": 0,
   "fib_reached": 50,
   "watching_alerts": 24,
@@ -13,7 +13,7 @@
   "wins": 1,
   "losses": 1,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-07-08 13:05",
+  "last_scan": "2026-07-08 13:10",
   "last_update_id": 628997452,
   "journal": [
     {

@@ -166,19 +166,27 @@ STATE_MEMORY_MAX_DRIFT_PIPS = 80
 # continuation with no sweep, but the continuation still fires if it
 # clears the ACCEPTABLE floor — the bot ranks evidence instead of
 # hard-coding a single required path.
+#
+# htf_bias is intentionally NOT in this table. It used to be scored here
+# (worth 20 pts, awarded automatically since CONSOLIDATION already forces
+# an early return before any setup reaches scoring) which meant it was
+# padding every score with 20 free points rather than measuring anything.
+# It is now a hard binary pre-check (see htf_bias_gate()) that runs before
+# a setup is allowed anywhere near compute_confidence_score at all — a
+# regime question, not a quality question, so it can't be earned partial
+# credit for or outweighed by a great fib+liquidity+confirmation read.
+#
+# The remaining categories are the old weights rescaled proportionally
+# (old sum was 80 without htf_bias) so the total still runs 0-100 and the
+# existing SCORE_TIER_* thresholds stay meaningful until they're replaced
+# empirically per the threshold-calibration step.
 SCORE_WEIGHTS = {
-    "htf_bias":     20,   # directional 1H bias present (non-consolidation)
-    "liquidity":    25,   # 25 = confirmed sweep, 12 = direct touch w/ no sweep, 0 = neither
-    "structure":    20,   # 20 = fresh BOS/CHoCH aligned with bias, 10 = fallback/state-memory structure
-    "fib":          15,   # price actually reached the discount/premium zone
-    "atr":           5,   # 5 = healthy ATR, 2 = regime-shifted/thin but still tradeable
-    "session":       5,   # scan occurred inside a liquid session window
-    "confirmation": 10,   # engulf/rejection confirmation candle present. Raised from 5 —
-                           # a confirmed engulf is categorically stronger evidence than an
-                           # unconfirmed zone touch, so it should move the score meaningfully
-                           # rather than act as a same-tier tiebreaker. atr's weight was cut
-                           # from 10 to fund the increase (session left alone; atr's role is
-                           # partly redundant with the hard ATR_MIN_PIPS floor upstream).
+    "liquidity":    31,   # 31 = confirmed sweep, 15/16 = direct touch w/ no sweep, 0 = neither
+    "structure":    25,   # 25 = fresh BOS/CHoCH aligned with bias, 12/13 = fallback/state-memory structure
+    "fib":          19,   # price actually reached the discount/premium zone
+    "atr":           6,   # 6 = healthy ATR, 3 = regime-shifted/thin but still tradeable
+    "session":       6,   # scan occurred inside a liquid session window
+    "confirmation": 13,   # engulf/rejection confirmation candle present
 }
 assert sum(SCORE_WEIGHTS.values()) == 100
 
@@ -720,7 +728,34 @@ def is_active_session(now_utc, windows=SESSION_WINDOWS_UTC):
     return False
 
 
-def compute_confidence_score(macro_bias, sweep_usable, in_zone_direct,
+def htf_bias_gate(macro_bias, proposed_direction):
+    """
+    Hard binary pre-check — NOT a scored factor. A setup whose proposed
+    direction disagrees with the 1H regime must never reach
+    compute_confidence_score, no matter how clean its liquidity, structure,
+    fib, or confirmation read. Bias answers "is there a regime to trade
+    with, and which way" — that's a yes/no gate, not a spectrum, so it
+    can't be partially satisfied or outscored by the other components.
+
+    Structurally, scan() only ever proposes a BULLISH setup when
+    macro_bias is BULLISH (same for BEARISH), so today this gate should
+    never actually trip. It's kept as an explicit, callable, testable
+    choke point anyway — if a future change (e.g. a counter-trend fade
+    variant) ever proposes a setup direction independent of macro_bias,
+    it is forced through here before it can touch the scoring system.
+
+    Returns (passed: bool, reason: str).
+    """
+    if macro_bias not in ("BULLISH", "BEARISH"):
+        return False, f"1H regime is {macro_bias} — no tradeable bias"
+    if proposed_direction not in ("BULLISH", "BEARISH"):
+        return False, f"invalid proposed direction {proposed_direction!r}"
+    if proposed_direction != macro_bias:
+        return False, f"setup direction {proposed_direction} runs against 1H bias {macro_bias}"
+    return True, ""
+
+
+def compute_confidence_score(sweep_usable, in_zone_direct,
                               structure_source, in_zone, atr_ok, regime_shifted,
                               session_active, confirmation_passed):
     """
@@ -730,12 +765,14 @@ def compute_confidence_score(macro_bias, sweep_usable, in_zone_direct,
     valid continuation missing one input (e.g. no sweep) instead of the
     continuation being hard-rejected outright.
 
-    Returns (score: int, breakdown: dict[str, int], tier: str, emoji: str).
+    HTF bias is deliberately absent from this function — it's a pass/fail
+    regime gate handled by htf_bias_gate() before this is ever called, not
+    a component that contributes points. This function scores QUALITY only.
+
+    Returns (score: int, breakdown: dict[str, int], tier: str, emoji: str,
+    warnings: list[str]).
     """
     breakdown = {}
-
-    # HTF Bias — full credit; CONSOLIDATION never reaches this function.
-    breakdown["htf_bias"] = SCORE_WEIGHTS["htf_bias"] if macro_bias in ("BULLISH", "BEARISH") else 0
 
     # Liquidity — confirmed sweep beats a direct touch with no sweep,
     # which still beats nothing (price never reached the zone at all).
@@ -775,6 +812,19 @@ def compute_confidence_score(macro_bias, sweep_usable, in_zone_direct,
 
     score = sum(breakdown.values())
 
+    # ── Critical-zero warning ──────────────────────────────────────────
+    # A high total built by compensating for one dead-zero factor worth
+    # 20+ points is a different (riskier) setup than one that scored
+    # broadly across every component, even when the two totals match.
+    # This flags that case; it does not change the score or the tier.
+    warnings = []
+    for component, weight in SCORE_WEIGHTS.items():
+        if weight >= 20 and breakdown.get(component, 0) == 0:
+            warnings.append(
+                f"WARNING: {component} scored 0 (worth {weight} pts) — "
+                f"total may be masking a critical gap"
+            )
+
     if score >= SCORE_TIER_A_PLUS:
         tier, emoji = "A+ SETUP", "🟢"
     elif score >= SCORE_TIER_STRONG:
@@ -784,7 +834,7 @@ def compute_confidence_score(macro_bias, sweep_usable, in_zone_direct,
     else:
         tier, emoji = "IGNORE", "🔴"
 
-    return score, breakdown, tier, emoji
+    return score, breakdown, tier, emoji, warnings
 
 
 def check_result_commands(stats):
@@ -1514,9 +1564,10 @@ def scan():
     trade_signal  = "HOLD"
     entry = sl = tp = risk_pips = reward_pips = None
     pattern_check = "N/A"
+    score = score_breakdown = score_tier = score_emoji = None
+    score_warnings = []
     in_zone       = False
     in_zone_direct = False
-    score = score_breakdown = score_tier = score_emoji = None
 
     if macro_bias == "BULLISH":
         lowest_wick    = min(c_prev["Low"], c_last["Low"])
@@ -1542,29 +1593,34 @@ def scan():
             stats["fib_reached"] += 1
 
         if in_zone and confirmation_passed:
-            score, score_breakdown, score_tier, score_emoji = compute_confidence_score(
-                macro_bias, sweep_usable, in_zone_direct, structure_source,
-                in_zone, True, regime_shifted, is_active_session(now_utc),
-                confirmation_passed,
-            )
-            if score >= SCORE_TIER_ACCEPTABLE:
-                trade_signal  = "BUY"
-                entry         = c_last["Close"]
-                sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                sl            = lowest_wick - sl_buffer
-                risk          = entry - sl
-                tp            = entry + (RR_RATIO * risk)
-                risk_pips     = risk / PIP_SIZE
-                reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-                pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
-                    " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
-                stats["pattern_passed"] += 1
+            gate_ok, gate_reason = htf_bias_gate(macro_bias, "BULLISH")
+            if not gate_ok:
+                pattern_check = "FAIL (" + gate_reason + ")"
             else:
-                pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
-                    score_emoji, score, SCORE_TIER_ACCEPTABLE,
-                    ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
+                score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
+                    sweep_usable, in_zone_direct, structure_source,
+                    in_zone, True, regime_shifted, is_active_session(now_utc),
+                    confirmation_passed,
+                )
+                if score >= SCORE_TIER_ACCEPTABLE:
+                    trade_signal  = "BUY"
+                    entry         = c_last["Close"]
+                    sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                    sl            = lowest_wick - sl_buffer
+                    risk          = entry - sl
+                    tp            = entry + (RR_RATIO * risk)
+                    risk_pips     = risk / PIP_SIZE
+                    reward_pips   = (RR_RATIO * risk) / PIP_SIZE
+                    pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
+                        " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
+                    stats["pattern_passed"] += 1
+                else:
+                    pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
+                        score_emoji, score, SCORE_TIER_ACCEPTABLE,
+                        ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
         else:
             score = score_breakdown = score_tier = score_emoji = None
+            score_warnings = []
             fails = []
             if not in_zone:
                 if sweep_valid and not sweep_distance_ok:
@@ -1599,29 +1655,34 @@ def scan():
             stats["fib_reached"] += 1
 
         if in_zone and confirmation_passed:
-            score, score_breakdown, score_tier, score_emoji = compute_confidence_score(
-                macro_bias, sweep_usable, in_zone_direct, structure_source,
-                in_zone, True, regime_shifted, is_active_session(now_utc),
-                confirmation_passed,
-            )
-            if score >= SCORE_TIER_ACCEPTABLE:
-                trade_signal  = "SELL"
-                entry         = c_last["Close"]
-                sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                sl            = highest_wick + sl_buffer
-                risk          = sl - entry
-                tp            = entry - (RR_RATIO * risk)
-                risk_pips     = risk / PIP_SIZE
-                reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-                pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
-                    " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
-                stats["pattern_passed"] += 1
+            gate_ok, gate_reason = htf_bias_gate(macro_bias, "BEARISH")
+            if not gate_ok:
+                pattern_check = "FAIL (" + gate_reason + ")"
             else:
-                pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
-                    score_emoji, score, SCORE_TIER_ACCEPTABLE,
-                    ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
+                score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
+                    sweep_usable, in_zone_direct, structure_source,
+                    in_zone, True, regime_shifted, is_active_session(now_utc),
+                    confirmation_passed,
+                )
+                if score >= SCORE_TIER_ACCEPTABLE:
+                    trade_signal  = "SELL"
+                    entry         = c_last["Close"]
+                    sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                    sl            = highest_wick + sl_buffer
+                    risk          = sl - entry
+                    tp            = entry - (RR_RATIO * risk)
+                    risk_pips     = risk / PIP_SIZE
+                    reward_pips   = (RR_RATIO * risk) / PIP_SIZE
+                    pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
+                        " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
+                    stats["pattern_passed"] += 1
+                else:
+                    pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
+                        score_emoji, score, SCORE_TIER_ACCEPTABLE,
+                        ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
         else:
             score = score_breakdown = score_tier = score_emoji = None
+            score_warnings = []
             fails = []
             if not in_zone:
                 if sweep_valid and not sweep_distance_ok:
@@ -1734,6 +1795,7 @@ def scan():
             stats["last_journal_structure"] = structure_source
             stats["last_journal_score"]     = score
             stats["last_journal_score_breakdown"] = score_breakdown
+            stats["last_journal_score_warnings"]  = score_warnings
             stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             # New signal identity — any pending flip-confirmation from a
             # previous signal is now stale and must not carry over.
@@ -1763,6 +1825,7 @@ def scan():
             stats["last_journal_structure"] = structure_source
             stats["last_journal_score"]     = score
             stats["last_journal_score_breakdown"] = score_breakdown
+            stats["last_journal_score_warnings"]  = score_warnings
             stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             # New signal identity — any pending flip-confirmation from a
             # previous signal is now stale and must not carry over.
@@ -1772,6 +1835,9 @@ def scan():
             confirm_tag     = "\n✅ _Zone was pre-flagged — entry confirmed._" if was_watching else ""
             score_lines     = "\n".join(
                 f"     {k.replace('_', ' ').title()}: {v}" for k, v in score_breakdown.items()
+            )
+            warning_block = (
+                "\n⚠️ " + " / ".join(score_warnings) + "\n" if score_warnings else ""
             )
 
             msg = (
@@ -1790,6 +1856,7 @@ def scan():
                 "⚖️ *RR:*     `1:" + str(RR_RATIO) + "`\n"
                 "─────────────────────\n"
                 "*Score breakdown:*\n" + score_lines + "\n"
+                + warning_block +
                 "─────────────────────\n"
                 "⚠️ _Confirm higher-TF context before executing._"
                 + confirm_tag
@@ -1818,8 +1885,8 @@ def scan():
             # Live partial score — everything except the confirmation candle,
             # which by definition hasn't happened yet. Gives a read on how
             # strong the setup already is while still waiting.
-            live_score, live_breakdown, live_tier, live_emoji = compute_confidence_score(
-                macro_bias, sweep_usable, in_zone_direct, structure_source,
+            live_score, live_breakdown, live_tier, live_emoji, _live_warnings = compute_confidence_score(
+                sweep_usable, in_zone_direct, structure_source,
                 in_zone, True, regime_shifted, is_active_session(now_utc),
                 confirmation_passed=False,
             )

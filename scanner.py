@@ -64,6 +64,50 @@ HTF_EMA_FLAT_THRESHOLD = 0.15
 FIB_ZONE_NEAR = 0.382
 FIB_ZONE_FAR = 0.618
 
+# Momentum-overshoot guard — price is meant to GRADUALLY work its way into
+# the fib pocket across several candles, reacting as it goes. A single
+# large 15M candle that spans the entire pocket in one bar is a different
+# animal: that's displacement, not a pullback, and displacement candles
+# very often keep going and break clean through the zone rather than
+# reacting from it. This doesn't lower the score (it isn't a quality
+# gradient) — it's a structural "was this actually a controlled approach"
+# check, so like regime_shifted/fib_stale it suppresses the alert outright
+# rather than discounting it.
+MOMENTUM_OVERSHOOT_POCKET_MULT = 1.5   # 15M candle range must be at least this many
+                                          # times the pocket's own width to count as
+                                          # "moving with force" rather than the pocket
+                                          # just being naturally narrow that day.
+
+# Effort-invalidation guard — a second, independent definition of "momentum
+# candle" alongside the pocket-span one above. Geometry (did it wick through
+# the zone) isn't the only signature of a momentum candle; the other is
+# EFFORT: a leg that took a long, gradual grind to build (many candles / a
+# long time) can have most of that progress erased by one or two opposing
+# candles. That's disproportionate regardless of where price ends up
+# relative to the fib pocket, and it's the same underlying idea the person
+# who wrote this described directly: momentum candles invalidate effort,
+# not necessarily a fixed price zone or a fixed clock.
+#
+# Deliberately loose on all three knobs so this doesn't fire on ordinary
+# pullbacks — it needs a genuinely slow build (min_build_bars), a genuinely
+# large give-back (erase_min_fraction), AND genuinely fast erasure
+# (time_max_fraction) all at once. Any one of the three alone is normal
+# market behavior; only the combination is the "effort invalidated" pattern.
+EFFORT_MIN_BUILD_BARS       = 4     # leg must have taken at least this many 15M bars
+                                       # (~60 min) to build before this check applies at
+                                       # all — a fast-built leg reversing fast isn't
+                                       # disproportionate to anything.
+EFFORT_ERASE_MIN_FRACTION   = 0.5   # the reversal must have given back at least half
+                                       # the leg's total range — a minor pullback isn't
+                                       # "invalidated effort."
+EFFORT_TIME_MAX_FRACTION    = 0.25  # ...while taking no more than 25% of the bars the
+                                       # leg took to build. A slow give-back over a
+                                       # comparable stretch of time is just the market
+                                       # reversing normally, not a momentum candle.
+EFFORT_REVERSAL_WINDOW_BARS = 2     # candles counted as "the reversal" — matches the
+                                       # person's own framing of "one or sometimes two
+                                       # candles," not a longer counted losing streak.
+
 # Data sanity
 DATA_SPIKE_ATR_MULT = 8
 
@@ -1370,6 +1414,141 @@ def scaled_cooldown_bars(peak_ratio):
     return min(int(bars), POST_SPIKE_COOLDOWN_MAX)
 
 
+def _pocket_span_overshoot(df_15m, swing_high, swing_low, macro_bias,
+                            near_ratio=FIB_ZONE_NEAR, far_ratio=FIB_ZONE_FAR):
+    """
+    Geometric definition of a momentum candle: the most recent 15M candle
+    traversed the ENTIRE fib pocket (near edge to far edge) in a single
+    bar, at a range large relative to the pocket's own width. That's a
+    displacement/momentum candle doing the "entering" instead of price
+    gradually working into the pocket.
+
+    Returns (is_overshoot: bool, reason: str).
+    """
+    structural_range = swing_high - swing_low
+    if structural_range <= 0 or len(df_15m) < 1:
+        return False, ""
+
+    if macro_bias == "BULLISH":
+        near_edge = swing_high - (near_ratio * structural_range)
+        far_edge  = swing_high - (far_ratio  * structural_range)
+    else:
+        near_edge = swing_low + (near_ratio * structural_range)
+        far_edge  = swing_low + (far_ratio  * structural_range)
+
+    pocket_top    = max(near_edge, far_edge)
+    pocket_bottom = min(near_edge, far_edge)
+    pocket_width  = pocket_top - pocket_bottom
+    if pocket_width <= 0:
+        return False, ""
+
+    c = df_15m.iloc[-1]
+    candle_range = c["High"] - c["Low"]
+
+    spans_whole_pocket = c["High"] >= pocket_top and c["Low"] <= pocket_bottom
+    is_momentum_sized  = candle_range >= (MOMENTUM_OVERSHOOT_POCKET_MULT * pocket_width)
+
+    if spans_whole_pocket and is_momentum_sized:
+        return True, (
+            f"15M candle range {candle_range/PIP_SIZE:.1f}p spans the whole "
+            f"pocket ({pocket_width/PIP_SIZE:.1f}p) in one bar — displacement, "
+            f"not a gradual approach; likely to break through rather than react"
+        )
+    return False, ""
+
+
+def detect_effort_invalidation(df_15m, swing_high, swing_low, macro_bias,
+                                lookback_bars=SWING_LOOKBACK_15,
+                                min_build_bars=EFFORT_MIN_BUILD_BARS,
+                                erase_min_fraction=EFFORT_ERASE_MIN_FRACTION,
+                                time_max_fraction=EFFORT_TIME_MAX_FRACTION,
+                                reversal_window_bars=EFFORT_REVERSAL_WINDOW_BARS):
+    """
+    Effort-based definition of a momentum candle, independent of the fib
+    pocket entirely: a leg that took a long, gradual grind to build (many
+    candles) had most of that progress erased by only one or two opposing
+    candles. That's disproportionate regardless of where price ends up
+    relative to any zone — the thing being invalidated is the TIME/EFFORT
+    that built the leg, not a price level.
+
+    Locates the leg's origin and extreme within the recent 15M window by
+    nearest-price match (swing_high/swing_low are already known structural
+    levels; this just finds where in time they occurred), measures how
+    many bars separate them (the "build"), then checks how much of that
+    leg's range was given back in just the last `reversal_window_bars`
+    candles (the "erasure"). Flags only when the erasure is both large
+    (>= erase_min_fraction of the leg) and fast (<= time_max_fraction of
+    the bars it took to build) — either alone is normal market behavior.
+
+    Returns (is_invalidated: bool, reason: str).
+    """
+    leg_range = swing_high - swing_low
+    min_bars_needed = min_build_bars + reversal_window_bars
+    if leg_range <= 0 or len(df_15m) < min_bars_needed:
+        return False, ""
+
+    lookback = df_15m.tail(lookback_bars).reset_index(drop=True)
+    if len(lookback) < min_bars_needed:
+        return False, ""
+
+    if macro_bias == "BULLISH":
+        idx_origin  = (lookback["Low"]  - swing_low).abs().idxmin()
+        idx_extreme = (lookback["High"] - swing_high).abs().idxmin()
+    else:
+        idx_origin  = (lookback["High"] - swing_high).abs().idxmin()
+        idx_extreme = (lookback["Low"]  - swing_low).abs().idxmin()
+
+    bars_to_build = abs(idx_extreme - idx_origin)
+    if bars_to_build < min_build_bars:
+        # The leg itself formed quickly — a fast reversal isn't
+        # disproportionate to anything; this check only means something
+        # when the build was genuinely gradual.
+        return False, ""
+
+    reversal = lookback.tail(reversal_window_bars)
+    if macro_bias == "BULLISH":
+        reversal_distance = swing_high - reversal["Low"].min()
+    else:
+        reversal_distance = reversal["High"].max() - swing_low
+
+    erase_fraction = reversal_distance / leg_range
+    time_fraction  = len(reversal) / bars_to_build
+
+    if erase_fraction >= erase_min_fraction and time_fraction <= time_max_fraction:
+        return True, (
+            f"leg took {bars_to_build} bars (~{bars_to_build * 15} min) to build "
+            f"but {erase_fraction*100:.0f}% of its range was erased in just "
+            f"{len(reversal)} bar(s) — effort invalidated, treat with caution "
+            f"even if price reacts from here"
+        )
+    return False, ""
+
+
+def detect_momentum_overshoot(df_15m, swing_high, swing_low, macro_bias,
+                               near_ratio=FIB_ZONE_NEAR, far_ratio=FIB_ZONE_FAR):
+    """
+    A momentum candle can show up two different ways, and either one on
+    its own is enough to distrust the setup:
+
+      1. Pocket-span (geometry): one candle wicks straight through the
+         whole fib pocket instead of price gradually working into it.
+      2. Effort-invalidation (pace): a slow, many-candle build gets most
+         of its progress erased by one or two opposing candles — a
+         disproportionate give-back regardless of where price lands
+         relative to any zone.
+
+    Returns (is_overshoot: bool, reason: str) — whichever check fired
+    first; if both fire, the pocket-span reason is reported since it's
+    the more visually immediate one.
+    """
+    span_overshoot, span_reason = _pocket_span_overshoot(
+        df_15m, swing_high, swing_low, macro_bias, near_ratio, far_ratio)
+    if span_overshoot:
+        return True, span_reason
+
+    return detect_effort_invalidation(df_15m, swing_high, swing_low, macro_bias)
+
+
 def is_fib_zone_stale(c_spike, swing_high, swing_low, fib_zone, current_price):
     """
     Tests whether the Fib zone should be considered stale after a spike.
@@ -1693,6 +1872,20 @@ def scan():
         sweep_label if sweep_valid else "—"
     )
 
+    # ── Momentum-overshoot check ────────────────────────────────────────
+    # Independent of the ATR-ratio regime-shift heuristic below: this asks
+    # a narrower, always-on question — did the most recent 15M candle alone
+    # carry price through the whole pocket, rather than price gradually
+    # working into it? A regime shift can be absent (ATR ratio under
+    # threshold) while a single 15M bar still blows clean through the zone,
+    # so this runs on every scan, not just during a detected volatility spike.
+    momentum_overshoot, momentum_reason = detect_momentum_overshoot(
+        df_15m, swing_high, swing_low, macro_bias)
+    momentum_note = (
+        f"\n  💥 [MOMENTUM OVERSHOOT] {momentum_reason} — signal will be suppressed."
+        if momentum_overshoot else ""
+    )
+
     # c_last/c_prev are needed by the fib-staleness check right below, so
     # they're pulled here rather than further down where they used to live -
     # that ordering caused an UnboundLocalError any time regime_shifted or
@@ -1876,6 +2069,8 @@ def scan():
         decision = "⚡ SIGNAL SUPPRESSED — volatility regime shift / post-spike cooldown"
     elif fib_stale and trade_signal != "HOLD":
         decision = "🗑 SIGNAL SUPPRESSED — Fib zone stale after spike"
+    elif momentum_overshoot and trade_signal != "HOLD":
+        decision = "💥 SIGNAL SUPPRESSED — momentum candle overshot the pocket"
     print(_checklist(macro_bias, bos_check, bos_bias_check, range_check,
                      fib_check, atr_valid_check, pattern_check, decision))
     print(
@@ -1892,6 +2087,8 @@ def scan():
     )
     if regime_note:
         print(regime_note)
+    if momentum_note:
+        print(momentum_note)
 
     # ── WATCHING state — invalidation check ───────────────────────────────
     # Run this before the alert logic so we know the current watching status
@@ -1941,6 +2138,15 @@ def scan():
                     invalidate = True
                     inv_reason = "price ran {:.1f} pips below zone — pullback missed".format(drift_pips)
 
+        # Guard 3: Momentum overshoot — the candle that just printed blew
+        # clean through the whole pocket instead of price gradually working
+        # into it. Same signal as the suppression at signal time, applied
+        # here too: an already-WATCHING setup doesn't survive its own zone
+        # getting run over by a displacement candle.
+        if not invalidate and momentum_overshoot:
+            invalidate = True
+            inv_reason = momentum_reason
+
         if invalidate:
             print("  [WATCHING] Cleared — " + inv_reason)
             state["watching"] = False
@@ -1952,17 +2158,25 @@ def scan():
 
     # ── Signal / WATCHING alert logic ─────────────────────────────────────
     if trade_signal != "HOLD" and entry is not None:
-        if regime_shifted or fib_stale:
-            # Pattern fired but volatility regime has shifted — parameters
-            # (stop buffer, engulf threshold, Fib zone) were calibrated on
-            # the old regime and are now miscalibrated. Log everything for
-            # research but suppress the Telegram alert.
-            print(
-                f"  [REGIME SHIFT] Signal {trade_signal} @ {entry:.5f} "
-                f"suppressed — short/long ATR ratio {regime_ratio:.2f}× "
-                f"(threshold {REGIME_SHIFT_THRESHOLD}×). "
-                f"Logged to journal context only."
-            )
+        if regime_shifted or fib_stale or momentum_overshoot:
+            # Pattern fired but something structurally undermines this
+            # entry — volatility regime shift, a stale post-spike Fib zone,
+            # or (new) a single 15M candle that overshot the whole pocket
+            # instead of price gradually working into it. Any of these on
+            # their own is reason enough to log the setup for research but
+            # withhold the Telegram alert rather than act on it.
+            if momentum_overshoot and not (regime_shifted or fib_stale):
+                print(
+                    f"  [MOMENTUM OVERSHOOT] Signal {trade_signal} @ {entry:.5f} "
+                    f"suppressed — {momentum_reason}. Logged to journal context only."
+                )
+            else:
+                print(
+                    f"  [REGIME SHIFT] Signal {trade_signal} @ {entry:.5f} "
+                    f"suppressed — short/long ATR ratio {regime_ratio:.2f}× "
+                    f"(threshold {REGIME_SHIFT_THRESHOLD}×). "
+                    f"Logged to journal context only."
+                )
             # Still save signal context so /last works for research review
             stats["last_journal_signal"]    = trade_signal + " (suppressed)"
             stats["last_journal_entry"]     = f"{entry:.5f}"
@@ -2066,7 +2280,12 @@ def scan():
 
     elif in_zone and trade_signal == "HOLD":
         # CASE B: Price is in the zone but pattern hasn't confirmed yet.
-        if not is_watching:
+        if momentum_overshoot:
+            # Don't set WATCHING off a displacement candle — this "zone
+            # entry" was a blow-through, not a gradual approach, so there's
+            # nothing here worth watching for a confirmation candle on.
+            print("  [WATCHING] Suppressed — " + momentum_reason)
+        elif not is_watching:
             # First time price entered this zone — set WATCHING and alert.
             state["watching"]      = True
             state["watching_zone"] = fib_zone

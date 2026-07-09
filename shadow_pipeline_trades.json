@@ -1,8 +1,8 @@
 {
   "funnel": {
-    "total_scans": 1,
+    "total_scans": 2,
     "consolidation_skip": 0,
-    "bos_conflict": 1,
+    "bos_conflict": 2,
     "no_structure": 0,
     "atr_too_low": 0,
     "fib_reached": 0,

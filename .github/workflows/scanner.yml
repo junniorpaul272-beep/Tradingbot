@@ -5,6 +5,21 @@ on:
     - cron: '0,5,10,15,20,25,30,35,40,45,50,55 8-13 * * 1-5'
   workflow_dispatch:
 
+# Prevents this exact failure: without this, a scheduled run that's still
+# executing when the next 5-minute trigger fires (or a manual
+# workflow_dispatch overlapping a scheduled run) starts a SECOND job in
+# parallel. Both jobs check out the same commit, both try to push their
+# own stats.json/state.json update back to main, and whichever pushes
+# second gets rejected with "remote contains work you do not have" —
+# exactly the error in the log. `group` scopes this to one queue per
+# workflow; `cancel-in-progress: false` means an overlapping run WAITS
+# for the current one to finish rather than killing it mid-scan (killing
+# a run mid-write is worse here — it could leave state.json/stats.json
+# partially written).
+concurrency:
+  group: gbpusd-scanner
+  cancel-in-progress: false
+
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -35,5 +50,26 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f stats.json state.json 2>/dev/null || true
           git diff --cached --quiet || git commit -m "chore: update scan stats and state [skip ci]"
-          git push
+
+          # Belt-and-suspenders alongside the concurrency group above: even
+          # with that in place, a manual re-run or a brief overlap can still
+          # land a remote commit between this job's checkout and its push.
+          # Rebase onto whatever's now on main before pushing, instead of
+          # failing outright. Since the only commits on this branch are
+          # these same "chore: update scan stats and state" bumps, a
+          # same-file conflict is resolved by keeping THIS run's version
+          # (-X ours) — it's the freshest scan result, which is what you
+          # want persisted either way.
+          for attempt in 1 2 3; do
+            if git push; then
+              break
+            fi
+            echo "Push rejected (attempt $attempt) — fetching and rebasing before retry..."
+            git fetch origin main
+            git rebase -X ours origin/main || {
+              echo "Rebase conflict could not be auto-resolved — aborting."
+              git rebase --abort
+              exit 1
+            }
+          done
           

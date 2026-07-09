@@ -293,6 +293,15 @@ STATE_MAX_AGE_HOURS = 6
 # Funnel analytics — persists across runs in the repo
 STATS_FILE = "stats.json"
 
+# Shadow log — every scan, records what the OLD (ungated) bias rule would
+# have decided side-by-side with the live CHoCH+BOS+EMA-gated rule. Exists
+# purely to produce short-term A/B evidence on whether the stricter flip
+# gate is removing bad trades or just removing trades — the two look
+# identical from signal count alone, so this log is what actually answers
+# it, e.g. by end of week.
+SHADOW_LOG_FILE = "shadow_log.json"
+SHADOW_LOG_MAX_ENTRIES = 2000   # ~7 days at one 5-min-cadence entry/scan
+
 # How often to send a Telegram summary (every N scans)
 # Set to 0 to disable periodic summaries entirely
 STATS_SUMMARY_EVERY = 50
@@ -370,6 +379,24 @@ def save_stats(stats):
             json.dump(stats, f, indent=2)
     except Exception as e:
         print("[STATS SAVE ERROR] " + str(e))
+
+
+def load_shadow_log():
+    try:
+        with open(SHADOW_LOG_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_shadow_log(log):
+    try:
+        with open(SHADOW_LOG_FILE, "w") as f:
+            # Capped so this doesn't grow unbounded across months of runs —
+            # short-term A/B evidence only needs a rolling recent window.
+            json.dump(log[-SHADOW_LOG_MAX_ENTRIES:], f, indent=2)
+    except Exception as e:
+        print("[SHADOW LOG SAVE ERROR] " + str(e))
 
 
 def format_stats_summary(stats):
@@ -453,6 +480,81 @@ def format_stats_summary(stats):
 
     if RESULT_TRACKING_ENABLED:
         lines.append("_Send /win or /loss to log last trade result._")
+
+    return "\n".join(lines)
+
+
+def format_shadow_summary(shadow_log):
+    """
+    Summarizes the live CHoCH+BOS+EMA-gated bias vs the old ungated rule
+    (any 1H break flips immediately), scan-by-scan, from shadow_log.json.
+
+    This is the actual evidence for "is the stricter gate worth it" —
+    agreement rate alone plus a list of recent divergence windows, so it
+    can be read manually against how price actually moved during each
+    divergence (did the old rule's earlier flip get run over, or did it
+    call a real reversal sooner than the gated live rule did).
+    """
+    if not shadow_log:
+        return "🕶️ _No shadow log entries yet — give it a few scans._"
+
+    n = len(shadow_log)
+    agree = sum(1 for e in shadow_log if e.get("agree"))
+    diverge = n - agree
+    agree_pct = f"{agree/n*100:.0f}%"
+
+    first_t = shadow_log[0].get("time", "?")
+    last_t  = shadow_log[-1].get("time", "?")
+
+    lines = [
+        "",
+        "🕶️ *Shadow Log — Live (gated) vs Old Rule (ungated)*",
+        f"_Period: {first_t} → {last_t}_",
+        "─────────────────────",
+        f"🔍 Scans logged:     `{n}`",
+        f"🤝 Agreement:        `{agree}/{n}` ({agree_pct})",
+        f"↔️ Divergence:       `{diverge}`",
+        "─────────────────────",
+    ]
+
+    if diverge == 0:
+        lines.append("_No divergences yet — nothing for the gate to have blocked or delayed so far._")
+    else:
+        # Collapse consecutive divergent scans into contiguous windows so
+        # a multi-hour disagreement reads as one event, not dozens of
+        # near-duplicate lines.
+        windows = []
+        current = None
+        for e in shadow_log:
+            if not e.get("agree"):
+                if current is None:
+                    current = {"start": e["time"], "end": e["time"],
+                               "live": e["live_bias"], "shadow": e["shadow_bias"],
+                               "price_start": e["price"], "price_end": e["price"]}
+                else:
+                    current["end"] = e["time"]
+                    current["price_end"] = e["price"]
+            else:
+                if current is not None:
+                    windows.append(current)
+                    current = None
+        if current is not None:
+            windows.append(current)
+
+        lines.append(f"*Recent divergence windows* (last {min(len(windows), 8)} of {len(windows)}):")
+        for w in windows[-8:]:
+            price_move = w["price_end"] - w["price_start"]
+            lines.append(
+                f"  `{w['start']}` → `{w['end']}`\n"
+                f"     live=`{w['live']}` (held) vs old-rule=`{w['shadow']}`\n"
+                f"     price moved {price_move:+.5f} during the window"
+            )
+        lines.append("─────────────────────")
+        lines.append(
+            "_Read each window against price direction: if price kept moving "
+            "toward the old rule's call, the gate delayed/blocked a real move. "
+            "If price reverted back toward the live bias, the gate avoided a whipsaw._"
+        )
 
     return "\n".join(lines)
 
@@ -1127,6 +1229,63 @@ def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
     return raw_bias
 
 
+def compute_macro_bias_shadow_old_rule(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
+                                        flat_atr_mult=HTF_CONSOLIDATION_ATR_MULT,
+                                        flat_slope_atr_mult=HTF_EMA_FLAT_THRESHOLD,
+                                        structure_wing=HTF_STRUCTURE_WING):
+    """
+    SHADOW ONLY — never used for trading decisions or signals. Mirrors the
+    exact pre-gate compute_macro_bias behavior: any 1H break, in either
+    direction, flips bias immediately (no CHoCH+BOS follow-through
+    requirement, no EMA agreement check). Runs alongside the live gated
+    rule purely to produce side-by-side evidence of whether the new gate
+    is filtering out bad flips or just delaying/blocking good ones.
+
+    Deliberately self-contained and reads/writes only shadow_-prefixed
+    state keys — it must never share state with, or influence, the real
+    macro_bias_confirmed/macro_leg_* keys the live system trades on.
+    """
+    df_1h = df_1h.copy()
+    df_1h["EMA_100"] = df_1h["Close"].ewm(span=100, adjust=False).mean()
+    df_1h["ATR_1H"] = atr(df_1h, period=14)
+
+    close_now = df_1h["Close"].iloc[-1]
+    ema_now = df_1h["EMA_100"].iloc[-1]
+    atr_now = df_1h["ATR_1H"].iloc[-1]
+
+    confirmed = state.get("shadow_macro_bias_confirmed")
+
+    is_flat = False
+    if not (pd.isna(atr_now) or atr_now == 0 or len(df_1h) <= slope_bars):
+        ema_then = df_1h["EMA_100"].iloc[-1 - slope_bars]
+        dist_in_atr = abs(close_now - ema_now) / atr_now
+        slope_in_atr = abs(ema_now - ema_then) / atr_now
+        is_flat = dist_in_atr < flat_atr_mult and slope_in_atr < flat_slope_atr_mult
+
+    if is_flat:
+        state["shadow_macro_bias_confirmed"] = "CONSOLIDATION"
+        return "CONSOLIDATION"
+
+    bos_1h = detect_bos_impulse(df_1h, wing=structure_wing)
+    if bos_1h is not None:
+        structural_bias = bos_1h["direction"]
+        state["shadow_macro_bias_confirmed"]  = structural_bias
+        state["shadow_macro_leg_direction"]   = structural_bias
+        state["shadow_macro_leg_origin"]      = bos_1h["impulse_start"]
+        state["shadow_macro_leg_extreme"]     = bos_1h["impulse_end"]
+        return structural_bias
+
+    if _refresh_leg_anchor(state, "shadow_macro_leg", df_1h):
+        return state["shadow_macro_leg_direction"]
+
+    if confirmed in ("BULLISH", "BEARISH"):
+        return confirmed
+
+    raw_bias = "BULLISH" if close_now > ema_now else "BEARISH"
+    state["shadow_macro_bias_confirmed"] = raw_bias
+    return raw_bias
+
+
 def adaptive_fib_ratio(df_5m, current_atr, near=FIB_ZONE_NEAR, far=FIB_ZONE_FAR, lookback=50):
     avg_atr = df_5m["ATR"].rolling(lookback, min_periods=10).mean().iloc[-1]
     if pd.isna(avg_atr) or avg_atr == 0 or pd.isna(current_atr):
@@ -1380,6 +1539,7 @@ def check_result_commands(stats):
       /undo                    — reverse the last journal entry, no questions asked
       /confirm                 — override the last result after a flip warning
       /stats                   — get full funnel summary on demand
+      /shadow                  — old-rule vs live-gated bias agreement rate + recent divergences
       /journal                 — get the last 10 trade journal entries
       /last                    — show the last signal that was sent
 
@@ -1576,6 +1736,9 @@ def check_result_commands(stats):
 
         elif cmd in ("/stats", "stats"):
             send_telegram(format_stats_summary(stats))
+
+        elif cmd in ("/shadow", "shadow"):
+            send_telegram(format_shadow_summary(load_shadow_log()))
 
         elif cmd in ("/journal", "journal", "/j"):
             entries = stats.get("journal", [])
@@ -2062,6 +2225,36 @@ def scan():
     # early before any other save_state() call would run) — save here so
     # the confirmation counter survives across runs regardless of outcome.
     bias_stale = state.get("macro_bias_stale", False)
+
+    # ── Shadow log (old ungated rule vs live CHoCH+BOS+EMA gated rule) ───
+    # Never used for trading decisions — purely an A/B record. Runs on the
+    # same state dict (writing only shadow_-prefixed keys) so it's saved
+    # in the same save_state(state) call right below, then a separate
+    # comparison entry gets appended to its own rolling log file.
+    shadow_bias = compute_macro_bias_shadow_old_rule(df_1h, state)
+    shadow_agrees = (shadow_bias == macro_bias)
+    pending_flip = state.get("macro_bias_pending_flip")
+    if not shadow_agrees or pending_flip:
+        print(
+            "  [SHADOW] live={} (gated){} | old-rule={} | {}".format(
+                macro_bias,
+                " STALE" if bias_stale else "",
+                shadow_bias,
+                "MATCH" if shadow_agrees else "DIVERGE — gate is currently holding back a flip the old rule would have taken"
+            )
+        )
+    shadow_log = load_shadow_log()
+    shadow_log.append({
+        "time":            now_utc.isoformat(),
+        "price":           float(df_1h["Close"].iloc[-1]),
+        "live_bias":       macro_bias,
+        "live_bias_stale": bias_stale,
+        "shadow_bias":     shadow_bias,
+        "agree":           shadow_agrees,
+        "pending_flip":    pending_flip,
+    })
+    save_shadow_log(shadow_log)
+
     save_state(state)
 
     # WATCHING bias-mismatch guard — runs BEFORE the CONSOLIDATION early
@@ -2822,3 +3015,4 @@ def scan():
 
 if __name__ == "__main__":
     scan()
+   

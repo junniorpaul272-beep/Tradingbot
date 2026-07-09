@@ -118,6 +118,13 @@ EFFORT_REVERSAL_WINDOW_BARS = 2     # candles counted as "the reversal" — matc
 # Data sanity
 DATA_SPIKE_ATR_MULT = 8
 
+# Data freshness — confirms the scanner is trading on CURRENT market data,
+# not a cached/delayed/stuck feed. A "last closed candle" older than this
+# many multiples of its own interval is treated as a broken feed, not real
+# market silence — vendor outages and stuck caches don't announce
+# themselves, they just quietly serve the same bar forever.
+FRESHNESS_MAX_CANDLE_AGE_MULT = 3
+
 # Margin of error — small pip buffers so near-misses don't get rejected for noise
 ZONE_TOLERANCE_PIPS   = 3    # fib zone: wick can be this many pips shy of the level
 ENGULF_TOLERANCE_PIPS = 1    # engulf body overlap: 1 pip of leniency on containment
@@ -644,6 +651,55 @@ def fetch_ohlc(interval, outputsize=200):
     return df.iloc[:-1]
 
 
+def is_forex_weekend(now_utc):
+    """
+    FX closes roughly Fri 21:00 UTC -> Sun 21:00 UTC. Checked loosely by
+    weekday/hour, not to the minute — this only exists so the freshness
+    check below doesn't false-positive on data that's legitimately stale
+    because the market itself is shut, not because the feed is broken.
+    """
+    wd = now_utc.weekday()  # Mon=0 ... Sun=6
+    if wd == 5:
+        return True
+    if wd == 6:
+        return True
+    if wd == 4 and now_utc.hour >= 21:
+        return True
+    return False
+
+
+def check_data_freshness(df, interval_minutes, label, now_utc):
+    """
+    Confirms this is CURRENT market data, not a cached/delayed/stuck feed.
+    Compares the last closed candle's timestamp against now_utc; if it's
+    older than a lag budget of FRESHNESS_MAX_CANDLE_AGE_MULT × interval,
+    something's wrong upstream (stuck cache, vendor outage, wrong
+    symbol/interval) and the scan must not trade off stale bars as if
+    they were live. Skipped during the FX weekend close, when staleness
+    is expected and not a symptom of anything broken.
+    """
+    if df is None or df.empty:
+        return True  # handled separately by the None/empty check upstream
+
+    if is_forex_weekend(now_utc):
+        return True
+
+    last_candle_time = df.index[-1]
+    age_minutes = (now_utc - last_candle_time).total_seconds() / 60
+    max_age = interval_minutes * FRESHNESS_MAX_CANDLE_AGE_MULT
+
+    if age_minutes > max_age:
+        print(
+            "[STALE DATA] {}: last closed candle is {:.0f} min old "
+            "(max allowed {:.0f} min) — feed may be delayed or stuck, "
+            "refusing to trade on this as current market data.".format(
+                label, age_minutes, max_age)
+        )
+        return False
+
+    return True
+
+
 # -----------------------------------------------
 # INDICATORS
 # -----------------------------------------------
@@ -691,6 +747,14 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
     candidate_low_origin = None
     candidate_high_origin = None
     dominant = None
+    # Counts discrete break events belonging to the CURRENT dominant leg.
+    # The break that founds/flips a leg (a CHoCH when it reverses an
+    # opposing dominant leg) counts as 1. Any further break in that SAME
+    # direction — a genuine follow-through BOS — increments it. A caller
+    # deciding whether to flip a held bias can require break_count >= 2
+    # to demand "CHoCH AND a confirming BOS", not just a single reversal
+    # wick, before trusting the new direction.
+    leg_break_count = 0
 
     fractal_iter = iter(fractals)
     next_fractal = next(fractal_iter, None)
@@ -756,9 +820,12 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
         if new_candidate is not None:
             if dominant is None:
                 dominant = new_candidate
+                leg_break_count = 1
             elif new_candidate["direction"] == dominant["direction"]:
-                pass  # same-direction break just extends the existing leg;
-                      # extreme is already updated unconditionally below.
+                # Same-direction break: the existing leg just produced a
+                # genuine follow-through break — this is the BOS half of
+                # a CHoCH-then-BOS pattern if the leg started as a flip.
+                leg_break_count += 1
             else:
                 # Opposite-direction break while a leg was still active —
                 # this IS the CHoCH: character changed on a break of the
@@ -767,8 +834,11 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
                 # now instead of waiting for the old leg's own invalidation
                 # to eventually catch up (which may lag several bars, or
                 # never trigger at all if price just chops below the break
-                # without also blowing through the old origin).
+                # without also blowing through the old origin). This
+                # founding break is the CHoCH itself, not yet a confirming
+                # BOS — reset the counter to 1.
                 dominant = new_candidate
+                leg_break_count = 1
 
         if dominant is not None:
             if dominant["direction"] == "BULLISH":
@@ -783,6 +853,7 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
         "direction": dominant["direction"],
         "impulse_start": dominant["origin"],
         "impulse_end": dominant["extreme"],
+        "break_count": leg_break_count,
     }
 
 
@@ -859,27 +930,64 @@ def _refresh_leg_anchor(state, prefix, window_df, invalidation_retrace=INVALIDAT
     return True
 
 
+def _persist_macro_swing(state, direction, origin, extreme):
+    """
+    Saves the actual 1H swing points backing the current confirmed macro
+    bias as explicit, auditable state — separate from macro_leg_origin/
+    extreme (which are direction-agnostic anchor fields used for
+    invalidation checks). These are labeled swing_high/swing_low the way
+    a person reading state.json would expect, plus a timestamp, so it's
+    possible to look at state.json at any time and see exactly which
+    swing points and when last justified the current bias — the same gap
+    that made "why is it reading bearish" require three rounds of manual
+    digging earlier in this conversation.
+    """
+    if direction == "BULLISH":
+        state["macro_swing_low"]  = origin
+        state["macro_swing_high"] = extreme
+    else:
+        state["macro_swing_high"] = origin
+        state["macro_swing_low"]  = extreme
+    state["macro_swing_confirmed_at"] = datetime.now(timezone.utc).isoformat()
+
+
 def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
                         flat_atr_mult=HTF_CONSOLIDATION_ATR_MULT,
                         flat_slope_atr_mult=HTF_EMA_FLAT_THRESHOLD,
                         structure_wing=HTF_STRUCTURE_WING):
     """
-    Bias is now driven ONLY by a confirmed 1H structure break (a real
-    macro MSS via detect_bos_impulse on the 1H series) or by a flat-EMA
-    CONSOLIDATION read. A bare EMA_100 cross with no matching 1H break
-    does NOT flip bias — it holds whatever bias was last confirmed in
-    state. EMA position is used only:
-      (a) inside the flatness check below, and
-      (b) as a one-time seed on true cold start (no prior confirmed
-          bias AND no 1H leg detected yet), since the bot has to start
-          somewhere.
+    Bias is driven by a confirmed 1H structure break (a real macro MSS via
+    detect_bos_impulse on the 1H series) or by a flat-EMA CONSOLIDATION
+    read. A bare EMA_100 cross with no matching 1H break does NOT flip
+    bias on its own — see the FLIP GATE below for the one specific case
+    where EMA does play a role.
+
+    FLIP GATE (CHoCH confirmed by BOS, plus EMA agreement):
+    When a fresh 1H break points OPPOSITE to the currently confirmed
+    bias, that break alone is a CHoCH candidate — a change of character,
+    not yet a confirmed reversal. Flipping the live bias on a single
+    reversal wick is exactly the kind of thing that produces a FALLBACK
+    -quality flip-flop. So a flip only completes when ALL of:
+      1. CHoCH — a break opposite the currently held bias occurred.
+      2. BOS follow-through — detect_bos_impulse's break_count for that
+         new leg is >= 2, i.e. the new direction broke a FURTHER swing
+         point after the initial reversal break, not just the one wick.
+      3. EMA agreement — close is on the correct side of EMA_100 for the
+         new direction (extra confirmation layer, not a hard structural
+         requirement on its own — see htf_bias_gate design).
+    Until all three line up, the OLD bias is held (not flipped, and not
+    marked "stale" either — a pending flip is a distinct, more specific
+    state than a plain hold-over with nothing challenging it) and the
+    candidate is recorded in state["macro_bias_pending_flip"] so it's
+    visible in state.json and doesn't need to be re-detected from scratch
+    if the window rolls before it fully confirms.
 
     Mutates state["macro_bias_confirmed"] every call — caller must
     save_state(state) right after, since several downstream code paths
     return early before any other save_state() runs.
 
     Also mutates state["macro_bias_stale"]:
-      - False whenever a fresh 1H BOS/CHoCH is what produced this bias.
+      - False whenever a fresh 1H BOS/CHoCH+BOS is what produced this bias.
       - True whenever the bias is a hold-over — the leg that last
         confirmed it has since invalidated (origin break / 78.6% retrace)
         and nothing has replaced it yet, OR this is a raw EMA cold-start
@@ -894,17 +1002,19 @@ def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
 
     Also persists state["macro_leg_direction"/"macro_leg_origin"/
     "macro_leg_extreme"] as a standing anchor for the confirmed leg,
-    independent of the fetch window. detect_bos_impulse is re-run on only
-    the last ~120 1H bars every scan and has no memory of its own — if the
-    origin fractal that anchors the current dominant leg is older than
-    that window, it silently ages out and detect_bos_impulse picks
-    whatever fractal happens to still be visible as a new "origin,"
-    producing a different leg/range/retrace-threshold with no real price
-    event behind the change. The anchor below is checked directly against
-    whatever price data IS available each scan (which necessarily
-    postdates the anchor's origin, in or out of window) so a leg that's
-    still genuinely alive isn't misread as invalidated just because its
-    origin fractal scrolled out of view.
+    independent of the fetch window, plus state["macro_swing_high"/
+    "macro_swing_low"/"macro_swing_confirmed_at"] as the explicit,
+    human-readable swing points backing that leg (see _persist_macro_swing).
+    detect_bos_impulse is re-run on only the last ~120 1H bars every scan
+    and has no memory of its own — if the origin fractal that anchors the
+    current dominant leg is older than that window, it silently ages out
+    and detect_bos_impulse picks whatever fractal happens to still be
+    visible as a new "origin," producing a different leg/range/retrace
+    -threshold with no real price event behind the change. The anchor
+    below is checked directly against whatever price data IS available
+    each scan (which necessarily postdates the anchor's origin, in or out
+    of window) so a leg that's still genuinely alive isn't misread as
+    invalidated just because its origin fractal scrolled out of view.
     """
     df_1h = df_1h.copy()
     df_1h["EMA_100"] = df_1h["Close"].ewm(span=100, adjust=False).mean()
@@ -933,13 +1043,58 @@ def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
     bos_1h = detect_bos_impulse(df_1h, wing=structure_wing)
     if bos_1h is not None:
         structural_bias = bos_1h["direction"]
+
+        if confirmed in ("BULLISH", "BEARISH") and structural_bias != confirmed:
+            # A break AGAINST the currently confirmed bias — a CHoCH
+            # candidate. Gate it: require BOS follow-through AND EMA
+            # agreement before actually flipping.
+            break_count = bos_1h.get("break_count", 1)
+            choch_confirmed_by_bos = break_count >= 2
+            ema_agrees = (close_now > ema_now) if structural_bias == "BULLISH" else (close_now < ema_now)
+
+            if choch_confirmed_by_bos and ema_agrees:
+                state["macro_bias_confirmed"] = structural_bias
+                state["macro_bias_stale"] = False
+                state["macro_bias_pending_flip"] = None
+                state["macro_leg_direction"] = structural_bias
+                state["macro_leg_origin"]    = bos_1h["impulse_start"]
+                state["macro_leg_extreme"]   = bos_1h["impulse_end"]
+                _persist_macro_swing(state, structural_bias, bos_1h["impulse_start"], bos_1h["impulse_end"])
+                print(
+                    "  [BIAS FLIP] {} -> {} CONFIRMED — CHoCH + BOS follow-through "
+                    "({} breaks) + EMA agree.".format(confirmed, structural_bias, break_count)
+                )
+                return structural_bias
+            else:
+                reasons = []
+                if not choch_confirmed_by_bos:
+                    reasons.append(f"needs BOS follow-through (only {break_count} break so far)")
+                if not ema_agrees:
+                    reasons.append("price hasn't crossed EMA_100 yet")
+                state["macro_bias_pending_flip"] = {
+                    "direction": structural_bias,
+                    "break_count": break_count,
+                    "ema_agrees": ema_agrees,
+                    "reason": ", ".join(reasons),
+                }
+                print("  [BIAS] CHoCH vs {} detected ({}) but NOT confirmed — {}".format(
+                    confirmed, structural_bias, ", ".join(reasons)))
+                # Old bias held — not flipped, not marked stale (a pending
+                # challenger is more specific than a plain unchallenged hold).
+                return confirmed
+
+        # No flip in play: either this reconfirms the already-held bias,
+        # or it's a true cold start with nothing to conflict against —
+        # accept immediately, same as before the flip gate existed.
         state["macro_bias_confirmed"] = structural_bias
         state["macro_bias_stale"] = False
+        state["macro_bias_pending_flip"] = None
         # Anchor this fresh leg so a future window-rollover doesn't get
         # mistaken for invalidation.
         state["macro_leg_direction"] = structural_bias
         state["macro_leg_origin"]    = bos_1h["impulse_start"]
         state["macro_leg_extreme"]   = bos_1h["impulse_end"]
+        _persist_macro_swing(state, structural_bias, bos_1h["impulse_start"], bos_1h["impulse_end"])
         return structural_bias
 
     # detect_bos_impulse found nothing IN THE CURRENT WINDOW. Before
@@ -951,6 +1106,7 @@ def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
         anchor_dir = state["macro_leg_direction"]
         state["macro_bias_confirmed"] = anchor_dir
         state["macro_bias_stale"]     = False
+        _persist_macro_swing(state, anchor_dir, state["macro_leg_origin"], state["macro_leg_extreme"])
         return anchor_dir
 
     # No 1H leg detected. Hold the last confirmed bias — do NOT flip on
@@ -1106,7 +1262,7 @@ def htf_bias_gate(macro_bias, proposed_direction):
 
 def compute_confidence_score(sweep_usable, in_zone_direct,
                               structure_source, in_zone, atr_ok, regime_shifted,
-                              session_active, confirmation_passed):
+                              session_active, confirmation_passed, bias_stale=False):
     """
     V2 confidence score. Replaces the V1 binary Signal/No-Signal decision
     with a weighted evaluation of the evidence actually present, so a
@@ -1114,9 +1270,24 @@ def compute_confidence_score(sweep_usable, in_zone_direct,
     valid continuation missing one input (e.g. no sweep) instead of the
     continuation being hard-rejected outright.
 
-    HTF bias is deliberately absent from this function — it's a pass/fail
-    regime gate handled by htf_bias_gate() before this is ever called, not
-    a component that contributes points. This function scores QUALITY only.
+    HTF bias DIRECTION is a pass/fail regime gate handled by
+    htf_bias_gate() before this is ever called, not a component that
+    contributes points here — this function scores QUALITY only.
+
+    bias_stale, however, is not a direction question — it's a QUALITY
+    question about the same 1H macro bias htf_bias_gate() already passed,
+    and it belongs here. structure_source == "BOS" as passed into this
+    function means "a fresh 15M leg aligned with the current macro bias",
+    which says nothing about whether the 1H bias itself is a live,
+    confirmed break or a day-old carryover nothing has re-tested. A 15M
+    BOS riding a stale 1H hold is real evidence, but it is not the same
+    thing as a 15M BOS riding a bias that a fresh 1H MSS just confirmed —
+    treating them identically is exactly how a FALLBACK_FRACTAL-quality
+    setup (unconfirmed higher timeframe, weaker lower timeframe read)
+    ended up scoring the same as the system's actual best setup (both
+    timeframes freshly confirmed). The two losses in the journal so far
+    were both non-BOS structure; this makes sure a stale bias can't
+    quietly borrow full BOS-tier structure credit either.
 
     Returns (score: int, breakdown: dict[str, int], tier: str, emoji: str,
     warnings: list[str]).
@@ -1134,8 +1305,14 @@ def compute_confidence_score(sweep_usable, in_zone_direct,
 
     # Structure — a fresh BOS/CHoCH aligned with bias beats structure
     # pulled from fallback/state-memory, which beats no structure.
-    if structure_source == "BOS":
+    # A stale macro bias caps this at fallback-tier credit regardless of
+    # the 15M read: the higher timeframe itself is unconfirmed, so the
+    # combined structure picture can't be graded as the system's best case
+    # (BOS + confirmed bias) even when the lower timeframe looks clean.
+    if structure_source == "BOS" and not bias_stale:
         breakdown["structure"] = SCORE_WEIGHTS["structure"]
+    elif structure_source == "BOS" and bias_stale:
+        breakdown["structure"] = SCORE_WEIGHTS["structure"] // 2
     elif structure_source in ("STATE_MEMORY", "FALLBACK_FRACTAL") or "memory stale" in str(structure_source):
         breakdown["structure"] = SCORE_WEIGHTS["structure"] // 2
     else:
@@ -1173,6 +1350,12 @@ def compute_confidence_score(sweep_usable, in_zone_direct,
                 f"WARNING: {component} scored 0 (worth {weight} pts) — "
                 f"total may be masking a critical gap"
             )
+
+    if bias_stale:
+        warnings.append(
+            "WARNING: macro bias is STALE (no live 1H break confirms it) — "
+            "this setup is riding a carried-over bias, not a freshly confirmed one"
+        )
 
     if score >= SCORE_TIER_A_PLUS:
         tier, emoji = "A+ SETUP", "🟢"
@@ -1503,7 +1686,8 @@ def data_looks_sane(df, label, max_spike_mult=DATA_SPIKE_ATR_MULT):
     return True
 
 
-def _checklist(bias, bos_check, bos_bias_check, range_check, fib_check, atr_check, pattern_check, decision):
+def _checklist(bias, bos_check, bos_bias_check, range_check, fib_check, atr_check, pattern_check, decision,
+               bias_stale=None):
     """Prints the full filter checklist every scan with emojis."""
     def fmt(val):
         s = str(val)
@@ -1518,10 +1702,16 @@ def _checklist(bias, bos_check, bos_bias_check, range_check, fib_check, atr_chec
         return s
 
     bias_line = str(bias)
-    if bias == "BULLISH":
-        bias_line += " ✅"
-    elif bias == "BEARISH":
-        bias_line += " ✅"
+    if bias == "BULLISH" or bias == "BEARISH":
+        # bias_stale=None means "not applicable" (paths that never reach
+        # here with a directional bias anyway). Only a directional bias
+        # needs the confirmed/stale distinction called out — this is the
+        # fix for the exact confusion where a day-old carried-over bias
+        # printed identically to a fresh 1H MSS.
+        if bias_stale:
+            bias_line += " ⚠️ (STALE — no live 1H break backing this)"
+        else:
+            bias_line += " ✅ (CONFIRMED — fresh 1H structure)"
     elif bias == "CONSOLIDATION":
         bias_line += " ➖ (flat — no edge)"
     else:
@@ -1829,6 +2019,18 @@ def scan():
         save_stats(stats)
         return
 
+    # ── Data freshness ───────────────────────────────────────────────────
+    # Must run before ANYTHING structural — a stale feed masquerading as
+    # live data is worse than a fetch failure, since a fetch failure is at
+    # least loud. This is silent by default, which is exactly the danger.
+    fresh_5m  = check_data_freshness(df_5m,  5,  "5min",  now_utc)
+    fresh_15m = check_data_freshness(df_15m, 15, "15min", now_utc)
+    fresh_1h  = check_data_freshness(df_1h,  60, "1h",    now_utc)
+    if not (fresh_5m and fresh_15m and fresh_1h):
+        print("Data freshness check failed — exiting without trading on stale bars.")
+        save_stats(stats)
+        return
+
     if not (data_looks_sane(df_5m, "5min") and
             data_looks_sane(df_15m, "15min") and
             data_looks_sane(df_1h, "1h")):
@@ -1907,7 +2109,7 @@ def scan():
     if pd.isna(current_atr) or current_atr == 0:
         save_stats(stats)
         print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", atr_valid_check, "N/A",
-                          "NO TRADE — ATR invalid"))
+                          "NO TRADE — ATR invalid", bias_stale=bias_stale))
         return
 
     # Hard minimum ATR gate
@@ -1917,7 +2119,8 @@ def scan():
         print(_checklist(
             macro_bias, "N/A", "N/A", "N/A", "N/A",
             f"FAIL — ATR {current_atr_pips:.1f}p < min {ATR_MIN_PIPS}p",
-            "N/A", "NO TRADE — ATR below minimum threshold"
+            "N/A", "NO TRADE — ATR below minimum threshold",
+            bias_stale=bias_stale
         ))
         return
 
@@ -2061,7 +2264,8 @@ def scan():
             save_stats(stats)
             print(_checklist(macro_bias, bos_check, "CONFLICT (suppressed)", "N/A",
                               "N/A", atr_valid_check, "N/A",
-                              "NO TRADE — 15M structure conflicts with confirmed macro bias"))
+                              "NO TRADE — 15M structure conflicts with confirmed macro bias",
+                              bias_stale=bias_stale))
             return
     else:
         bos_bias_check = "N/A (no dominant leg found)"
@@ -2109,7 +2313,7 @@ def scan():
         save_stats(stats)
         print(_checklist(macro_bias, bos_check, bos_bias_check, range_check,
                           "N/A", atr_valid_check, "N/A",
-                          "NO TRADE — range too compressed"))
+                          "NO TRADE — range too compressed", bias_stale=bias_stale))
         return
 
     # ── Adaptive Fib Zone ─────────────────────────────────────────────────
@@ -2225,7 +2429,7 @@ def scan():
                 score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
                     sweep_usable, in_zone_direct, structure_source,
                     in_zone, True, regime_shifted, is_active_session(now_utc),
-                    confirmation_passed,
+                    confirmation_passed, bias_stale=bias_stale,
                 )
                 if score >= SCORE_TIER_ACCEPTABLE:
                     trade_signal  = "BUY"
@@ -2287,7 +2491,7 @@ def scan():
                 score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
                     sweep_usable, in_zone_direct, structure_source,
                     in_zone, True, regime_shifted, is_active_session(now_utc),
-                    confirmation_passed,
+                    confirmation_passed, bias_stale=bias_stale,
                 )
                 if score >= SCORE_TIER_ACCEPTABLE:
                     trade_signal  = "SELL"
@@ -2330,7 +2534,15 @@ def scan():
     elif momentum_overshoot and trade_signal != "HOLD":
         decision = "💥 SIGNAL SUPPRESSED — momentum candle overshot the pocket"
     print(_checklist(macro_bias, bos_check, bos_bias_check, range_check,
-                     fib_check, atr_valid_check, pattern_check, decision))
+                     fib_check, atr_valid_check, pattern_check, decision,
+                     bias_stale=bias_stale))
+    if state.get("macro_swing_high") is not None and state.get("macro_swing_low") is not None:
+        print(
+            "  [Detail] 1H macro swing: H {:.5f} / L {:.5f} (confirmed {})".format(
+                state["macro_swing_high"], state["macro_swing_low"],
+                state.get("macro_swing_confirmed_at", "unknown")
+            )
+        )
     print(
         "  [Detail] Structure: " + structure_source +
         " | Price: {:.5f}".format(c_last["Close"]) +
@@ -2564,7 +2776,7 @@ def scan():
             live_score, live_breakdown, live_tier, live_emoji, _live_warnings = compute_confidence_score(
                 sweep_usable, in_zone_direct, structure_source,
                 in_zone, True, regime_shifted, is_active_session(now_utc),
-                confirmation_passed=False,
+                confirmation_passed=False, bias_stale=bias_stale,
             )
             watch_msg = (
                 "👀 *SMC WATCHING — GBPUSD*\n\n"

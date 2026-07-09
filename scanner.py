@@ -302,6 +302,17 @@ STATS_FILE = "stats.json"
 SHADOW_LOG_FILE = "shadow_log.json"
 SHADOW_LOG_MAX_ENTRIES = 2000   # ~7 days at one 5-min-cadence entry/scan
 
+# Shadow TRADING pipeline (separate from the bias-only A/B log above) —
+# a full independent, loose-rule mirror of the live pipeline that takes
+# a meaningfully higher volume of paper trades for research. See the
+# "SHADOW PIPELINE" section further down for the full design notes.
+SHADOW_ATR_MIN_PIPS   = 5     # live floor is ATR_MIN_PIPS = 6
+SHADOW_STATE_FILE     = "shadow_pipeline_state.json"
+SHADOW_TRADES_FILE    = "shadow_pipeline_trades.json"
+SHADOW_MAX_OPEN_PER_DIRECTION = 2   # a little overlap allowed, not unbounded
+SHADOW_MAX_OPEN_TOTAL         = 6   # hard safety ceiling regardless of direction split
+SHADOW_RESOLVED_MAX           = 1000   # rolling cap on resolved shadow-trade history
+
 # How often to send a Telegram summary (every N scans)
 # Set to 0 to disable periodic summaries entirely
 STATS_SUMMARY_EVERY = 50
@@ -617,6 +628,41 @@ def format_trade_status(active, current_price, now_utc):
     )
 
 
+def format_trade_query_response(stats, current_price, now_utc):
+    """
+    On-demand answer for /trade. Three cases:
+      1. A live trade is currently open — full status (same content as
+         the periodic ping): direction, entry vs current, P/L, distance
+         to TP/SL, time in trade, frozen signal-time score.
+      2. No trade open, but the last one closed via SL/TP (auto-detected
+         by manage_active_trade) or was logged via /win or /loss — say
+         which level was hit (or which result was logged) and the pips.
+      3. Never had a trade this session — say so plainly.
+    """
+    active = stats.get("active_trade")
+    if active:
+        return format_trade_status(active, current_price, now_utc)
+
+    last_closed = stats.get("last_closed_trade")
+    if last_closed:
+        hit    = last_closed.get("hit", "?")
+        pips   = last_closed.get("pips", 0)
+        result = last_closed.get("result", "?")
+        icon   = "✅" if result == "WIN" else "❌"
+        try:
+            pips_str = f"{pips:+.1f} pips"
+        except (TypeError, ValueError):
+            pips_str = "?"
+        return (
+            f"📭 *No trade in session* — {hit} hit {icon}\n"
+            f"{last_closed.get('direction','?')} @ `{last_closed.get('entry','?')}` → "
+            f"`{last_closed.get('exit','?')}` ({pips_str})\n"
+            f"_Closed: {last_closed.get('closed_at','?')}_"
+        )
+
+    return "📭 *No trade in session.*"
+
+
 def check_trade_closed(active, c_last):
     """
     Checks the latest closed 5M candle's High/Low against the frozen SL/TP.
@@ -688,6 +734,18 @@ def manage_active_trade(stats, df_5m, now_utc):
             stats["losses"] = stats.get("losses", 0) + 1
         # Lock this signal against a stray manual /win or /loss arriving after auto-close.
         stats["result_logged_for_signal"] = active.get("opened_at_display")
+
+        # Snapshot for the /trade command — "no trade in session, TP/SL hit".
+        stats["last_closed_trade"] = {
+            "direction":  active["direction"],
+            "entry":      f"{active['entry']:.5f}",
+            "exit":       f"{exit_price:.5f}",
+            "result":     outcome,
+            "hit":        "TP" if outcome == "WIN" else "SL",
+            "pips":       pl_pips,
+            "closed_at":  now_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            "opened_at_display": active.get("opened_at_display", "?"),
+        }
 
         icon = "✅" if outcome == "WIN" else "❌"
         send_telegram(
@@ -1539,7 +1597,14 @@ def check_result_commands(stats):
       /undo                    — reverse the last journal entry, no questions asked
       /confirm                 — override the last result after a flip warning
       /stats                   — get full funnel summary on demand
-      /shadow                  — old-rule vs live-gated bias agreement rate + recent divergences
+      /trade                   — status of the live trade in session (or
+                                  "no trade in session" / which level of
+                                  the last one was hit, if none is open)
+      /shadow                  — loose-rule shadow pipeline summary: funnel
+                                  counts, win rate, broken down by BOS vs
+                                  Fractal structure and by confidence score
+      /biasab                  — old-rule vs live-gated 1H bias agreement
+                                  rate + recent divergences (was /shadow)
       /journal                 — get the last 10 trade journal entries
       /last                    — show the last signal that was sent
 
@@ -1611,6 +1676,21 @@ def check_result_commands(stats):
         stats["result_logged_for_signal"] = sig_time
         # Manual result overrides auto-detection — clear the active trade
         # (if any) so trade-status pings stop and normal scanning resumes.
+        active = stats.get("active_trade")
+        if active:
+            # Snapshot for /trade — manual /win or /loss closes it exactly
+            # like an auto-detected SL/TP hit, just with the level unknown
+            # (a person logged the result, not a candle touching a price).
+            stats["last_closed_trade"] = {
+                "direction":  active.get("direction", "?"),
+                "entry":      f"{active['entry']:.5f}" if "entry" in active else "?",
+                "exit":       "manual",
+                "result":     result,
+                "hit":        "manual /win" if result == "WIN" else "manual /loss",
+                "pips":       None,
+                "closed_at":  now_str,
+                "opened_at_display": active.get("opened_at_display", "?"),
+            }
         stats.pop("active_trade", None)
         return stats
 
@@ -1737,10 +1817,31 @@ def check_result_commands(stats):
         elif cmd in ("/stats", "stats"):
             send_telegram(format_stats_summary(stats))
 
+        elif cmd in ("/trade", "trade"):
+            # Needs a live price to compute P/L and distance to SL/TP, and
+            # df_5m isn't fetched yet at this point in scan() (commands are
+            # processed before the data fetch so they're never dropped by a
+            # fetch failure). Defer the actual reply to right after
+            # manage_active_trade() runs later this same scan, when fresh
+            # 5M data is on hand — see the pending-query check in scan().
+            stats["_pending_trade_query"] = True
+
         elif cmd in ("/shadow", "shadow"):
+            send_telegram(format_shadow_pipeline_summary(load_shadow_trades()))
+
+        elif cmd in ("/biasab", "biasab"):
+            # Old-rule-vs-live-gated 1H BIAS A/B log (unrelated to the
+            # /shadow loose-trading pipeline above) — kept under its own
+            # command name so the two don't collide.
             send_telegram(format_shadow_summary(load_shadow_log()))
 
         elif cmd in ("/bias", "bias"):
+            # NOTE: this branch previously referenced a bare `state` name
+            # that does not exist inside this function's scope (only
+            # scan() has a local `state` from load_state()) — sending
+            # /bias raised a NameError and silently dropped the command.
+            # Fixed by loading state fresh here.
+            state        = load_state()
             confirmed    = state.get("macro_bias_confirmed", "?")
             stale        = state.get("macro_bias_stale", False)
             pending      = state.get("macro_bias_pending_flip")
@@ -2182,6 +2283,413 @@ def detect_regime_shift(df_5m, current_atr, now_utc):
 
 
 # -----------------------------------------------
+# SHADOW PIPELINE — loose-rule parallel paper-trading simulator
+# -----------------------------------------------
+# Runs a full, INDEPENDENT mirror of the live pipeline every scan, using
+# deliberately looser thresholds so it takes a meaningfully higher volume
+# of paper trades than the live bot for research purposes only. It never
+# sends a live trading alert and never reads or writes state.json /
+# stats.json — it has its own dedicated files (SHADOW_STATE_FILE /
+# SHADOW_TRADES_FILE), so a bug here cannot corrupt or influence the live
+# bot's trading decisions. It also computes its own 1H bias independently
+# (via the SAME compute_macro_bias() the live bot uses, just against its
+# own state), so it keeps evaluating and opening trades even while the
+# live bot itself is mid-trade and frozen at manage_active_trade().
+#
+# Kept IDENTICAL to live (real structural hard-stops, not noise filters):
+#   - 1H bias / CONSOLIDATION gate
+#   - 15M BOS vs 1H bias conflict suppression (timeframe alignment)
+#   - Structural range floor + ATR-invalid (NaN/0) guard
+#   - htf_bias_gate + compute_confidence_score (identical scoring math)
+#   - SCORE_TIER_ACCEPTABLE floor (70) — same bar to actually "trade"
+#
+# Loosened (filters that gate WHEN a real setup fires, not what counts
+# as a real setup):
+#   - ATR floor: SHADOW_ATR_MIN_PIPS (5) vs live's ATR_MIN_PIPS (6)
+#   - Volatility regime-shift / post-spike suppression: detected and
+#     tagged on the trade record, but does not block it from opening
+#   - Momentum-overshoot suppression: detected and tagged, not enforced
+#   - Live's full dealing-range duplicate-signal cooldown: replaced with
+#     a much lighter "already have an open shadow trade near this entry,
+#     in this direction" dedup — enough that a stalled price doesn't
+#     spawn a new trade every 5 minutes, without throttling as hard as
+#     live's full-leg-memory cooldown
+#   - The two-stage WATCHING confirmation ping: not applicable — shadow
+#     only records executed (or would-be) trades, not pre-alerts
+def load_shadow_pipeline_state():
+    try:
+        with open(SHADOW_STATE_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_shadow_pipeline_state(state):
+    try:
+        with open(SHADOW_STATE_FILE, "w") as f:
+            json.dump(state, f)
+    except Exception as e:
+        print("[SHADOW STATE SAVE ERROR] " + str(e))
+
+
+def load_shadow_trades():
+    try:
+        with open(SHADOW_TRADES_FILE, "r") as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+    data.setdefault("funnel", {})
+    data.setdefault("open_trades", [])
+    data.setdefault("resolved_trades", [])
+    funnel = data["funnel"]
+    for k in ("total_scans", "consolidation_skip", "bos_conflict", "no_structure",
+              "atr_too_low", "fib_reached", "pattern_passed", "trades_opened"):
+        funnel.setdefault(k, 0)
+    return data
+
+
+def save_shadow_trades(data):
+    data["resolved_trades"] = data["resolved_trades"][-SHADOW_RESOLVED_MAX:]
+    try:
+        with open(SHADOW_TRADES_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print("[SHADOW TRADES SAVE ERROR] " + str(e))
+
+
+def _shadow_structure_group(structure_source):
+    """
+    Collapses the fine-grained structure_source label into the two
+    buckets requested for the /shadow breakdown: BOS vs everything
+    fractal-derived (FALLBACK_FRACTAL, STATE_MEMORY, and the
+    memory-stale-fallback variant all ultimately trade off the same
+    underlying fractal swing read, not a fresh confirmed break).
+    """
+    return "BOS" if structure_source == "BOS" else "FRACTAL"
+
+
+def resolve_shadow_trades(df_5m, now_utc):
+    """
+    Checks every currently-open shadow trade against the latest closed
+    5M candle and closes any that hit SL or TP, using the same
+    conservative "assume SL if a single bar touches both levels" rule
+    check_trade_closed() already applies to the live trade. Runs every
+    scan regardless of anything else, so shadow trades keep resolving
+    even on scans where a new one can't open (or where the live bot is
+    itself mid-trade and frozen).
+    """
+    data = load_shadow_trades()
+    if not data["open_trades"]:
+        return
+    c_last = df_5m.iloc[-1]
+    still_open = []
+    for t in data["open_trades"]:
+        outcome = check_trade_closed(t, c_last)
+        if outcome is None:
+            still_open.append(t)
+            continue
+        exit_price = t["tp"] if outcome == "WIN" else t["sl"]
+        sign = 1 if t["direction"] == "BUY" else -1
+        pl_pips = (exit_price - t["entry"]) * sign / PIP_SIZE
+        t["result"]    = outcome
+        t["exit"]      = exit_price
+        t["pl_pips"]   = pl_pips
+        t["closed_at"] = now_utc.strftime("%Y-%m-%d %H:%M UTC")
+        data["resolved_trades"].append(t)
+    data["open_trades"] = still_open
+    save_shadow_trades(data)
+
+
+def maybe_open_shadow_trade(df_5m, df_15m, df_1h, now_utc):
+    """
+    Independent, loose-rule evaluation of whether a shadow (paper) trade
+    should open this scan. Purely additive — only touches
+    SHADOW_STATE_FILE / SHADOW_TRADES_FILE, never state.json/stats.json.
+    """
+    shadow_state = load_shadow_pipeline_state()
+    data = load_shadow_trades()
+    data["funnel"]["total_scans"] += 1
+
+    if len(df_1h) < HTF_BIAS_MIN_BARS:
+        save_shadow_trades(data)
+        return
+
+    macro_bias = compute_macro_bias(df_1h, shadow_state)
+    bias_stale = shadow_state.get("macro_bias_stale", False)
+    save_shadow_pipeline_state(shadow_state)
+
+    if macro_bias == "CONSOLIDATION":
+        data["funnel"]["consolidation_skip"] += 1
+        save_shadow_trades(data)
+        return
+
+    df_5m = df_5m.copy()
+    df_5m["ATR"] = atr(df_5m, period=14)
+    current_atr = df_5m["ATR"].iloc[-1]
+    if pd.isna(current_atr) or current_atr == 0:
+        save_shadow_trades(data)
+        return
+    current_atr_pips = current_atr / PIP_SIZE
+
+    if current_atr_pips < SHADOW_ATR_MIN_PIPS:
+        data["funnel"]["atr_too_low"] += 1
+        save_shadow_trades(data)
+        return
+
+    regime_shifted, regime_ratio, short_atr_pips = detect_regime_shift(df_5m, current_atr, now_utc)
+
+    lookback = df_15m.tail(SWING_LOOKBACK_15)
+    bos = detect_bos_impulse(lookback, wing=FRACTAL_WING)
+    if bos is None:
+        if _refresh_leg_anchor(shadow_state, "leg15", lookback):
+            bos = {
+                "direction":     shadow_state["leg15_direction"],
+                "impulse_start": shadow_state["leg15_origin"],
+                "impulse_end":   shadow_state["leg15_extreme"],
+            }
+    else:
+        shadow_state["leg15_direction"] = bos["direction"]
+        shadow_state["leg15_origin"]    = bos["impulse_start"]
+        shadow_state["leg15_extreme"]   = bos["impulse_end"]
+
+    if bos is not None:
+        if bos["direction"] == macro_bias:
+            structure_source = "BOS"
+            if bos["direction"] == "BULLISH":
+                swing_low, swing_high = bos["impulse_start"], bos["impulse_end"]
+            else:
+                swing_high, swing_low = bos["impulse_start"], bos["impulse_end"]
+            shadow_state.update({
+                "status":        "ACTIVE_LEG",
+                "direction":     bos["direction"],
+                "impulse_start": bos["impulse_start"],
+                "impulse_end":   bos["impulse_end"],
+            })
+        else:
+            # Real 15M-vs-1H timeframe conflict — kept as a hard stop for
+            # shadow too (this is core SMC strategy alignment, not noise).
+            data["funnel"]["bos_conflict"] += 1
+            save_shadow_pipeline_state(shadow_state)
+            save_shadow_trades(data)
+            return
+    else:
+        swing_high, swing_low, structure_source = fallback_structure(
+            lookback, macro_bias, shadow_state, wing=FRACTAL_WING)
+
+    save_shadow_pipeline_state(shadow_state)
+
+    structural_range = swing_high - swing_low
+    if structural_range < (5 * PIP_SIZE):
+        data["funnel"]["no_structure"] += 1
+        save_shadow_trades(data)
+        return
+
+    fib_ratio = adaptive_fib_ratio(df_5m, current_atr)
+    fib_zone = (swing_high - (fib_ratio * structural_range) if macro_bias == "BULLISH"
+                else swing_low + (fib_ratio * structural_range))
+
+    zone_tol   = ZONE_TOLERANCE_PIPS * PIP_SIZE
+    engulf_tol = ENGULF_TOLERANCE_PIPS * PIP_SIZE
+    sweep_valid, _sweep_label = detect_liquidity_sweep(df_5m, df_15m, fib_zone, macro_bias)
+    momentum_overshoot, _momentum_reason = detect_momentum_overshoot(df_15m, swing_high, swing_low, macro_bias)
+
+    c_last = df_5m.iloc[-1]
+    c_prev = df_5m.iloc[-2]
+    body_last     = abs(c_last["Close"] - c_last["Open"])
+    atr_threshold = ATR_ENGULF_MIN * current_atr
+
+    trade_signal = "HOLD"
+    entry = sl = tp = None
+    score = score_tier = None
+
+    if macro_bias == "BULLISH":
+        lowest_wick        = min(c_prev["Low"], c_last["Low"])
+        in_zone_direct     = lowest_wick <= fib_zone + zone_tol
+        sweep_distance_ok  = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
+        sweep_usable       = sweep_valid and sweep_distance_ok
+        in_zone            = in_zone_direct or sweep_usable
+        bear_prev          = c_prev["Close"] < c_prev["Open"]
+        bull_last          = c_last["Close"] > c_last["Open"]
+        engulfs            = (c_last["Close"] >= c_prev["Open"] - engulf_tol and
+                               c_last["Open"]  <= c_prev["Close"] + engulf_tol)
+        real_body          = body_last > atr_threshold
+        confirmation_passed = bear_prev and bull_last and engulfs and real_body
+
+        if in_zone:
+            data["funnel"]["fib_reached"] += 1
+
+        if in_zone and confirmation_passed:
+            gate_ok, _ = htf_bias_gate(macro_bias, "BULLISH")
+            if gate_ok:
+                score, _bd, score_tier, _emoji, _warn = compute_confidence_score(
+                    sweep_usable, in_zone_direct, structure_source, in_zone, True,
+                    regime_shifted, is_active_session(now_utc), confirmation_passed,
+                    bias_stale=bias_stale,
+                )
+                if score >= SCORE_TIER_ACCEPTABLE:
+                    trade_signal = "BUY"
+                    entry        = c_last["Close"]
+                    sl_buffer    = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                    sl           = lowest_wick - sl_buffer
+                    risk         = entry - sl
+                    tp           = entry + (RR_RATIO * risk)
+                    data["funnel"]["pattern_passed"] += 1
+
+    elif macro_bias == "BEARISH":
+        highest_wick       = max(c_prev["High"], c_last["High"])
+        in_zone_direct     = highest_wick >= fib_zone - zone_tol
+        sweep_distance_ok  = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
+        sweep_usable       = sweep_valid and sweep_distance_ok
+        in_zone            = in_zone_direct or sweep_usable
+        bull_prev          = c_prev["Close"] > c_prev["Open"]
+        bear_last          = c_last["Close"] < c_last["Open"]
+        engulfs            = (c_last["Open"]  >= c_prev["Close"] - engulf_tol and
+                               c_last["Close"] <= c_prev["Open"]  + engulf_tol)
+        real_body          = body_last > atr_threshold
+        confirmation_passed = bull_prev and bear_last and engulfs and real_body
+
+        if in_zone:
+            data["funnel"]["fib_reached"] += 1
+
+        if in_zone and confirmation_passed:
+            gate_ok, _ = htf_bias_gate(macro_bias, "BEARISH")
+            if gate_ok:
+                score, _bd, score_tier, _emoji, _warn = compute_confidence_score(
+                    sweep_usable, in_zone_direct, structure_source, in_zone, True,
+                    regime_shifted, is_active_session(now_utc), confirmation_passed,
+                    bias_stale=bias_stale,
+                )
+                if score >= SCORE_TIER_ACCEPTABLE:
+                    trade_signal = "SELL"
+                    entry        = c_last["Close"]
+                    sl_buffer    = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                    sl           = highest_wick + sl_buffer
+                    risk         = sl - entry
+                    tp           = entry - (RR_RATIO * risk)
+                    data["funnel"]["pattern_passed"] += 1
+
+    if trade_signal == "HOLD" or entry is None:
+        save_shadow_trades(data)
+        return
+
+    # Lightweight dedup — NOT live's full dealing-range memory, just
+    # enough that a stalled price sitting in one zone for hours doesn't
+    # spawn a near-identical "trade" every 5 minutes.
+    same_dir_open = [t for t in data["open_trades"] if t["direction"] == trade_signal]
+    if (len(same_dir_open) >= SHADOW_MAX_OPEN_PER_DIRECTION or
+            len(data["open_trades"]) >= SHADOW_MAX_OPEN_TOTAL):
+        save_shadow_trades(data)
+        return
+    if any(abs(t["entry"] - entry) / PIP_SIZE < 3 for t in same_dir_open):
+        save_shadow_trades(data)
+        return
+
+    data["open_trades"].append({
+        "direction":          trade_signal,
+        "entry":              entry,
+        "sl":                 sl,
+        "tp":                 tp,
+        "score":              score,
+        "score_tier":         score_tier,
+        "structure_source":   structure_source,
+        "structure_group":    _shadow_structure_group(structure_source),
+        "regime_shifted":     bool(regime_shifted),
+        "momentum_overshoot":  bool(momentum_overshoot),
+        "opened_at":          now_utc.isoformat(),
+        "opened_at_display":  now_utc.strftime("%Y-%m-%d %H:%M UTC"),
+    })
+    data["funnel"]["trades_opened"] += 1
+    save_shadow_trades(data)
+
+
+def run_shadow_pipeline(df_5m, df_15m, df_1h, now_utc):
+    """
+    Single entry point called from scan(). Wrapped in a try/except that
+    swallows and logs any error — the shadow pipeline must NEVER be able
+    to raise into, break, or otherwise interrupt the live bot's own scan.
+    """
+    try:
+        resolve_shadow_trades(df_5m, now_utc)
+        maybe_open_shadow_trade(df_5m, df_15m, df_1h, now_utc)
+    except Exception as e:
+        print("[SHADOW PIPELINE ERROR] " + str(e))
+
+
+def format_shadow_pipeline_summary(data):
+    """
+    /shadow response: funnel breakdown (mirrors format_stats_summary's
+    style so it reads the same way), overall resolved win rate, then two
+    fine-grained breakdowns — by structure source (BOS vs Fractal) and by
+    confidence-score bucket (e.g. "80-84: 5 trades — 45% win rate") — so
+    it's possible to see at a glance which kind of setup the looser rules
+    are actually paying off on.
+    """
+    funnel = data.get("funnel", {})
+    resolved = data.get("resolved_trades", [])
+    open_trades = data.get("open_trades", [])
+    n = funnel.get("total_scans", 0)
+    if n == 0:
+        return "🕶️ _Shadow pipeline — no scans recorded yet._"
+
+    def pct(v):
+        return f"{v/n*100:.1f}%" if n else "—"
+
+    total_resolved = len(resolved)
+    wins = sum(1 for t in resolved if t.get("result") == "WIN")
+    wr = (f"{wins}/{total_resolved} ({wins/total_resolved*100:.0f}%)"
+          if total_resolved else "no trades resolved yet")
+
+    lines = [
+        "",
+        "🕶️ *Shadow Pipeline — Loose-Rule Simulator*",
+        f"_ATR floor {SHADOW_ATR_MIN_PIPS}p (live {ATR_MIN_PIPS}p) · regime/momentum "
+        "suppression OFF · duplicate cooldown light · 1H bias & BOS-conflict "
+        "still hard stops_",
+        "─────────────────────",
+        f"🔍 Scans:                `{n}`",
+        f"➖ Consolidation skip:    `{funnel.get('consolidation_skip',0)}` ({pct(funnel.get('consolidation_skip',0))})",
+        f"⚠️ BOS conflict:          `{funnel.get('bos_conflict',0)}` ({pct(funnel.get('bos_conflict',0))})",
+        f"❌ No structure:          `{funnel.get('no_structure',0)}` ({pct(funnel.get('no_structure',0))})",
+        f"📉 ATR too low (<{SHADOW_ATR_MIN_PIPS}p):  `{funnel.get('atr_too_low',0)}` ({pct(funnel.get('atr_too_low',0))})",
+        f"🎯 Fib zone reached:      `{funnel.get('fib_reached',0)}` ({pct(funnel.get('fib_reached',0))})",
+        f"✅ Pattern passed:        `{funnel.get('pattern_passed',0)}` ({pct(funnel.get('pattern_passed',0))})",
+        f"🚨 Trades opened:         `{funnel.get('trades_opened',0)}`",
+        f"📬 Currently open:        `{len(open_trades)}`",
+        "─────────────────────",
+        f"🏆 Resolved win rate:     `{wr}`",
+    ]
+
+    if total_resolved:
+        lines.append("─────────────────────")
+        lines.append("*By structure source:*")
+        for grp in ("BOS", "FRACTAL"):
+            grp_trades = [t for t in resolved if t.get("structure_group") == grp]
+            if not grp_trades:
+                continue
+            g_wins  = sum(1 for t in grp_trades if t.get("result") == "WIN")
+            g_total = len(grp_trades)
+            lines.append(f"  {grp}: `{g_total} trades` — `{g_wins/g_total*100:.0f}% win rate`")
+
+        lines.append("─────────────────────")
+        lines.append("*By confidence score:*")
+        buckets = [(70, 74), (75, 79), (80, 84), (85, 89), (90, 94), (95, 100)]
+        for lo, hi in buckets:
+            b_trades = [t for t in resolved if t.get("score") is not None and lo <= t["score"] <= hi]
+            if not b_trades:
+                continue
+            b_wins  = sum(1 for t in b_trades if t.get("result") == "WIN")
+            b_total = len(b_trades)
+            lines.append(f"  {lo}-{hi}: `{b_total} trades` — `{b_wins/b_total*100:.0f}% win rate`")
+
+    lines.append("─────────────────────")
+    lines.append(
+        "_Research only — never a live trading alert. Send /trade for the "
+        "live bot's actual open position, or /biasab for the older bias-only A/B log._"
+    )
+    return "\n".join(lines)
+
+
+# -----------------------------------------------
 # MAIN SCAN
 # -----------------------------------------------
 def scan():
@@ -2234,13 +2742,31 @@ def scan():
         save_stats(stats)
         return
 
+    # ── Shadow pipeline (independent loose-rule paper-trade simulator) ────
+    # Runs every scan with good data, regardless of whether the live bot
+    # itself is about to freeze at manage_active_trade() below — it keeps
+    # its own bias/state/trades entirely separate from the live bot's, so
+    # it never stalls just because a live trade happens to be open.
+    run_shadow_pipeline(df_5m, df_15m, df_1h, now_utc)
+
     # ── Active-trade check — runs BEFORE bias/zone/scoring ────────────────
     # If a trade is already open, this is the ONLY thing scan() does this
     # cycle: check for SL/TP hit, or send a status ping. No new bias read,
     # no zone/structure evaluation, no confidence score gets computed —
     # the signal-time score stays frozen in stats["active_trade"] and is
     # never touched again until the trade closes.
-    if manage_active_trade(stats, df_5m, now_utc):
+    trade_is_open = manage_active_trade(stats, df_5m, now_utc)
+
+    # ── /trade on-demand query ────────────────────────────────────────────
+    # Deferred here from check_result_commands() (which runs before the
+    # data fetch, and so has no live price to report with) — now that
+    # fresh 5M data exists and manage_active_trade() has had a chance to
+    # auto-close a just-hit SL/TP this same cycle, answer with the
+    # freshest possible picture.
+    if stats.pop("_pending_trade_query", False):
+        send_telegram(format_trade_query_response(stats, df_5m.iloc[-1]["Close"], now_utc))
+
+    if trade_is_open:
         save_stats(stats)
         return
 
@@ -3085,5 +3611,4 @@ def scan():
 
 if __name__ == "__main__":
     scan()
-       
-  
+ 

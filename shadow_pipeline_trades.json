@@ -1,0 +1,14 @@
+{
+  "funnel": {
+    "total_scans": 1,
+    "consolidation_skip": 0,
+    "bos_conflict": 1,
+    "no_structure": 0,
+    "atr_too_low": 0,
+    "fib_reached": 0,
+    "pattern_passed": 0,
+    "trades_opened": 0
+  },
+  "open_trades": [],
+  "resolved_trades": []
+}

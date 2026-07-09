@@ -1740,6 +1740,39 @@ def check_result_commands(stats):
         elif cmd in ("/shadow", "shadow"):
             send_telegram(format_shadow_summary(load_shadow_log()))
 
+        elif cmd in ("/bias", "bias"):
+            confirmed    = state.get("macro_bias_confirmed", "?")
+            stale        = state.get("macro_bias_stale", False)
+            pending      = state.get("macro_bias_pending_flip")
+            swing_high   = state.get("macro_swing_high")
+            swing_low    = state.get("macro_swing_low")
+            confirmed_at = state.get("macro_swing_confirmed_at", "?")
+            leg_dir      = state.get("macro_leg_direction", "?")
+            lines = [
+                "🧭 *1H Bias — live state*",
+                "─────────────────────",
+                f"Confirmed: `{confirmed}`" + (" ⚠️ STALE" if stale else ""),
+                f"Anchored leg direction: `{leg_dir}`",
+            ]
+            if swing_high is not None and swing_low is not None:
+                lines.append(f"Swing H/L: `{swing_high:.5f}` / `{swing_low:.5f}`")
+                lines.append(f"Confirmed at: `{confirmed_at}`")
+            else:
+                lines.append("Swing H/L: _no anchor — nothing has confirmed this bias yet_")
+            if pending:
+                lines.append(
+                    "Pending flip: `{}` — {}".format(
+                        pending.get("direction", "?"), pending.get("reason", "?"))
+                )
+            if stale:
+                lines.append(
+                    "\n_STALE means the leg that last confirmed this bias has "
+                    "since invalidated (origin break or 78.6%+ retrace) and "
+                    "nothing fresh has replaced it yet. The direction shown is "
+                    "a hold-over, not a live confirmation._"
+                )
+            send_telegram("\n".join(lines))
+
         elif cmd in ("/journal", "journal", "/j"):
             entries = stats.get("journal", [])
             if not entries:
@@ -2292,6 +2325,43 @@ def scan():
         print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", "N/A", "N/A",
                           "NO TRADE — 1H is consolidating (no directional edge)"))
         return
+
+    # ── Early stale-bias resolution via 15M structure ────────────────────
+    # This is the SAME promotion logic that lives further down in the 15M
+    # BOS/Structure section (a 15M break against a stale 1H hold gets
+    # promoted rather than suppressed as a "conflict") — duplicated here,
+    # ahead of the ATR gate below, specifically because the ATR gate
+    # RETURNS before that later block ever runs. Bias bookkeeping has
+    # nothing to do with whether this instant's 5M ATR clears the entry
+    # floor, so a quiet-ATR scan must not be able to leave a stale bias
+    # stuck reporting its OLD direction indefinitely just because it never
+    # got a turn to check. The later block still runs its own copy of this
+    # check when reached; it naturally no-ops here since bias_stale is
+    # already False by then, so nothing fires twice.
+    if bias_stale:
+        early_lookback = df_15m.tail(SWING_LOOKBACK_15)
+        early_bos = detect_bos_impulse(early_lookback, wing=FRACTAL_WING)
+        if early_bos is None:
+            if _refresh_leg_anchor(state, "leg15", early_lookback):
+                early_bos = {
+                    "direction":     state["leg15_direction"],
+                    "impulse_start": state["leg15_origin"],
+                    "impulse_end":   state["leg15_extreme"],
+                }
+        if early_bos is not None and early_bos["direction"] != macro_bias:
+            print(
+                "  [BIAS] 15M BOS ({}) reconfirms over stale 1H hold ({}) — "
+                "promoting early, ahead of the ATR gate.".format(
+                    early_bos["direction"], macro_bias)
+            )
+            macro_bias = early_bos["direction"]
+            state["macro_bias_confirmed"] = macro_bias
+            state["macro_bias_stale"]     = False
+            state["macro_leg_direction"]  = macro_bias
+            state["macro_leg_origin"]     = early_bos["impulse_start"]
+            state["macro_leg_extreme"]    = early_bos["impulse_end"]
+            bias_stale = False
+            save_state(state)
 
     # ── ATR ───────────────────────────────────────────────────────────────
     df_5m["ATR"] = atr(df_5m, period=14)
@@ -3015,4 +3085,5 @@ def scan():
 
 if __name__ == "__main__":
     scan()
-   
+       
+  

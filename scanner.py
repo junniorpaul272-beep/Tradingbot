@@ -810,6 +810,55 @@ def fractal_swings(df, wing=2):
     )
 
 
+def _refresh_leg_anchor(state, prefix, window_df, invalidation_retrace=INVALIDATION_RETRACE):
+    """
+    Checks a standing leg anchor — state[prefix+"_direction"/"_origin"/
+    "_extreme"] — directly against the low/high of window_df, independent
+    of whatever a fresh fractal recompute on that same window does or
+    doesn't find.
+
+    This is what makes "the leg's origin fractal scrolled out of the
+    fetch window" distinguishable from "the leg actually broke." Without
+    it, a window-limited detect_bos_impulse recompute has no memory and
+    treats both cases identically — silently picking a different origin/
+    range/retrace-threshold with no real price event behind the change.
+
+    On survival: updates the anchor's extreme in state and returns True.
+    On invalidation (origin broken, or retraced past threshold): drops
+    the anchor keys from state and returns False.
+    Returns False immediately if no anchor is currently set.
+    """
+    anchor_dir     = state.get(prefix + "_direction")
+    anchor_origin  = state.get(prefix + "_origin")
+    anchor_extreme = state.get(prefix + "_extreme")
+
+    if anchor_dir not in ("BULLISH", "BEARISH") or anchor_origin is None or anchor_extreme is None:
+        return False
+
+    window_low  = window_df["Low"].min()
+    window_high = window_df["High"].max()
+
+    if anchor_dir == "BULLISH":
+        new_extreme      = max(anchor_extreme, window_high)
+        leg_range        = new_extreme - anchor_origin
+        origin_violated  = window_low <= anchor_origin
+        retrace_violated = leg_range > 0 and (new_extreme - window_low) / leg_range >= invalidation_retrace
+    else:
+        new_extreme      = min(anchor_extreme, window_low)
+        leg_range        = anchor_origin - new_extreme
+        origin_violated  = window_high >= anchor_origin
+        retrace_violated = leg_range > 0 and (window_high - new_extreme) / leg_range >= invalidation_retrace
+
+    if origin_violated or retrace_violated:
+        state.pop(prefix + "_direction", None)
+        state.pop(prefix + "_origin", None)
+        state.pop(prefix + "_extreme", None)
+        return False
+
+    state[prefix + "_extreme"] = new_extreme
+    return True
+
+
 def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
                         flat_atr_mult=HTF_CONSOLIDATION_ATR_MULT,
                         flat_slope_atr_mult=HTF_EMA_FLAT_THRESHOLD,
@@ -828,6 +877,34 @@ def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
     Mutates state["macro_bias_confirmed"] every call — caller must
     save_state(state) right after, since several downstream code paths
     return early before any other save_state() runs.
+
+    Also mutates state["macro_bias_stale"]:
+      - False whenever a fresh 1H BOS/CHoCH is what produced this bias.
+      - True whenever the bias is a hold-over — the leg that last
+        confirmed it has since invalidated (origin break / 78.6% retrace)
+        and nothing has replaced it yet, OR this is a raw EMA cold-start
+        seed with no structural confirmation at all.
+    This flag exists so callers (the 15M BOS-conflict gate, the WATCHING
+    invalidation guard) can tell "bias is live and structurally backed"
+    apart from "bias is a placeholder waiting on the next break" — before
+    this flag existed the two looked identical downstream, which meant a
+    genuine 15M reversal against a stale hold was indistinguishable from
+    one against a freshly confirmed bias, and got suppressed as a
+    "conflict" either way.
+
+    Also persists state["macro_leg_direction"/"macro_leg_origin"/
+    "macro_leg_extreme"] as a standing anchor for the confirmed leg,
+    independent of the fetch window. detect_bos_impulse is re-run on only
+    the last ~120 1H bars every scan and has no memory of its own — if the
+    origin fractal that anchors the current dominant leg is older than
+    that window, it silently ages out and detect_bos_impulse picks
+    whatever fractal happens to still be visible as a new "origin,"
+    producing a different leg/range/retrace-threshold with no real price
+    event behind the change. The anchor below is checked directly against
+    whatever price data IS available each scan (which necessarily
+    postdates the anchor's origin, in or out of window) so a leg that's
+    still genuinely alive isn't misread as invalidated just because its
+    origin fractal scrolled out of view.
     """
     df_1h = df_1h.copy()
     df_1h["EMA_100"] = df_1h["Close"].ewm(span=100, adjust=False).mean()
@@ -849,6 +926,7 @@ def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
 
     if is_flat:
         state["macro_bias_confirmed"] = "CONSOLIDATION"
+        state["macro_bias_stale"] = False
         return "CONSOLIDATION"
 
     # --- Only bias driver: a confirmed 1H structure break (real MSS) ----
@@ -856,19 +934,40 @@ def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
     if bos_1h is not None:
         structural_bias = bos_1h["direction"]
         state["macro_bias_confirmed"] = structural_bias
+        state["macro_bias_stale"] = False
+        # Anchor this fresh leg so a future window-rollover doesn't get
+        # mistaken for invalidation.
+        state["macro_leg_direction"] = structural_bias
+        state["macro_leg_origin"]    = bos_1h["impulse_start"]
+        state["macro_leg_extreme"]   = bos_1h["impulse_end"]
         return structural_bias
 
+    # detect_bos_impulse found nothing IN THE CURRENT WINDOW. Before
+    # treating that as invalidation, check whether we already have a
+    # standing anchor for the leg the window just lost track of — if so,
+    # test it directly against the price data on hand instead of trusting
+    # the window-limited fractal recompute.
+    if _refresh_leg_anchor(state, "macro_leg", df_1h):
+        anchor_dir = state["macro_leg_direction"]
+        state["macro_bias_confirmed"] = anchor_dir
+        state["macro_bias_stale"]     = False
+        return anchor_dir
+
     # No 1H leg detected. Hold the last confirmed bias — do NOT flip on
-    # EMA position alone.
+    # EMA position alone. Mark it stale: the structure that backed this
+    # bias has invalidated and nothing fresh has replaced it yet.
     if confirmed in ("BULLISH", "BEARISH"):
+        state["macro_bias_stale"] = True
         return confirmed
 
     # True cold start: no prior confirmed bias and no 1H leg yet. Seed
     # from raw EMA position once so the bot isn't permanently bias-less;
     # this seed is provisional and will be immediately superseded the
-    # moment a real 1H break occurs.
+    # moment a real 1H break occurs. Also marked stale — it's not a
+    # structural confirmation, just a placeholder.
     raw_bias = "BULLISH" if close_now > ema_now else "BEARISH"
     state["macro_bias_confirmed"] = raw_bias
+    state["macro_bias_stale"] = True
     return raw_bias
 
 
@@ -1634,7 +1733,7 @@ def is_fib_zone_stale(c_spike, swing_high, swing_low, fib_zone, current_price):
     return False, "zone still valid"
 
 
-def detect_regime_shift(df_5m, current_atr):
+def detect_regime_shift(df_5m, current_atr, now_utc):
     """
     Detects whether the current volatility environment has shifted away
     from the baseline the strategy parameters were calibrated on.
@@ -1654,6 +1753,14 @@ def detect_regime_shift(df_5m, current_atr):
     The open warmup guard prevents false positives at session open where
     the long ATR is contaminated by overnight low-liquidity data, making
     the ratio artificially elevated even without a genuine news event.
+
+    now_utc is passed in from scan() rather than re-derived here. Three
+    sequential data-fetch calls (each up to 15s) happen between scan()
+    capturing its own now_utc and this function running; a fresh
+    datetime.now() call here could drift away from that — most visibly
+    right at the 08:00 UTC session-open boundary this warmup guard cares
+    about, where the two timestamps could straddle the boundary and
+    disagree about whether warmup should apply.
     """
     if not REGIME_SHIFT_ENABLED:
         return False, 0.0, 0.0
@@ -1663,7 +1770,6 @@ def detect_regime_shift(df_5m, current_atr):
 
     # Open warmup: skip regime detection for the first N bars of the
     # session to avoid false positives from normal open expansion
-    now_utc      = datetime.now(timezone.utc)
     session_open = now_utc.replace(hour=8, minute=0, second=0, microsecond=0)
     bars_since_open = int((now_utc - session_open).total_seconds() / 300)
     if 0 <= bars_since_open < REGIME_SHIFT_OPEN_WARMUP:
@@ -1753,6 +1859,7 @@ def scan():
     # call (including the CONSOLIDATION/no-trade path below, which returns
     # early before any other save_state() call would run) — save here so
     # the confirmation counter survives across runs regardless of outcome.
+    bias_stale = state.get("macro_bias_stale", False)
     save_state(state)
 
     # WATCHING bias-mismatch guard — runs BEFORE the CONSOLIDATION early
@@ -1763,11 +1870,21 @@ def scan():
     # run, is the market event here — not a timer, not a bar count. A
     # WATCHING state anchored to a bias that no longer holds (flipped
     # direction, or gone flat) is stale regardless of price action.
-    if state.get("watching") and state.get("watching_bias") and state.get("watching_bias") != macro_bias:
-        print(
-            "  [WATCHING] Cleared — 1H bias moved from {} to {} (zone no longer valid)."
-            .format(state.get("watching_bias"), macro_bias)
+    #
+    # Also clears on bias_stale even when the VALUE hasn't changed — a
+    # stale-held bias means the leg that anchored this WATCHING zone has
+    # already invalidated (origin break / 78.6% retrace); the zone was
+    # built on structure that no longer exists, even though macro_bias
+    # still reads the same direction it did when WATCHING was set.
+    if state.get("watching") and state.get("watching_bias") and (
+        state.get("watching_bias") != macro_bias or bias_stale
+    ):
+        reason = (
+            "1H bias moved from {} to {}".format(state.get("watching_bias"), macro_bias)
+            if state.get("watching_bias") != macro_bias
+            else "1H structure backing '{}' has invalidated with nothing to replace it yet".format(macro_bias)
         )
+        print("  [WATCHING] Cleared — " + reason + " (zone no longer valid).")
         state["watching"] = False
         state.pop("watching_zone",   None)
         state.pop("watching_bias",   None)
@@ -1812,7 +1929,7 @@ def scan():
     # This preserves journal data while preventing trades on miscalibrated
     # parameters.
     regime_shifted, regime_ratio, short_atr_pips = detect_regime_shift(
-        df_5m, current_atr)
+        df_5m, current_atr, now_utc)
     regime_note = ""
 
     if regime_shifted:
@@ -1847,12 +1964,76 @@ def scan():
     bos           = detect_bos_impulse(lookback, wing=FRACTAL_WING)
     bos_check     = "N/A"
     bos_bias_check = "N/A"
+    bias_reconfirmed_15m = False
+    bos_from_anchor = False
 
     if bos is not None:
+        # Fresh 15M leg found — anchor it. SWING_LOOKBACK_15 is only 48
+        # bars (12 hours), far shorter than the 1H side's ~120-bar window,
+        # so the same window-aging bug (a still-alive leg's origin
+        # fractal scrolling out of view and getting silently replaced or
+        # lost) bites here more often, not less.
+        state["leg15_direction"] = bos["direction"]
+        state["leg15_origin"]    = bos["impulse_start"]
+        state["leg15_extreme"]   = bos["impulse_end"]
+    else:
+        # Nothing in the current 48-bar window. Before falling all the
+        # way back to STATE_MEMORY/fractals, check whether a standing 15M
+        # anchor is still alive against the price data actually on hand.
+        if _refresh_leg_anchor(state, "leg15", lookback):
+            bos = {
+                "direction":     state["leg15_direction"],
+                "impulse_start": state["leg15_origin"],
+                "impulse_end":   state["leg15_extreme"],
+            }
+            bos_from_anchor = True
+            print(
+                "  [15M] Window lost the origin fractal but the anchored {} "
+                "leg is still intact — using it instead of falling back."
+                .format(bos["direction"])
+            )
+
+    if bos is not None:
+        # Stale-hold reconfirmation: the 1H side has no live structure of
+        # its own right now (compute_macro_bias is coasting on a bias whose
+        # supporting leg already invalidated — see bias_stale above). A
+        # 15M break AGAINST that stale hold is exactly the "fresh break, in
+        # either direction" that resolves the gap, not a timeframe
+        # conflict — promote it instead of suppressing it. This branch is
+        # unreachable when bias_stale is False, so a 15M break against a
+        # freshly-confirmed 1H bias still hits the conflict-suppress path
+        # below, unchanged from before.
+        if bias_stale and bos["direction"] != macro_bias:
+            print(
+                "  [BIAS] 15M BOS ({}) reconfirms over stale 1H hold ({}) — promoting."
+                .format(bos["direction"], macro_bias)
+            )
+            macro_bias = bos["direction"]
+            state["macro_bias_confirmed"] = macro_bias
+            state["macro_bias_stale"] = False
+            # Anchor this promotion too — otherwise next scan's
+            # compute_macro_bias finds no macro_leg_* anchor for the new
+            # direction, marks it stale again for lack of one, and we're
+            # right back to depending on 15M reconfirming every single
+            # scan just to stand still. The 15M leg's own range is a
+            # weaker anchor than a real 1H break, but it's the best
+            # evidence on hand and strictly better than none.
+            state["macro_leg_direction"] = macro_bias
+            state["macro_leg_origin"]    = bos["impulse_start"]
+            state["macro_leg_extreme"]   = bos["impulse_end"]
+            bias_stale = False
+            bias_reconfirmed_15m = True
+            save_state(state)
+
         bos_check = bos["direction"] + (" OK" if bos["direction"] == macro_bias else " WARN")
 
         if bos["direction"] == macro_bias:
-            bos_bias_check   = "PASS"
+            if bias_reconfirmed_15m:
+                bos_bias_check = "PASS (15M reconfirmed stale 1H)"
+            elif bos_from_anchor:
+                bos_bias_check = "PASS (anchor-held leg)"
+            else:
+                bos_bias_check = "PASS"
             structure_source = "BOS"
             if bos["direction"] == "BULLISH":
                 swing_low  = bos["impulse_start"]
@@ -1888,17 +2069,34 @@ def scan():
             lookback, macro_bias, state, wing=FRACTAL_WING)
 
     # ── STATE_MEMORY drift guard ──────────────────────────────────────────
-    # If we're using a remembered leg, verify current price hasn't drifted
-    # so far from that leg's midpoint that the Fib zone it produces is
-    # contextually meaningless. A leg from 5 hours ago at a completely
-    # different price level should not be anchoring today's entries.
-    if structure_source == "STATE_MEMORY" and STATE_MEMORY_MAX_DRIFT_PIPS > 0:
-        current_price = df_5m["Close"].iloc[-1]
-        leg_mid       = (swing_high + swing_low) / 2
-        drift_pips    = abs(current_price - leg_mid) / PIP_SIZE
-        if drift_pips > STATE_MEMORY_MAX_DRIFT_PIPS:
-            print(f"  [STATE_MEMORY] Stale — price drifted {drift_pips:.0f}p from leg midpoint. "
-                  f"Falling back to fractal detection.")
+    # If we're using a remembered leg, verify it isn't stale before
+    # trusting it. Two independent conditions, either one triggers
+    # fallback to a fresh fractal read:
+    #   1. Corrupted/degenerate leg — the remembered range is implausibly
+    #      tiny (< 5 pips), more likely bad data than real structure.
+    #      (is_state_memory_stale existed for exactly this and was never
+    #      actually called anywhere — wiring it in here instead of leaving
+    #      it as dead code. Without this, a corrupted STATE_MEMORY leg
+    #      would fall through unchecked to the Range Filter below and get
+    #      an outright "NO TRADE — range too compressed" instead of a
+    #      chance at a fresh, possibly perfectly tradeable, fractal read.)
+    #   2. Price drift — current price has moved so far from the leg's
+    #      midpoint that its Fib zone is no longer contextually
+    #      meaningful. A leg from 5 hours ago at a completely different
+    #      price level should not be anchoring today's entries.
+    if structure_source == "STATE_MEMORY":
+        memory_corrupted = is_state_memory_stale(state, macro_bias)
+        current_price     = df_5m["Close"].iloc[-1]
+        leg_mid           = (swing_high + swing_low) / 2
+        drift_pips        = abs(current_price - leg_mid) / PIP_SIZE
+        drifted           = STATE_MEMORY_MAX_DRIFT_PIPS > 0 and drift_pips > STATE_MEMORY_MAX_DRIFT_PIPS
+
+        if memory_corrupted or drifted:
+            reason = (
+                "corrupted (remembered leg range < 5 pips)" if memory_corrupted
+                else f"price drifted {drift_pips:.0f}p from leg midpoint"
+            )
+            print(f"  [STATE_MEMORY] Stale — {reason}. Falling back to fractal detection.")
             swing_high, swing_low = fractal_swings(lookback, wing=FRACTAL_WING)
             structure_source = "FALLBACK_FRACTAL (memory stale)"
 
@@ -2301,6 +2499,10 @@ def scan():
             direction_emoji = "📈" if trade_signal == "BUY" else "📉"
             zone_tag        = " _(liquidity sweep)_" if sweep_usable and not in_zone_direct else ""
             confirm_tag     = "\n✅ _Zone was pre-flagged — entry confirmed._" if was_watching else ""
+            reconfirm_tag   = (
+                "\n🔁 _Bias reconfirmed via 15M BOS — 1H structure was pending._"
+                if bias_reconfirmed_15m else ""
+            )
             score_lines     = "\n".join(
                 f"     {k.replace('_', ' ').title()}: {v}" for k, v in score_breakdown.items()
             )
@@ -2312,7 +2514,7 @@ def scan():
                 "🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
                 + direction_emoji + " *Action:* `" + trade_signal + "`\n"
                 f"{score_emoji} *Confidence:* `{score}/100 — {score_tier}`\n"
-                "📊 *Bias:* `" + macro_bias + "` (1H EMA-100)\n"
+                "📊 *Bias:* `" + macro_bias + "` (1H structure)\n"
                 "🏗 *Structure:* `" + structure_source + "`\n"
                 "🎯 *Fib Zone* _(adaptive {:.1f}%):_ `{:.5f}`{}\n".format(fib_ratio * 100, fib_zone, zone_tag) +
                 "📐 *SwH:* `{:.5f}` | *SwL:* `{:.5f}`\n".format(swing_high, swing_low) +
@@ -2328,6 +2530,7 @@ def scan():
                 "─────────────────────\n"
                 "⚠️ _Confirm higher-TF context before executing._"
                 + confirm_tag
+                + reconfirm_tag
             )
             send_telegram(msg)
             # Save signal to state for the structural cooldown check on next scan
@@ -2374,6 +2577,7 @@ def scan():
                 "⏳ _Waiting for engulf confirmation..._\n"
                 "_(Clears only on 15M close-through the zone, or price running "
                 + str(WATCHING_EXIT_PIPS) + "p away without confirming — no timer.)_"
+                + ("\n🔁 _Bias reconfirmed via 15M BOS — 1H structure was pending._" if bias_reconfirmed_15m else "")
             )
             send_telegram(watch_msg)
             print("  [WATCHING] Set — price entered zone at {:.5f}".format(fib_zone))
@@ -2406,4 +2610,3 @@ def scan():
 
 if __name__ == "__main__":
     scan()
-                                

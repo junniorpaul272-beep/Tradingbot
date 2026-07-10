@@ -187,5 +187,14 @@
     "shadow_bias": "BULLISH",
     "agree": true,
     "pending_flip": null
+  },
+  {
+    "time": "2026-07-10T08:42:19.488247+00:00",
+    "price": 1.34218,
+    "live_bias": "BULLISH",
+    "live_bias_stale": false,
+    "shadow_bias": "BULLISH",
+    "agree": true,
+    "pending_flip": null
   }
 ]

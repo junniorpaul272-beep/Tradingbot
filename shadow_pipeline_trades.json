@@ -1,14 +1,29 @@
 {
   "funnel": {
-    "total_scans": 64,
+    "total_scans": 65,
     "consolidation_skip": 0,
     "bos_conflict": 10,
     "no_structure": 0,
     "atr_too_low": 52,
-    "fib_reached": 0,
-    "pattern_passed": 0,
-    "trades_opened": 0
+    "fib_reached": 1,
+    "pattern_passed": 1,
+    "trades_opened": 1
   },
-  "open_trades": [],
+  "open_trades": [
+    {
+      "direction": "BUY",
+      "entry": 1.34301,
+      "sl": 1.34097465519316,
+      "tp": 1.34911603442052,
+      "score": 71,
+      "score_tier": "ACCEPTABLE SETUP",
+      "structure_source": "FALLBACK_FRACTAL",
+      "structure_group": "FRACTAL",
+      "regime_shifted": false,
+      "momentum_overshoot": true,
+      "opened_at": "2026-07-10T12:20:19.818906+00:00",
+      "opened_at_display": "2026-07-10 12:20 UTC"
+    }
+  ],
   "resolved_trades": []
 }

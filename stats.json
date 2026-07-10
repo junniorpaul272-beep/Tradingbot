@@ -1,5 +1,5 @@
 {
-  "total_scans": 640,
+  "total_scans": 641,
   "consolidation_skip": 78,
   "bos_conflict": 9,
   "no_structure": 1,
@@ -13,7 +13,7 @@
   "wins": 1,
   "losses": 2,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-07-10 14:40",
+  "last_scan": "2026-07-10 14:45",
   "last_update_id": 628997457,
   "journal": [
     {
@@ -97,6 +97,6 @@
     "structure_source": "BOS",
     "opened_at": "2026-07-10T14:40:27.569540+00:00",
     "opened_at_display": "2026-07-10 14:40 UTC",
-    "last_update_sent_at": null
+    "last_update_sent_at": "2026-07-10T14:45:19.350044+00:00"
   }
 }

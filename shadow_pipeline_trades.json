@@ -1,11 +1,11 @@
 {
   "funnel": {
-    "total_scans": 95,
+    "total_scans": 96,
     "consolidation_skip": 0,
     "bos_conflict": 10,
     "no_structure": 0,
     "atr_too_low": 66,
-    "fib_reached": 16,
+    "fib_reached": 17,
     "pattern_passed": 2,
     "trades_opened": 2
   },

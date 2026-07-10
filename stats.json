@@ -1,19 +1,19 @@
 {
-  "total_scans": 639,
+  "total_scans": 640,
   "consolidation_skip": 78,
   "bos_conflict": 9,
   "no_structure": 1,
   "atr_too_low": 405,
   "regime_shift_skip": 0,
-  "fib_reached": 55,
+  "fib_reached": 56,
   "watching_alerts": 24,
   "watching_confirmed": 0,
-  "pattern_passed": 6,
-  "signals_sent": 4,
+  "pattern_passed": 7,
+  "signals_sent": 5,
   "wins": 1,
   "losses": 2,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-07-10 14:35",
+  "last_scan": "2026-07-10 14:40",
   "last_update_id": 628997457,
   "journal": [
     {
@@ -65,18 +65,38 @@
     }
   ],
   "last_journal_signal": "SELL",
-  "last_journal_entry": "1.33432",
-  "last_journal_structure": "FALLBACK_FRACTAL",
-  "last_journal_time": "2026-07-08 10:05 UTC",
-  "last_journal_score": 71,
+  "last_journal_entry": "1.33968",
+  "last_journal_structure": "BOS",
+  "last_journal_time": "2026-07-10 14:40 UTC",
+  "last_journal_score": 84,
   "last_journal_score_breakdown": {
     "liquidity": 15,
-    "structure": 12,
+    "structure": 25,
     "fib": 19,
     "atr": 6,
     "session": 6,
     "confirmation": 13
   },
   "last_journal_score_warnings": [],
-  "result_logged_for_signal": "2026-07-08 10:05 UTC"
+  "result_logged_for_signal": "2026-07-08 10:05 UTC",
+  "active_trade": {
+    "direction": "SELL",
+    "entry": 1.33968,
+    "sl": 1.3426611826160446,
+    "tp": 1.330736452151866,
+    "score": 84,
+    "score_tier": "STRONG SETUP",
+    "score_breakdown": {
+      "liquidity": 15,
+      "structure": 25,
+      "fib": 19,
+      "atr": 6,
+      "session": 6,
+      "confirmation": 13
+    },
+    "structure_source": "BOS",
+    "opened_at": "2026-07-10T14:40:27.569540+00:00",
+    "opened_at_display": "2026-07-10 14:40 UTC",
+    "last_update_sent_at": null
+  }
 }

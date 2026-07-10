@@ -1,15 +1,30 @@
 {
   "funnel": {
-    "total_scans": 92,
+    "total_scans": 93,
     "consolidation_skip": 0,
     "bos_conflict": 10,
     "no_structure": 0,
     "atr_too_low": 66,
-    "fib_reached": 13,
-    "pattern_passed": 1,
-    "trades_opened": 1
+    "fib_reached": 14,
+    "pattern_passed": 2,
+    "trades_opened": 2
   },
-  "open_trades": [],
+  "open_trades": [
+    {
+      "direction": "SELL",
+      "entry": 1.33968,
+      "sl": 1.3426611826160446,
+      "tp": 1.330736452151866,
+      "score": 84,
+      "score_tier": "STRONG SETUP",
+      "structure_source": "BOS",
+      "structure_group": "BOS",
+      "regime_shifted": false,
+      "momentum_overshoot": false,
+      "opened_at": "2026-07-10T14:40:24.194899+00:00",
+      "opened_at_display": "2026-07-10 14:40 UTC"
+    }
+  ],
   "resolved_trades": [
     {
       "direction": "BUY",

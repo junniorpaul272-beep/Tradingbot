@@ -1,9 +1,9 @@
 {
-  "total_scans": 643,
+  "total_scans": 644,
   "consolidation_skip": 78,
   "bos_conflict": 9,
   "no_structure": 1,
-  "atr_too_low": 405,
+  "atr_too_low": 406,
   "regime_shift_skip": 0,
   "fib_reached": 56,
   "watching_alerts": 24,
@@ -11,10 +11,10 @@
   "pattern_passed": 7,
   "signals_sent": 5,
   "wins": 1,
-  "losses": 2,
+  "losses": 3,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-07-10 14:55",
-  "last_update_id": 628997457,
+  "last_scan": "2026-07-10 15:52",
+  "last_update_id": 628997460,
   "journal": [
     {
       "time": "2026-07-02 08:30 UTC",
@@ -62,6 +62,25 @@
         "confirmation": 13
       },
       "signal_time": "2026-07-08 10:05 UTC"
+    },
+    {
+      "time": "2026-07-10 14:40 UTC",
+      "logged_at": "2026-07-10 15:52 UTC",
+      "result": "LOSS",
+      "note": "\u2014",
+      "signal": "SELL",
+      "entry": "1.33968",
+      "structure": "BOS",
+      "score": 84,
+      "score_breakdown": {
+        "liquidity": 15,
+        "structure": 25,
+        "fib": 19,
+        "atr": 6,
+        "session": 6,
+        "confirmation": 13
+      },
+      "signal_time": "2026-07-10 14:40 UTC"
     }
   ],
   "last_journal_signal": "SELL",
@@ -78,25 +97,15 @@
     "confirmation": 13
   },
   "last_journal_score_warnings": [],
-  "result_logged_for_signal": "2026-07-08 10:05 UTC",
-  "active_trade": {
+  "result_logged_for_signal": "2026-07-10 14:40 UTC",
+  "last_closed_trade": {
     "direction": "SELL",
-    "entry": 1.33968,
-    "sl": 1.3426611826160446,
-    "tp": 1.330736452151866,
-    "score": 84,
-    "score_tier": "STRONG SETUP",
-    "score_breakdown": {
-      "liquidity": 15,
-      "structure": 25,
-      "fib": 19,
-      "atr": 6,
-      "session": 6,
-      "confirmation": 13
-    },
-    "structure_source": "BOS",
-    "opened_at": "2026-07-10T14:40:27.569540+00:00",
-    "opened_at_display": "2026-07-10 14:40 UTC",
-    "last_update_sent_at": "2026-07-10T14:45:19.350044+00:00"
+    "entry": "1.33968",
+    "exit": "manual",
+    "result": "LOSS",
+    "hit": "manual /loss",
+    "pips": null,
+    "closed_at": "2026-07-10 15:52 UTC",
+    "opened_at_display": "2026-07-10 14:40 UTC"
   }
 }

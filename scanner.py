@@ -49,6 +49,34 @@ SL_ATR_MULT = 1.5
 SL_MIN_PIPS = 5
 ATR_ENGULF_MIN = 0.4
 
+# Volatility-adjusted SL — when current 5M ATR is already spiking well
+# above the REGIME_SHIFT long-period baseline, volatility itself is
+# compensating for the risk. Stacking the full ATR-multiple buffer on
+# top of an already-wide bar produces stop-loss bloat (a wider stop than
+# the setup actually needs), so the multiplier tightens instead. Reuses
+# the regime_ratio already computed by detect_regime_shift() — no new
+# detection logic, just a second consumer of the existing signal.
+SL_VOL_SPIKE_RATIO     = 1.5   # regime_ratio (short/long ATR) above this = spike
+SL_ATR_MULT_COMPRESSED = 1.2   # multiplier used only during that spike
+
+# Engulf/rejection candle quality — WHERE the candle closed within its own
+# range, not just whether it technically contains the prior body. A candle
+# that engulfs but closes near its low (for a BUY) indicates aggressive
+# selling pressure that hasn't subsided even though the engulf condition
+# is met on paper. Applied to both the Tier 2 reversal candle and the
+# Tier 1 break-retest rejection wick below.
+ENGULF_CLOSE_LOCATION_MIN = 0.5   # BUY needs close in upper 50% of candle
+                                    # range; SELL needs close in lower 50%
+                                    # (checked as the complement).
+
+# Fib depth scoring — how deep into its own NEAR-FAR band the entry
+# actually reached, not just whether it crossed the near edge at all.
+# A near-edge touch is real evidence but weaker than a full discount-zone
+# entry; this scales the "fib" score component between these two floors
+# instead of awarding full credit for either.
+FIB_SCORE_MIN_FRACTION = 5 / 19   # near-edge touch gets this fraction of
+                                    # the full fib weight; deep pocket gets 1.0
+
 # Prospective R:R gate — computed AFTER SL is known but BEFORE the signal
 # fires. Rejects trades whose entry-to-stop distance is disproportionate,
 # regardless of why it got that way (a big real-bodied confirmation candle
@@ -276,6 +304,50 @@ POST_SPIKE_COOLDOWN_MAX   = 10   # hard cap = 50 minutes maximum suppression
 # Rationale: a leg saved 5H ago at completely different price levels
 # produces a geometrically valid but contextually meaningless Fib zone.
 STATE_MEMORY_MAX_DRIFT_PIPS = 80
+
+# ── Diagnostic mode ───────────────────────────────────────────────────────
+# Every scan that reaches a directional bias + valid structure but does NOT
+# end in a sent alert prints a single, plain-language rejection record:
+#   Trade rejected
+#
+#   Score: 82
+#
+#   Rejected because:
+#   ✓ Macro bias
+#   ✓ Structure
+#   ✓ Liquidity
+#   ✓ Confirmation
+#   ✗ Risk gate (47 pip stop > 45 max)
+#
+# Checks are listed in the order they're actually evaluated in scan(), so
+# a ✗ marks the FIRST gate that blocked the trade — everything after it
+# simply never ran, and is omitted rather than shown as a false ✓/✗. This
+# exists specifically to answer "which filter keeps killing my trades"
+# without having to reverse-engineer it from five different log lines.
+DIAGNOSTIC_MODE = os.environ.get("DIAGNOSTIC_MODE", "1") != "0"
+
+# ── Tier 1: Break-Retest anticipatory entry ──────────────────────────────
+# Classic SMC break-and-retest. detect_bos_impulse's "origin" (impulse_start)
+# IS the swing point that was broken to confirm the current BOS/CHoCH —
+# literally "the high/low of the break." Price very often pulls back to
+# sweep resting liquidity at that exact level before continuing in the
+# break direction, well before it ever reaches the deeper Tier 2 fib
+# pocket. This tier checks for that sweep+rejection directly against the
+# already-computed swing_high/swing_low (no new structure detection needed)
+# so the scanner can act on a fresh break immediately instead of only ever
+# entering late, deep into the range.
+# Gated to a short window after the 15M leg confirms — this is specifically
+# the immediate retest, not "any sweep of that level, whenever."
+TIER1_RETEST_ENABLED         = True
+TIER1_RETEST_MAX_AGE_MINUTES = 45   # ~9 5M bars — long enough for a real
+                                       # pullback, short enough to still be
+                                       # THE retest, not an unrelated later
+                                       # sweep of the same price.
+TIER1_REJECTION_ATR_MIN      = 0.3  # rejection candle body floor vs 5M ATR —
+                                       # same noise-filter role as
+                                       # ATR_ENGULF_MIN, scaled down since
+                                       # Tier 1 candles are typically smaller/
+                                       # faster than a full reversal engulf.
 
 # -----------------------------------------------
 # V2 — CONFIDENCE SCORING
@@ -727,7 +799,7 @@ def check_trade_closed(active, c_last):
 
     if direction == "BUY":
         hit_sl, hit_tp = low <= sl, high >= tp
-          else:
+    else:
         hit_sl, hit_tp = high >= sl, low <= tp
 
     if hit_sl:
@@ -1528,6 +1600,79 @@ def detect_liquidity_sweep(df_5m, df_15m, fib_zone, macro_bias,
         return True, "SWEEP CONFIRMED ✅"
 
 
+def close_location(candle):
+    """
+    Where the candle closed within its own High-Low range, as a fraction
+    0 (closed at the low) to 1 (closed at the high). Used to require that
+    a bullish rejection/engulf closes in the upper half of its range (and
+    a bearish one in the lower half) — an engulf that technically contains
+    the prior body but closes near its own low still shows unresolved
+    selling pressure, and vice versa.
+    """
+    rng = candle["High"] - candle["Low"]
+    if rng <= 0:
+        return 0.5
+    return (candle["Close"] - candle["Low"]) / rng
+
+
+def detect_break_retest(df_5m, swing_level, direction, current_atr, state, now_utc,
+                          max_age_minutes=TIER1_RETEST_MAX_AGE_MINUTES):
+    """
+    Tier 1 anticipatory entry (break-and-retest). Checks whether the two
+    most recent 5M candles swept and rejected the ORIGIN swing point of
+    the current 15M BOS/CHoCH — swing_level here is the same swing_high/
+    swing_low the caller already computed from bos["impulse_start"], i.e.
+    literally "the high/low of the break" itself, not the deeper fib
+    pocket further inside the range.
+
+    Only live within `max_age_minutes` of state["leg15_confirmed_at"] —
+    this is deliberately narrow so it can only fire on the immediate
+    retest of a fresh break, never on some unrelated later touch of the
+    same price level.
+
+    Returns (triggered: bool, reason: str, entry_price, rejection_extreme).
+    """
+    confirmed_at = state.get("leg15_confirmed_at")
+    if not confirmed_at:
+        return False, "no fresh 15M leg confirmation on record", None, None
+    try:
+        age_minutes = (now_utc - datetime.fromisoformat(confirmed_at)).total_seconds() / 60
+    except (ValueError, TypeError):
+        return False, "unparseable leg confirmation timestamp", None, None
+    if age_minutes < 0 or age_minutes > max_age_minutes:
+        return False, "break is {:.0f}m old — outside {:.0f}m retest window".format(
+            age_minutes, max_age_minutes), None, None
+
+    c_last, c_prev = df_5m.iloc[-1], df_5m.iloc[-2]
+    body_last = abs(c_last["Close"] - c_last["Open"])
+    atr_threshold = TIER1_REJECTION_ATR_MIN * current_atr
+    if body_last < atr_threshold:
+        return False, "rejection candle body too small vs ATR", None, None
+
+    zone_tol = ZONE_TOLERANCE_PIPS * PIP_SIZE
+    loc = close_location(c_last)
+
+    if direction == "BULLISH":
+        # swing_level is the origin LOW that was broken to confirm the
+        # up-leg. Retest sweeps at/below it, then closes back above.
+        low_touch = min(c_prev["Low"], c_last["Low"])
+        swept = low_touch <= swing_level + zone_tol
+        closed_back_above = c_last["Close"] > swing_level
+        loc_ok = loc >= ENGULF_CLOSE_LOCATION_MIN
+        if not (swept and closed_back_above and loc_ok):
+            return False, "no clean sweep+reject of break-origin low", None, None
+        return True, "BREAK-RETEST CONFIRMED \u2705 (origin low swept & rejected)", c_last["Close"], low_touch
+
+    else:  # BEARISH
+        high_touch = max(c_prev["High"], c_last["High"])
+        swept = high_touch >= swing_level - zone_tol
+        closed_back_below = c_last["Close"] < swing_level
+        loc_ok = loc <= (1 - ENGULF_CLOSE_LOCATION_MIN)
+        if not (swept and closed_back_below and loc_ok):
+            return False, "no clean sweep+reject of break-origin high", None, None
+        return True, "BREAK-RETEST CONFIRMED \u2705 (origin high swept & rejected)", c_last["Close"], high_touch
+
+
 def is_duplicate_signal(state, trade_signal, swing_high, swing_low):
     """
     V2: "duplicate" is a STRUCTURAL question, not a clock/distance one.
@@ -1591,9 +1736,35 @@ def htf_bias_gate(macro_bias, proposed_direction):
     return True, ""
 
 
+def compute_fib_fraction(swing_high, swing_low, extremity, macro_bias,
+                          near=FIB_ZONE_NEAR, far=FIB_ZONE_FAR):
+    """
+    How deep the entry actually reached into its own NEAR-FAR band, as a
+    0-1 fraction: 0 at the near edge (barely qualifies as "in zone"), 1 at
+    or beyond the far edge (deep discount/premium pocket). `extremity` is
+    the wick extreme actually used for the in-zone check (lowest_wick /
+    highest_wick) — reusing it means no new price read is needed here.
+    A near-edge entry offers a worse structural discount than a deep-pocket
+    one, which should score lower even though both technically "reached
+    the zone" under the current binary in_zone check.
+    """
+    structural_range = swing_high - swing_low
+    if structural_range <= 0:
+        return 0.0
+    if macro_bias == "BULLISH":
+        retrace_fraction = (swing_high - extremity) / structural_range
+    else:
+        retrace_fraction = (extremity - swing_low) / structural_range
+    if far <= near:
+        return 1.0
+    fraction = (retrace_fraction - near) / (far - near)
+    return max(0.0, min(1.0, fraction))
+
+
 def compute_confidence_score(sweep_usable, in_zone_direct,
                               structure_source, in_zone, atr_ok, regime_shifted,
-                              session_active, confirmation_passed, bias_stale=False):
+                              session_active, confirmation_passed, bias_stale=False,
+                              fib_fraction=None):
     """
     V2 confidence score. Replaces the V1 binary Signal/No-Signal decision
     with a weighted evaluation of the evidence actually present, so a
@@ -1649,8 +1820,20 @@ def compute_confidence_score(sweep_usable, in_zone_direct,
     else:
         breakdown["structure"] = 0
 
-    # Fib — did price actually reach the discount/premium zone.
-    breakdown["fib"] = SCORE_WEIGHTS["fib"] if in_zone else 0
+    # Fib — did price actually reach the discount/premium zone, and how
+    # deep. A near-edge touch still qualifies as "in zone" but is a weaker
+    # structural discount than a deep 50-61.8% pocket entry, so it's
+    # scored proportionally rather than as a flat pass/fail. fib_fraction
+    # of None (legacy callers) preserves the old flat behavior.
+    if not in_zone:
+        breakdown["fib"] = 0
+    elif fib_fraction is None:
+        breakdown["fib"] = SCORE_WEIGHTS["fib"]
+    else:
+        frac = max(0.0, min(1.0, fib_fraction))
+        breakdown["fib"] = round(
+            SCORE_WEIGHTS["fib"] * (FIB_SCORE_MIN_FRACTION + (1 - FIB_SCORE_MIN_FRACTION) * frac)
+        )
 
     # ATR — healthy vol beats a regime-shifted/thin reading (still logged,
     # already passed the hard ATR_MIN_PIPS floor upstream).
@@ -1698,6 +1881,57 @@ def compute_confidence_score(sweep_usable, in_zone_direct,
         tier, emoji = "IGNORE", "🔴"
 
     return score, breakdown, tier, emoji, warnings
+
+
+def _apply_risk_gate_and_finalize(prospective_entry, prospective_sl, direction,
+                                    current_atr, stats, score, score_emoji, tier_label=""):
+    """
+    Shared final stage for both Tier 1 (break-retest) and Tier 2 (fib
+    pocket) entries: the prospective R:R risk-ceiling check, then trade
+    field assembly. Pulled out so both tiers apply IDENTICAL risk
+    discipline — a Tier 1 entry is earlier, not looser.
+    Returns a dict: {"fired": bool, "pattern_check": str, and if fired,
+    "entry"/"sl"/"tp"/"risk_pips"/"reward_pips"}.
+    """
+    if direction == "BUY":
+        prospective_risk = prospective_entry - prospective_sl
+    else:
+        prospective_risk = prospective_sl - prospective_entry
+
+    risk_ceiling_atr  = MAX_RISK_ATR_MULT * current_atr
+    risk_ceiling_pips = MAX_RISK_PIPS * PIP_SIZE
+    risk_too_wide = (prospective_risk > risk_ceiling_atr or prospective_risk > risk_ceiling_pips)
+
+    if risk_too_wide:
+        stats["risk_gate_suppressed"] += 1
+        breach = []
+        if prospective_risk > risk_ceiling_atr:
+            breach.append("{:.1f}p > {:.1f}p ATR cap ({}x)".format(
+                prospective_risk / PIP_SIZE, risk_ceiling_atr / PIP_SIZE, MAX_RISK_ATR_MULT))
+        if prospective_risk > risk_ceiling_pips:
+            breach.append("{:.1f}p > {}p flat cap".format(prospective_risk / PIP_SIZE, MAX_RISK_PIPS))
+        breach_reason = "; ".join(breach)
+        return {
+            "fired": False,
+            "pattern_check": "PASS mechanically but SUPPRESSED — risk too wide ({}) [{} {}/100]".format(
+                breach_reason, score_emoji, score),
+            "risk_gate_pass": False,
+            "risk_gate_reason": breach_reason,
+        }
+
+    risk_pips   = prospective_risk / PIP_SIZE
+    reward_pips = (RR_RATIO * prospective_risk) / PIP_SIZE
+    tp = (prospective_entry + RR_RATIO * prospective_risk if direction == "BUY"
+          else prospective_entry - RR_RATIO * prospective_risk)
+    stats["pattern_passed"] += 1
+    return {
+        "fired": True,
+        "entry": prospective_entry, "sl": prospective_sl, "tp": tp,
+        "risk_pips": risk_pips, "reward_pips": reward_pips,
+        "pattern_check": "PASS — {} {}/100{}".format(score_emoji, score, tier_label),
+        "risk_gate_pass": True,
+        "risk_gate_reason": None,
+    }
 
 
 def check_result_commands(stats):
@@ -2148,6 +2382,78 @@ def _checklist(bias, bos_check, bos_bias_check, range_check, fib_check, atr_chec
         "  ─────────────────────────────────────",
         "  Decision:      " + str(decision),
     ]
+    return "\n".join(lines)
+
+
+def new_diagnostic():
+    """
+    A fresh, ordered diagnostic record for one scan. Each key maps to
+    either None (not evaluated — an earlier gate already blocked the
+    trade, so this one never ran) or an (passed: bool, reason: str|None)
+    tuple. Order here IS the order gates are actually applied in scan(),
+    so build_diagnostic_report() below can just walk it top to bottom.
+    """
+    keys = [
+        "macro_bias", "structure", "liquidity", "confirmation",
+        "htf_gate", "confidence_score", "risk_gate", "volatility_filter",
+        "duplicate_check",
+    ]
+    return {k: None for k in keys}
+
+
+DIAGNOSTIC_LABELS = {
+    "macro_bias":         "Macro bias",
+    "structure":          "Structure",
+    "liquidity":          "Liquidity",
+    "confirmation":       "Confirmation",
+    "htf_gate":           "HTF bias gate",
+    "confidence_score":   "Confidence score",
+    "risk_gate":          "Risk gate",
+    "volatility_filter":  "Volatility filter",
+    "duplicate_check":    "Duplicate signal check",
+}
+
+
+def diag_set(diag, key, passed, reason=None):
+    """Record one gate's outcome. No-op if the key isn't tracked."""
+    if diag is not None and key in diag:
+        diag[key] = (bool(passed), reason)
+    return diag
+
+
+def build_diagnostic_report(diag, score=None, header="Trade rejected"):
+    """
+    Renders the diagnostic dict into the plain-language record:
+
+        Trade rejected
+
+        Score: 82
+
+        Rejected because:
+        ✓ Macro bias
+        ✓ Structure
+        ✓ Liquidity
+        ✓ Confirmation
+        ✗ Risk gate (47 pip stop > 45 max)
+
+    Only keys that were actually evaluated (not None) are printed — this
+    is what keeps the record honest about which gate did the rejecting
+    instead of implying every filter ran on every trade.
+    """
+    lines = [header, ""]
+    if score is not None:
+        lines.append(f"Score: {score}")
+        lines.append("")
+    lines.append("Rejected because:")
+    for key in diag:
+        entry = diag[key]
+        if entry is None:
+            continue
+        passed, reason = entry
+        mark  = "✓" if passed else "✗"
+        label = DIAGNOSTIC_LABELS.get(key, key)
+        suffix = f" ({reason})" if (not passed and reason) else ""
+        lines.append(f"{mark} {label}{suffix}")
     return "\n".join(lines)
 
 
@@ -2679,7 +2985,17 @@ def maybe_open_shadow_trade(df_5m, df_15m, df_1h, now_utc):
     zone_tol   = ZONE_TOLERANCE_PIPS * PIP_SIZE
     engulf_tol = ENGULF_TOLERANCE_PIPS * PIP_SIZE
     sweep_valid, _sweep_label = detect_liquidity_sweep(df_5m, df_15m, fib_zone, macro_bias)
-    momentum_overshoot, _momentum_reason = detect_momentum_overshoot(df_15m, swing_high, swing_low, macro_bias)
+    # NOTE: momentum-overshoot / effort-invalidation is intentionally NOT
+    # computed here. detect_momentum_overshoot() is really two overlapping
+    # checks bolted together (pocket-span geometry + effort/erasure pace),
+    # and live already gates on it, on top of the risk gate, on top of the
+    # regime-shift check — three filters doing variations of "was this move
+    # too aggressive/too wide." Shadow exists to test the loosest reasonable
+    # rule set as a comparison baseline, so it deliberately keeps regime
+    # shift (used below only to size the stop, never to block a trade) and
+    # drops momentum-overshoot/effort-invalidation and the risk gate
+    # entirely rather than stacking all three on the same paper trades live
+    # already stacks.
 
     c_last = df_5m.iloc[-1]
     c_prev = df_5m.iloc[-2]
@@ -2701,7 +3017,8 @@ def maybe_open_shadow_trade(df_5m, df_15m, df_1h, now_utc):
         engulfs            = (c_last["Close"] >= c_prev["Open"] - engulf_tol and
                                c_last["Open"]  <= c_prev["Close"] + engulf_tol)
         real_body          = body_last > atr_threshold
-        confirmation_passed = bear_prev and bull_last and engulfs and real_body
+        close_loc_ok       = close_location(c_last) >= ENGULF_CLOSE_LOCATION_MIN
+        confirmation_passed = bear_prev and bull_last and engulfs and real_body and close_loc_ok
 
         if in_zone:
             data["funnel"]["fib_reached"] += 1
@@ -2709,15 +3026,18 @@ def maybe_open_shadow_trade(df_5m, df_15m, df_1h, now_utc):
         if in_zone and confirmation_passed:
             gate_ok, _ = htf_bias_gate(macro_bias, "BULLISH")
             if gate_ok:
+                fib_fraction = compute_fib_fraction(swing_high, swing_low, lowest_wick, macro_bias)
                 score, _bd, score_tier, _emoji, _warn = compute_confidence_score(
                     sweep_usable, in_zone_direct, structure_source, in_zone, True,
                     regime_shifted, is_active_session(now_utc), confirmation_passed,
-                    bias_stale=bias_stale,
+                    bias_stale=bias_stale, fib_fraction=fib_fraction,
                 )
                 if score >= SCORE_TIER_ACCEPTABLE:
                     trade_signal = "BUY"
                     entry        = c_last["Close"]
-                    sl_buffer    = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                    sl_mult      = (SL_ATR_MULT_COMPRESSED if regime_ratio >= SL_VOL_SPIKE_RATIO
+                                     else SL_ATR_MULT)
+                    sl_buffer    = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
                     sl           = lowest_wick - sl_buffer
                     risk         = entry - sl
                     tp           = entry + (RR_RATIO * risk)
@@ -2734,7 +3054,8 @@ def maybe_open_shadow_trade(df_5m, df_15m, df_1h, now_utc):
         engulfs            = (c_last["Open"]  >= c_prev["Close"] - engulf_tol and
                                c_last["Close"] <= c_prev["Open"]  + engulf_tol)
         real_body          = body_last > atr_threshold
-        confirmation_passed = bull_prev and bear_last and engulfs and real_body
+        close_loc_ok       = close_location(c_last) <= (1 - ENGULF_CLOSE_LOCATION_MIN)
+        confirmation_passed = bull_prev and bear_last and engulfs and real_body and close_loc_ok
 
         if in_zone:
             data["funnel"]["fib_reached"] += 1
@@ -2742,15 +3063,18 @@ def maybe_open_shadow_trade(df_5m, df_15m, df_1h, now_utc):
         if in_zone and confirmation_passed:
             gate_ok, _ = htf_bias_gate(macro_bias, "BEARISH")
             if gate_ok:
+                fib_fraction = compute_fib_fraction(swing_high, swing_low, highest_wick, macro_bias)
                 score, _bd, score_tier, _emoji, _warn = compute_confidence_score(
                     sweep_usable, in_zone_direct, structure_source, in_zone, True,
                     regime_shifted, is_active_session(now_utc), confirmation_passed,
-                    bias_stale=bias_stale,
+                    bias_stale=bias_stale, fib_fraction=fib_fraction,
                 )
                 if score >= SCORE_TIER_ACCEPTABLE:
                     trade_signal = "SELL"
                     entry        = c_last["Close"]
-                    sl_buffer    = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                    sl_mult      = (SL_ATR_MULT_COMPRESSED if regime_ratio >= SL_VOL_SPIKE_RATIO
+                                     else SL_ATR_MULT)
+                    sl_buffer    = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
                     sl           = highest_wick + sl_buffer
                     risk         = sl - entry
                     tp           = entry - (RR_RATIO * risk)
@@ -2782,7 +3106,6 @@ def maybe_open_shadow_trade(df_5m, df_15m, df_1h, now_utc):
         "structure_source":   structure_source,
         "structure_group":    _shadow_structure_group(structure_source),
         "regime_shifted":     bool(regime_shifted),
-        "momentum_overshoot":  bool(momentum_overshoot),
         "opened_at":          now_utc.isoformat(),
         "opened_at_display":  now_utc.strftime("%Y-%m-%d %H:%M UTC"),
     })
@@ -3038,6 +3361,10 @@ def scan():
         save_stats(stats)
         print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", "N/A", "N/A",
                           "NO TRADE — 1H is consolidating (no directional edge)"))
+        if DIAGNOSTIC_MODE:
+            diag = new_diagnostic()
+            diag_set(diag, "macro_bias", False, "1H is consolidating — no directional edge")
+            print(build_diagnostic_report(diag))
         return
 
     # ── Early stale-bias resolution via 15M structure ────────────────────
@@ -3288,6 +3615,13 @@ def scan():
                               "N/A", atr_valid_check, "N/A",
                               "NO TRADE — 15M structure conflicts with confirmed macro bias",
                               bias_stale=bias_stale))
+            if DIAGNOSTIC_MODE:
+                diag = new_diagnostic()
+                diag_set(diag, "macro_bias", True)
+                diag_set(diag, "structure", False,
+                          "15M structure ({}) conflicts with confirmed macro bias ({})".format(
+                              bos["direction"], macro_bias))
+                print(build_diagnostic_report(diag))
             return
     else:
         bos_bias_check = "N/A (no dominant leg found)"
@@ -3336,6 +3670,12 @@ def scan():
         print(_checklist(macro_bias, bos_check, bos_bias_check, range_check,
                           "N/A", atr_valid_check, "N/A",
                           "NO TRADE — range too compressed", bias_stale=bias_stale))
+        if DIAGNOSTIC_MODE:
+            diag = new_diagnostic()
+            diag_set(diag, "macro_bias", True)
+            diag_set(diag, "structure", False,
+                      "range {:.1f}p < 5p minimum".format(structural_range / PIP_SIZE))
+            print(build_diagnostic_report(diag))
         return
 
     # ── Adaptive Fib Zone ─────────────────────────────────────────────────
@@ -3480,176 +3820,244 @@ def scan():
     score_warnings = []
     in_zone       = False
     in_zone_direct = False
+    confirmation_passed = False
+
+    # ── Diagnostic-mode capture ───────────────────────────────────────────
+    # Reaching this point already means macro bias resolved to a direction
+    # and a valid structural range was found, so both are recorded as
+    # passed up front. Everything below (htf_gate_ok / risk_result /
+    # alert_sent / duplicate/volatility reasons) is filled in as the real
+    # decision logic below actually reaches each stage — anything left
+    # None means that gate was never reached this scan.
+    diag = new_diagnostic()
+    diag_set(diag, "macro_bias", True)
+    diag_set(diag, "structure", True)
+    htf_gate_ok       = None
+    htf_gate_reason   = None
+    risk_result       = None
+    alert_sent        = False
+    duplicate_reason  = None
+    volatility_reason = None
+    tier2_ran         = False
 
     if macro_bias == "BULLISH":
         lowest_wick    = min(c_prev["Low"], c_last["Low"])
-        # Direct touch: wick at or below zone (+ tolerance buffer)
-        # Sweep touch: confirmed liquidity sweep in the last 3 candles, but
-        # only if the entry candle hasn't since drifted too far from the
-        # zone - a sweep proves the level, it doesn't excuse chasing price
-        # far away from it afterward.
-        in_zone_direct = lowest_wick <= fib_zone + zone_tol
-        sweep_distance_ok = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
-        sweep_usable   = sweep_valid and sweep_distance_ok
-        in_zone        = in_zone_direct or sweep_usable
-        bear_prev      = c_prev["Close"] < c_prev["Open"]
-        bull_last      = c_last["Close"] > c_last["Open"]
-        # 1 pip of leniency on body containment — near-perfect engulfs pass
-        engulfs        = (c_last["Close"] >= c_prev["Open"] - engulf_tol and
-                          c_last["Open"]  <= c_prev["Close"] + engulf_tol)
-        real_body      = body_last > atr_threshold
+        close_loc_ok   = close_location(c_last) >= ENGULF_CLOSE_LOCATION_MIN
+        sl_mult        = SL_ATR_MULT_COMPRESSED if regime_ratio >= SL_VOL_SPIKE_RATIO else SL_ATR_MULT
 
-        confirmation_passed = bear_prev and bull_last and engulfs and real_body
-
-        if in_zone:
-            stats["fib_reached"] += 1
-
-        if in_zone and confirmation_passed:
-            gate_ok, gate_reason = htf_bias_gate(macro_bias, "BULLISH")
-            if not gate_ok:
-                pattern_check = "FAIL (" + gate_reason + ")"
-            else:
-                score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
-                    sweep_usable, in_zone_direct, structure_source,
-                    in_zone, True, regime_shifted, is_active_session(now_utc),
-                    confirmation_passed, bias_stale=bias_stale,
-                )
-                if score >= SCORE_TIER_ACCEPTABLE:
-                    prospective_entry = c_last["Close"]
-                    sl_buffer         = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                    prospective_sl    = lowest_wick - sl_buffer
-                    prospective_risk  = prospective_entry - prospective_sl
-                    risk_ceiling_atr  = MAX_RISK_ATR_MULT * current_atr
-                    risk_ceiling_pips = MAX_RISK_PIPS * PIP_SIZE
-                    risk_too_wide     = (prospective_risk > risk_ceiling_atr or
-                                         prospective_risk > risk_ceiling_pips)
-
-                    if risk_too_wide:
-                        stats["risk_gate_suppressed"] += 1
-                        breach = []
-                        if prospective_risk > risk_ceiling_atr:
-                            breach.append("{:.1f}p > {:.1f}p ATR cap ({}x)".format(
-                                prospective_risk / PIP_SIZE, risk_ceiling_atr / PIP_SIZE, MAX_RISK_ATR_MULT))
-                        if prospective_risk > risk_ceiling_pips:
-                            breach.append("{:.1f}p > {}p flat cap".format(
-                                prospective_risk / PIP_SIZE, MAX_RISK_PIPS))
-                        pattern_check = (
-                            "PASS mechanically but SUPPRESSED — risk too wide ({}) [{} {}/100]"
-                            .format("; ".join(breach), score_emoji, score)
-                        )
+        # ── Tier 1: Break-Retest (anticipatory) ──────────────────────────
+        # Fires on a sweep+rejection of swing_low itself — the ORIGIN
+        # point whose break confirmed this BOS/CHoCH — instead of waiting
+        # for price to travel deeper into the Tier 2 fib pocket below.
+        # Only live within TIER1_RETEST_MAX_AGE_MINUTES of the break.
+        tier1_note = ""
+        if TIER1_RETEST_ENABLED:
+            t1_ok, t1_reason, t1_entry, t1_extreme = detect_break_retest(
+                df_5m, swing_low, "BULLISH", current_atr, state, now_utc)
+            if t1_ok:
+                gate_ok, gate_reason = htf_bias_gate(macro_bias, "BULLISH")
+                htf_gate_ok, htf_gate_reason = gate_ok, gate_reason
+                if not gate_ok:
+                    pattern_check = "FAIL (" + gate_reason + ")"
+                else:
+                    score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
+                        True, False, structure_source, True, True, regime_shifted,
+                        is_active_session(now_utc), True, bias_stale=bias_stale, fib_fraction=0.0,
+                    )
+                    if score >= SCORE_TIER_ACCEPTABLE:
+                        sl_buffer = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                        result = _apply_risk_gate_and_finalize(
+                            t1_entry, t1_extreme - sl_buffer, "BUY", current_atr, stats,
+                            score, score_emoji, tier_label=" (Tier 1 break-retest)")
+                        pattern_check = result["pattern_check"]
+                        risk_result = result
+                        if result["fired"]:
+                            trade_signal = "BUY"
+                            entry, sl, tp = result["entry"], result["sl"], result["tp"]
+                            risk_pips, reward_pips = result["risk_pips"], result["reward_pips"]
                     else:
-                        trade_signal  = "BUY"
-                        entry         = prospective_entry
-                        sl            = prospective_sl
-                        risk          = prospective_risk
-                        tp            = entry + (RR_RATIO * risk)
-                        risk_pips     = risk / PIP_SIZE
-                        reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-                        pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
-                            " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
-                        stats["pattern_passed"] += 1
+                        pattern_check = "Tier 1 PASS mechanically but IGNORED — {} {}/100 < {} floor".format(
+                            score_emoji, score, SCORE_TIER_ACCEPTABLE)
+            else:
+                tier1_note = "  [TIER 1] " + t1_reason
+
+        # ── Tier 2: Fib pocket (deep discount, unchanged trigger logic) ──
+        if trade_signal == "HOLD":
+            tier2_ran = True
+            # Direct touch: wick at or below zone (+ tolerance buffer)
+            # Sweep touch: confirmed liquidity sweep in the last 3 candles, but
+            # only if the entry candle hasn't since drifted too far from the
+            # zone - a sweep proves the level, it doesn't excuse chasing price
+            # far away from it afterward.
+            in_zone_direct = lowest_wick <= fib_zone + zone_tol
+            sweep_distance_ok = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
+            sweep_usable   = sweep_valid and sweep_distance_ok
+            in_zone        = in_zone_direct or sweep_usable
+            bear_prev      = c_prev["Close"] < c_prev["Open"]
+            bull_last      = c_last["Close"] > c_last["Open"]
+            # 1 pip of leniency on body containment — near-perfect engulfs pass
+            engulfs        = (c_last["Close"] >= c_prev["Open"] - engulf_tol and
+                              c_last["Open"]  <= c_prev["Close"] + engulf_tol)
+            real_body      = body_last > atr_threshold
+
+            confirmation_passed = bear_prev and bull_last and engulfs and real_body and close_loc_ok
+
+            if in_zone:
+                stats["fib_reached"] += 1
+
+            if in_zone and confirmation_passed:
+                gate_ok, gate_reason = htf_bias_gate(macro_bias, "BULLISH")
+                htf_gate_ok, htf_gate_reason = gate_ok, gate_reason
+                if not gate_ok:
+                    pattern_check = "FAIL (" + gate_reason + ")"
                 else:
-                    pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
-                        score_emoji, score, SCORE_TIER_ACCEPTABLE,
-                        ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
-        else:
-            score = score_breakdown = score_tier = score_emoji = None
-            score_warnings = []
-            fails = []
-            if not in_zone:
-                if sweep_valid and not sweep_distance_ok:
-                    fails.append("sweep confirmed but price drifted too far from zone")
-                else:
-                    fails.append("price not in discount zone (no direct touch or sweep)")
-            if not bear_prev:  fails.append("prev candle not bearish")
-            if not bull_last:  fails.append("last candle not bullish")
-            if not engulfs:    fails.append("doesn't engulf prev body")
-            if not real_body:  fails.append("body too small vs ATR")
-            pattern_check = "FAIL (" + ", ".join(fails) + ")"
+                    fib_fraction = compute_fib_fraction(swing_high, swing_low, lowest_wick, macro_bias)
+                    score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
+                        sweep_usable, in_zone_direct, structure_source,
+                        in_zone, True, regime_shifted, is_active_session(now_utc),
+                        confirmation_passed, bias_stale=bias_stale, fib_fraction=fib_fraction,
+                    )
+                    if score >= SCORE_TIER_ACCEPTABLE:
+                        sl_buffer = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                        result = _apply_risk_gate_and_finalize(
+                            c_last["Close"], lowest_wick - sl_buffer, "BUY", current_atr, stats,
+                            score, score_emoji,
+                            tier_label=" (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
+                        pattern_check = result["pattern_check"]
+                        risk_result = result
+                        if result["fired"]:
+                            trade_signal = "BUY"
+                            entry, sl, tp = result["entry"], result["sl"], result["tp"]
+                            risk_pips, reward_pips = result["risk_pips"], result["reward_pips"]
+                    else:
+                        pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
+                            score_emoji, score, SCORE_TIER_ACCEPTABLE,
+                            ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
+            else:
+                score = score_breakdown = score_tier = score_emoji = None
+                score_warnings = []
+                fails = []
+                if not in_zone:
+                    if sweep_valid and not sweep_distance_ok:
+                        fails.append("sweep confirmed but price drifted too far from zone")
+                    else:
+                        fails.append("price not in discount zone (no direct touch or sweep)")
+                if not bear_prev:      fails.append("prev candle not bearish")
+                if not bull_last:      fails.append("last candle not bullish")
+                if not engulfs:        fails.append("doesn't engulf prev body")
+                if not real_body:      fails.append("body too small vs ATR")
+                if not close_loc_ok:   fails.append("closed in wrong half of candle range")
+                pattern_check = "FAIL (" + ", ".join(fails) + ")"
+        if tier1_note:
+            print(tier1_note)
 
     elif macro_bias == "BEARISH":
         highest_wick   = max(c_prev["High"], c_last["High"])
-        # Direct touch: wick at or above zone (- tolerance buffer)
-        # Sweep touch: confirmed liquidity sweep in the last 3 candles, but
-        # only if the entry candle hasn't since drifted too far from the zone.
-        in_zone_direct = highest_wick >= fib_zone - zone_tol
-        sweep_distance_ok = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
-        sweep_usable   = sweep_valid and sweep_distance_ok
-        in_zone        = in_zone_direct or sweep_usable
-        bull_prev      = c_prev["Close"] > c_prev["Open"]
-        bear_last      = c_last["Close"] < c_last["Open"]
-        # 1 pip of leniency on body containment
-        engulfs        = (c_last["Open"]  >= c_prev["Close"] - engulf_tol and
-                          c_last["Close"] <= c_prev["Open"]  + engulf_tol)
-        real_body      = body_last > atr_threshold
+        close_loc_ok   = close_location(c_last) <= (1 - ENGULF_CLOSE_LOCATION_MIN)
+        sl_mult        = SL_ATR_MULT_COMPRESSED if regime_ratio >= SL_VOL_SPIKE_RATIO else SL_ATR_MULT
 
-        confirmation_passed = bull_prev and bear_last and engulfs and real_body
-
-        if in_zone:
-            stats["fib_reached"] += 1
-
-        if in_zone and confirmation_passed:
-            gate_ok, gate_reason = htf_bias_gate(macro_bias, "BEARISH")
-            if not gate_ok:
-                pattern_check = "FAIL (" + gate_reason + ")"
-            else:
-                score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
-                    sweep_usable, in_zone_direct, structure_source,
-                    in_zone, True, regime_shifted, is_active_session(now_utc),
-                    confirmation_passed, bias_stale=bias_stale,
-                )
-                if score >= SCORE_TIER_ACCEPTABLE:
-                    prospective_entry = c_last["Close"]
-                    sl_buffer         = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                    prospective_sl    = highest_wick + sl_buffer
-                    prospective_risk  = prospective_sl - prospective_entry
-                    risk_ceiling_atr  = MAX_RISK_ATR_MULT * current_atr
-                    risk_ceiling_pips = MAX_RISK_PIPS * PIP_SIZE
-                    risk_too_wide     = (prospective_risk > risk_ceiling_atr or
-                                         prospective_risk > risk_ceiling_pips)
-
-                    if risk_too_wide:
-                        stats["risk_gate_suppressed"] += 1
-                        breach = []
-                        if prospective_risk > risk_ceiling_atr:
-                            breach.append("{:.1f}p > {:.1f}p ATR cap ({}x)".format(
-                                prospective_risk / PIP_SIZE, risk_ceiling_atr / PIP_SIZE, MAX_RISK_ATR_MULT))
-                        if prospective_risk > risk_ceiling_pips:
-                            breach.append("{:.1f}p > {}p flat cap".format(
-                                prospective_risk / PIP_SIZE, MAX_RISK_PIPS))
-                        pattern_check = (
-                            "PASS mechanically but SUPPRESSED — risk too wide ({}) [{} {}/100]"
-                            .format("; ".join(breach), score_emoji, score)
-                        )
+        # ── Tier 1: Break-Retest (anticipatory) ──────────────────────────
+        # Fires on a sweep+rejection of swing_high itself — the ORIGIN
+        # point whose break confirmed this BOS/CHoCH — instead of waiting
+        # for price to travel deeper into the Tier 2 fib pocket below.
+        tier1_note = ""
+        if TIER1_RETEST_ENABLED:
+            t1_ok, t1_reason, t1_entry, t1_extreme = detect_break_retest(
+                df_5m, swing_high, "BEARISH", current_atr, state, now_utc)
+            if t1_ok:
+                gate_ok, gate_reason = htf_bias_gate(macro_bias, "BEARISH")
+                htf_gate_ok, htf_gate_reason = gate_ok, gate_reason
+                if not gate_ok:
+                    pattern_check = "FAIL (" + gate_reason + ")"
+                else:
+                    score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
+                        True, False, structure_source, True, True, regime_shifted,
+                        is_active_session(now_utc), True, bias_stale=bias_stale, fib_fraction=0.0,
+                    )
+                    if score >= SCORE_TIER_ACCEPTABLE:
+                        sl_buffer = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                        result = _apply_risk_gate_and_finalize(
+                            t1_entry, t1_extreme + sl_buffer, "SELL", current_atr, stats,
+                            score, score_emoji, tier_label=" (Tier 1 break-retest)")
+                        pattern_check = result["pattern_check"]
+                        risk_result = result
+                        if result["fired"]:
+                            trade_signal = "SELL"
+                            entry, sl, tp = result["entry"], result["sl"], result["tp"]
+                            risk_pips, reward_pips = result["risk_pips"], result["reward_pips"]
                     else:
-                        trade_signal  = "SELL"
-                        entry         = prospective_entry
-                        sl            = prospective_sl
-                        risk          = prospective_risk
-                        tp            = entry - (RR_RATIO * risk)
-                        risk_pips     = risk / PIP_SIZE
-                        reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-                        pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
-                            " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
-                        stats["pattern_passed"] += 1
+                        pattern_check = "Tier 1 PASS mechanically but IGNORED — {} {}/100 < {} floor".format(
+                            score_emoji, score, SCORE_TIER_ACCEPTABLE)
+            else:
+                tier1_note = "  [TIER 1] " + t1_reason
+
+        # ── Tier 2: Fib pocket (deep premium, unchanged trigger logic) ───
+        if trade_signal == "HOLD":
+            tier2_ran = True
+            # Direct touch: wick at or above zone (- tolerance buffer)
+            # Sweep touch: confirmed liquidity sweep in the last 3 candles, but
+            # only if the entry candle hasn't since drifted too far from the zone.
+            in_zone_direct = highest_wick >= fib_zone - zone_tol
+            sweep_distance_ok = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
+            sweep_usable   = sweep_valid and sweep_distance_ok
+            in_zone        = in_zone_direct or sweep_usable
+            bull_prev      = c_prev["Close"] > c_prev["Open"]
+            bear_last      = c_last["Close"] < c_last["Open"]
+            # 1 pip of leniency on body containment
+            engulfs        = (c_last["Open"]  >= c_prev["Close"] - engulf_tol and
+                              c_last["Close"] <= c_prev["Open"]  + engulf_tol)
+            real_body      = body_last > atr_threshold
+
+            confirmation_passed = bull_prev and bear_last and engulfs and real_body and close_loc_ok
+
+            if in_zone:
+                stats["fib_reached"] += 1
+
+            if in_zone and confirmation_passed:
+                gate_ok, gate_reason = htf_bias_gate(macro_bias, "BEARISH")
+                htf_gate_ok, htf_gate_reason = gate_ok, gate_reason
+                if not gate_ok:
+                    pattern_check = "FAIL (" + gate_reason + ")"
                 else:
-                    pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
-                        score_emoji, score, SCORE_TIER_ACCEPTABLE,
-                        ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
-        else:
-            score = score_breakdown = score_tier = score_emoji = None
-            score_warnings = []
-            fails = []
-            if not in_zone:
-                if sweep_valid and not sweep_distance_ok:
-                    fails.append("sweep confirmed but price drifted too far from zone")
-                else:
-                    fails.append("price not in premium zone (no direct touch or sweep)")
-            if not bull_prev:  fails.append("prev candle not bullish")
-            if not bear_last:  fails.append("last candle not bearish")
-            if not engulfs:    fails.append("doesn't engulf prev body")
-            if not real_body:  fails.append("body too small vs ATR")
-            pattern_check = "FAIL (" + ", ".join(fails) + ")"
+                    fib_fraction = compute_fib_fraction(swing_high, swing_low, highest_wick, macro_bias)
+                    score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
+                        sweep_usable, in_zone_direct, structure_source,
+                        in_zone, True, regime_shifted, is_active_session(now_utc),
+                        confirmation_passed, bias_stale=bias_stale, fib_fraction=fib_fraction,
+                    )
+                    if score >= SCORE_TIER_ACCEPTABLE:
+                        sl_buffer = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                        result = _apply_risk_gate_and_finalize(
+                            c_last["Close"], highest_wick + sl_buffer, "SELL", current_atr, stats,
+                            score, score_emoji,
+                            tier_label=" (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
+                        pattern_check = result["pattern_check"]
+                        risk_result = result
+                        if result["fired"]:
+                            trade_signal = "SELL"
+                            entry, sl, tp = result["entry"], result["sl"], result["tp"]
+                            risk_pips, reward_pips = result["risk_pips"], result["reward_pips"]
+                    else:
+                        pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
+                            score_emoji, score, SCORE_TIER_ACCEPTABLE,
+                            ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
+            else:
+                score = score_breakdown = score_tier = score_emoji = None
+                score_warnings = []
+                fails = []
+                if not in_zone:
+                    if sweep_valid and not sweep_distance_ok:
+                        fails.append("sweep confirmed but price drifted too far from zone")
+                    else:
+                        fails.append("price not in premium zone (no direct touch or sweep)")
+                if not bull_prev:      fails.append("prev candle not bullish")
+                if not bear_last:      fails.append("last candle not bearish")
+                if not engulfs:        fails.append("doesn't engulf prev body")
+                if not real_body:      fails.append("body too small vs ATR")
+                if not close_loc_ok:   fails.append("closed in wrong half of candle range")
+                pattern_check = "FAIL (" + ", ".join(fails) + ")"
+        if tier1_note:
+            print(tier1_note)
 
     # ── Print checklist ───────────────────────────────────────────────────
     decision = ("🚨 SIGNAL — " + trade_signal) if trade_signal != "HOLD" \
@@ -3773,11 +4181,14 @@ def scan():
             # their own is reason enough to log the setup for research but
             # withhold the Telegram alert rather than act on it.
             if momentum_overshoot and not (regime_shifted or fib_stale):
+                volatility_reason = "momentum overshoot — " + momentum_reason
                 print(
                     f"  [MOMENTUM OVERSHOOT] Signal {trade_signal} @ {entry:.5f} "
                     f"suppressed — {momentum_reason}. Logged to journal context only."
                 )
             else:
+                volatility_reason = "regime shift — ATR ratio {:.2f}x > {}x threshold".format(
+                    regime_ratio, REGIME_SHIFT_THRESHOLD)
                 print(
                     f"  [REGIME SHIFT] Signal {trade_signal} @ {entry:.5f} "
                     f"suppressed — short/long ATR ratio {regime_ratio:.2f}× "
@@ -3797,6 +4208,7 @@ def scan():
             stats.pop("pending_confirm", None)
 
         elif is_duplicate_signal(state, trade_signal, swing_high, swing_low):
+            duplicate_reason = "same direction/dealing range as last signal — needs a new swing/leg"
             print(
                 "  [COOLDOWN] Signal suppressed — same direction, same dealing "
                 "range (SwH {:.5f} / SwL {:.5f}) as the last signal. Needs a new "
@@ -3894,6 +4306,7 @@ def scan():
                 + timeline_block
             )
             send_telegram(msg)
+            alert_sent = True
             # Save signal to state for the structural cooldown check on next scan
             state["last_signal_direction"] = trade_signal
             state["last_signal_swing_high"] = swing_high
@@ -3988,6 +4401,52 @@ def scan():
         else:
             print("  [NEUTRAL] Suppressed — already alerted this leg within cooldown window.")
 
+    # ── Diagnostic-mode rejection record ──────────────────────────────────
+    # Fires whenever this scan reached a real trade candidate (directional
+    # bias + valid structure, both already recorded as passed above) but
+    # did NOT end in an actual Telegram alert. Walks the gates in the same
+    # order scan() itself applies them and stops recording at the first
+    # one that failed — everything after a failed gate genuinely never
+    # ran this scan, so it's left blank rather than guessed at.
+    if DIAGNOSTIC_MODE and not alert_sent:
+        if tier2_ran:
+            liquidity_reason = None if in_zone else (
+                "sweep confirmed but price drifted too far from zone"
+                if sweep_valid and not in_zone
+                else "price never reached the discount/premium zone (no direct touch or usable sweep)"
+            )
+            diag_set(diag, "liquidity", in_zone, liquidity_reason)
+            if in_zone:
+                diag_set(diag, "confirmation", confirmation_passed,
+                          None if confirmation_passed else "engulf/rejection candle conditions not met")
+        # else: trade_signal was already decided by Tier 1 (break-retest)
+        # before Tier 2's zone/confirmation logic ever ran this scan —
+        # liquidity/confirmation are left unevaluated (None) rather than
+        # marked failed, since Tier 1 uses its own sweep+rejection check
+        # in place of them.
+
+        if htf_gate_ok is not None:
+            diag_set(diag, "htf_gate", htf_gate_ok, None if htf_gate_ok else htf_gate_reason)
+
+        if htf_gate_ok:
+            if score is not None:
+                score_ok = score >= SCORE_TIER_ACCEPTABLE
+                diag_set(diag, "confidence_score", score_ok,
+                          None if score_ok else f"{score}/100 < {SCORE_TIER_ACCEPTABLE} floor")
+
+        if risk_result is not None:
+            diag_set(diag, "risk_gate", risk_result.get("risk_gate_pass"),
+                      risk_result.get("risk_gate_reason"))
+
+        if risk_result is not None and risk_result.get("fired"):
+            # Mechanically fired — only the post-fire volatility veto and
+            # the structural-cooldown dedup could still hold the alert.
+            diag_set(diag, "volatility_filter", volatility_reason is None, volatility_reason)
+            if volatility_reason is None:
+                diag_set(diag, "duplicate_check", duplicate_reason is None, duplicate_reason)
+
+        print(build_diagnostic_report(diag, score=score))
+
     # ── Save stats and send periodic summary ─────────────────────────────
     save_stats(stats)
 
@@ -4015,5 +4474,3 @@ def scan():
 
 if __name__ == "__main__":
     scan()
-
-                        

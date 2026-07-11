@@ -49,6 +49,25 @@ SL_ATR_MULT = 1.5
 SL_MIN_PIPS = 5
 ATR_ENGULF_MIN = 0.4
 
+# Prospective R:R gate — computed AFTER SL is known but BEFORE the signal
+# fires. Rejects trades whose entry-to-stop distance is disproportionate,
+# regardless of why it got that way (a big real-bodied confirmation candle
+# on a shallow adaptive-fib entry is the main driver in practice — see
+# adaptive_fib_ratio, which goes SHALLOWER exactly when volatility/candle
+# size goes up). Two independent ceilings, either one breached rejects
+# the trade — a trade must satisfy BOTH to pass:
+#   - MAX_RISK_ATR_MULT: risk relative to current volatility. Scales with
+#     conditions, so it doesn't unfairly reject a wider stop when ATR is
+#     genuinely elevated for good reason.
+#   - MAX_RISK_PIPS: flat absolute backstop, independent of ATR, so a
+#     data glitch or extreme-ATR reading can't wave through an
+#     arbitrarily large stop just because the ATR scaling grew with it.
+# Starting values, not backtested — tune against your own journal data.
+MAX_RISK_ATR_MULT = 3.0
+MAX_RISK_PIPS = 45
+
+NEUTRAL_WATCH_COOLDOWN_MINUTES = 60
+
 # Structure params
 HTF_BIAS_MIN_BARS = 100
 SWING_LOOKBACK_15 = 48
@@ -67,9 +86,36 @@ HTF_EMA_FLAT_THRESHOLD = 0.15
 #   cross with no matching break does not flip bias; see compute_macro_bias().
 HTF_STRUCTURE_WING = 3
 
+# 15M structure noise filter
+# BOS_15M_BREAK_BUFFER_ATR_MULT: a 15M break must clear the opposing swing
+#   by this fraction of 15M ATR to count as broken at all — a neutral band
+#   around the swing price instead of a hard binary at the exact tick. Only
+#   applied to 15M structure reads (main-scan structure check, the stale-
+#   bias promotion paths, and the shadow pipeline); the 1H bias read is
+#   left unbuffered (0.0) since it is already gated separately via
+#   break_count/EMA in compute_macro_bias.
+BOS_15M_BREAK_BUFFER_ATR_MULT = 0.15
+# PROMOTION_MIN_BREAK_COUNT: a 15M break is only allowed to override/
+#   promote bias while the 1H hold is stale (i.e. the 1H leg has ALREADY
+#   invalidated — see compute_macro_bias's bias_stale semantics). Even
+#   then, it must clear the same bar the 1H flip gate itself requires:
+#   a confirmed follow-through break, not a single reversal wick. A 1H
+#   timeframe making clean higher-highs/higher-lows is never overridden
+#   by this — the promotion paths never fire while bias_stale is False,
+#   full stop.
+PROMOTION_MIN_BREAK_COUNT = 2
+
 # Adaptive entry zone
 FIB_ZONE_NEAR = 0.382
 FIB_ZONE_FAR = 0.618
+
+# NEUTRAL_WATCH: an FYI-only alert (no direction bias, no trade) for the
+# gap between "bias is stale" (already handled by macro_bias_stale) and
+# "everything's fine" — a leg that's still technically confirmed
+# (bias_stale is False, nothing has invalidated) but has quietly retraced
+# deep into its own range without reaching the 78.6% invalidation line
+# and without ever reaching the entry zone. Purely descriptive.
+NEUTRAL_WATCH_MIN_RETRACE = FIB_ZONE_FAR  # 0.618 — reuse the existing far-zone ratio
 
 # Momentum-overshoot guard — price is meant to GRADUALLY work its way into
 # the fib pocket across several candles, reacting as it goes. A single
@@ -362,6 +408,8 @@ _STATS_DEFAULTS = {
     "watching_alerts":     0,
     "watching_confirmed":  0,
     "pattern_passed":      0,
+    "risk_gate_suppressed": 0,
+    "neutral_watch_alerts": 0,
     "signals_sent":        0,
     "wins":                0,
     "losses":              0,
@@ -679,7 +727,7 @@ def check_trade_closed(active, c_last):
 
     if direction == "BUY":
         hit_sl, hit_tp = low <= sl, high >= tp
-    else:
+          else:
         hit_sl, hit_tp = high >= sl, low <= tp
 
     if hit_sl:
@@ -892,7 +940,19 @@ def find_all_fractals(df, wing=2):
     return fractals
 
 
-def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
+def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE,
+                        break_buffer_atr_mult=0.0):
+    """
+    break_buffer_atr_mult: when > 0, a close must clear the opposing swing
+    by at least this fraction of that bar's ATR to count as a break — not
+    just cross it by a tick. Without this, a break is a hard binary at
+    the exact swing price, so a noise-level wick a fraction of a pip
+    through the level counts identically to a decisive push through it.
+    This matters most on noisier/shorter timeframes (15M) where such
+    wicks are common; default is 0.0 (off) so existing callers —
+    including the 1H bias read, which is already gated separately via
+    break_count/EMA — are unaffected unless they opt in.
+    """
     fractals = find_all_fractals(df, wing=wing)
     if len(fractals) < 2:
         return None
@@ -901,6 +961,8 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
     highs = df["High"].values
     lows = df["Low"].values
     n = len(df)
+
+    atr_vals = atr(df, period=14).values if break_buffer_atr_mult > 0 else None
 
     external_high = None
     external_low = None
@@ -922,11 +984,23 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
     for i in range(n):
         while next_fractal is not None and next_fractal["idx"] == i:
             if next_fractal["type"] == "high":
-                candidate_high_origin = next_fractal
+                # ORIGIN-CREEP FIX: only replace the candidate origin if the
+                # new fractal is MORE extreme than what's already held. A
+                # shallower high (e.g. a lower high formed mid-decline)
+                # must never overwrite a deeper, still-unconsumed swing
+                # high — that was causing the origin to walk forward/down
+                # through a stairstep move instead of anchoring to the
+                # true swing extreme. The candidate is only cleared (see
+                # below) once it's actually consumed as the origin of a
+                # confirmed leg, at which point tracking restarts fresh
+                # for the *next* leg.
+                if candidate_high_origin is None or next_fractal["price"] > candidate_high_origin["price"]:
+                    candidate_high_origin = next_fractal
                 if external_high is None:
                     external_high = next_fractal["price"]
             else:
-                candidate_low_origin = next_fractal
+                if candidate_low_origin is None or next_fractal["price"] < candidate_low_origin["price"]:
+                    candidate_low_origin = next_fractal
                 if external_low is None:
                     external_low = next_fractal["price"]
             next_fractal = next(fractal_iter, None)
@@ -957,7 +1031,11 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
 
         new_candidate = None
 
-        if external_high is not None and close > external_high and candidate_low_origin is not None:
+        buf = 0.0
+        if atr_vals is not None and not pd.isna(atr_vals[i]):
+            buf = atr_vals[i] * break_buffer_atr_mult
+
+        if external_high is not None and close > external_high + buf and candidate_low_origin is not None:
             new_candidate = {
                 "direction": "BULLISH",
                 "origin": candidate_low_origin["price"],
@@ -966,8 +1044,13 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
             }
             external_high = close
             external_low = None
+            # Origin consumed — start tracking the NEXT low fractal fresh
+            # instead of comparing future candidates against this one
+            # forever (which would wrongly pin the origin to ancient
+            # history once price has genuinely moved on).
+            candidate_low_origin = None
 
-        if external_low is not None and close < external_low and candidate_high_origin is not None:
+        if external_low is not None and close < external_low - buf and candidate_high_origin is not None:
             new_candidate = {
                 "direction": "BEARISH",
                 "origin": candidate_high_origin["price"],
@@ -976,6 +1059,7 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE):
             }
             external_low = close
             external_high = None
+            candidate_high_origin = None
 
         if new_candidate is not None:
             if dominant is None:
@@ -1109,6 +1193,36 @@ def _persist_macro_swing(state, direction, origin, extreme):
         state["macro_swing_high"] = origin
         state["macro_swing_low"]  = extreme
     state["macro_swing_confirmed_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def _promotion_confirmed(break_count, df_1h, direction, min_break_count=PROMOTION_MIN_BREAK_COUNT):
+    """
+    Gates whether a 15M break is strong enough to promote/override a
+    STALE 1H hold (this is only ever called from within a bias_stale
+    branch — it never runs, and never can run, while the 1H is actively
+    holding a confirmed bias; see compute_macro_bias's flip gate for that
+    separate, harder wall). Mirrors the exact bar the 1H CHoCH-flip gate
+    applies to itself before trusting a reversal:
+      1. break_count >= min_break_count — a confirmed follow-through
+         break on the new leg, not just the single reversal wick that
+         founded it.
+      2. EMA agreement — 1H close on the correct side of EMA_100 for the
+         proposed direction.
+    A 15M wick is weaker, noisier evidence than a 1H wick (shorter
+    memory, more of them per hour), so it must never be trusted with a
+    LOWER bar than the 1H timeframe already demands of itself. Returns
+    (confirmed: bool, reason: str).
+    """
+    if break_count < min_break_count:
+        return False, f"only {break_count} break(s) on 15M — needs follow-through (>= {min_break_count})"
+
+    ema_now = df_1h["Close"].ewm(span=100, adjust=False).mean().iloc[-1]
+    close_now = df_1h["Close"].iloc[-1]
+    ema_agrees = (close_now > ema_now) if direction == "BULLISH" else (close_now < ema_now)
+    if not ema_agrees:
+        return False, "1H close hasn't crossed EMA_100 for this direction yet"
+
+    return True, f"{break_count} breaks + EMA agree"
 
 
 def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
@@ -1900,6 +2014,13 @@ def check_result_commands(stats):
         elif cmd in ("/last", "last"):
             ctx = _last_signal_context(stats)
             if ctx:
+                timeline_line = ""
+                tl = stats.get("last_journal_timeline")
+                if tl:
+                    try:
+                        timeline_line = "\n\n" + format_timeline_diagnostics(tl, datetime.now(timezone.utc))
+                    except Exception:
+                        timeline_line = ""
                 send_telegram(
                     f"🔁 *Last signal sent:*\n"
                     f"Direction: `{ctx.get('signal','?')}`\n"
@@ -1907,6 +2028,7 @@ def check_result_commands(stats):
                     f"Structure: `{ctx.get('structure','?')}`\n"
                     f"Score: `{ctx.get('score','?')}/100`\n"
                     f"Time: `{ctx.get('signal_time','?')}`"
+                    + timeline_line
                 )
             else:
                 send_telegram("_No signal recorded yet this session._")
@@ -2153,6 +2275,72 @@ def detect_effort_invalidation(df_15m, swing_high, swing_low, macro_bias,
             f"even if price reacts from here"
         )
     return False, ""
+
+
+def format_timeline_diagnostics(timeline, now_utc):
+    """
+    Compact per-signal diagnostic block: when each confirmation stage
+    first happened, relative to the earliest known stage, plus MFE/MAE
+    on entry_distance (in pips from fib_zone) while waiting for
+    confirmation. The point: if entry_distance was still climbing right
+    up to the signal while confidence barely moved, THAT stage is the
+    bottleneck, not a mystery — this makes it visible per-trade instead
+    of needing to reconstruct it from memory afterward.
+
+    Timestamps are quantized to the scan interval (~5 min), not exact
+    intrabar tick time — this shows which scan each stage first appeared
+    in, not the literal live second it happened.
+    """
+    def _parse(iso):
+        try:
+            return datetime.fromisoformat(iso) if iso else None
+        except Exception:
+            return None
+
+    stages = [
+        ("CHoCH/BOS",   _parse(timeline.get("choch_bos_at")),   timeline.get("choch_bos_label") or "N/A"),
+        ("Fib entered", _parse(timeline.get("fib_entered_at")), None),
+        ("Sweep",       _parse(timeline.get("sweep_at")),       None),
+        ("Engulf",      _parse(timeline.get("engulf_at")),      None),
+        ("Signal sent", now_utc,                                None),
+    ]
+    anchor = next((t for _, t, _ in stages if t is not None), None)
+
+    lines = []
+    for label, ts, tag in stages:
+        if ts is None:
+            lines.append(f"     {label}: —")
+            continue
+        lag = f" (+{int((ts - anchor).total_seconds() // 60)}m)" if anchor and ts != anchor else ""
+        tag_str = f" [{tag}]" if tag and tag != "N/A" else ""
+        lines.append(f"     {label}: {ts.strftime('%H:%M UTC')}{lag}{tag_str}")
+
+    mfe = timeline.get("mfe_pips")
+    mae = timeline.get("mae_pips")
+    dist_line = (
+        "     Entry distance: closest {:.1f}p, farthest {:.1f}p (while waiting)".format(mfe, mae)
+        if mfe is not None and mae is not None else "     Entry distance: n/a"
+    )
+
+    return "🕒 *Timeline:*\n" + "\n".join(lines) + "\n" + dist_line
+
+
+def leg_retrace_fraction(swing_high, swing_low, current_price, macro_bias):
+    """
+    Fraction (0-1+) of the structural leg's range price has given back
+    from its extreme, using CLOSE rather than wick — this is meant to
+    describe a sustained, quiet drift back into the leg, not a wick
+    spike (wick-based depth is already what the invalidation/retrace
+    checks elsewhere use). Returns None if the leg has no measurable
+    range (degenerate swing_high == swing_low).
+    """
+    leg_range = swing_high - swing_low
+    if leg_range <= 0:
+        return None
+    if macro_bias == "BULLISH":
+        return (swing_high - current_price) / leg_range
+    else:
+        return (current_price - swing_low) / leg_range
 
 
 def detect_momentum_overshoot(df_15m, swing_high, swing_low, macro_bias,
@@ -2866,28 +3054,40 @@ def scan():
     # already False by then, so nothing fires twice.
     if bias_stale:
         early_lookback = df_15m.tail(SWING_LOOKBACK_15)
-        early_bos = detect_bos_impulse(early_lookback, wing=FRACTAL_WING)
-        if early_bos is None:
+        early_bos = detect_bos_impulse(early_lookback, wing=FRACTAL_WING,
+                                        break_buffer_atr_mult=BOS_15M_BREAK_BUFFER_ATR_MULT)
+        if early_bos is not None:
+            state["leg15_break_count"] = early_bos["break_count"]
+        else:
             if _refresh_leg_anchor(state, "leg15", early_lookback):
                 early_bos = {
                     "direction":     state["leg15_direction"],
                     "impulse_start": state["leg15_origin"],
                     "impulse_end":   state["leg15_extreme"],
+                    "break_count":   state.get("leg15_break_count", 1),
                 }
         if early_bos is not None and early_bos["direction"] != macro_bias:
-            print(
-                "  [BIAS] 15M BOS ({}) reconfirms over stale 1H hold ({}) — "
-                "promoting early, ahead of the ATR gate.".format(
-                    early_bos["direction"], macro_bias)
-            )
-            macro_bias = early_bos["direction"]
-            state["macro_bias_confirmed"] = macro_bias
-            state["macro_bias_stale"]     = False
-            state["macro_leg_direction"]  = macro_bias
-            state["macro_leg_origin"]     = early_bos["impulse_start"]
-            state["macro_leg_extreme"]    = early_bos["impulse_end"]
-            bias_stale = False
-            save_state(state)
+            promo_ok, promo_reason = _promotion_confirmed(
+                early_bos.get("break_count", 1), df_1h, early_bos["direction"])
+            if promo_ok:
+                print(
+                    "  [BIAS] 15M BOS ({}) reconfirms over stale 1H hold ({}) — "
+                    "promoting early, ahead of the ATR gate ({}).".format(
+                        early_bos["direction"], macro_bias, promo_reason)
+                )
+                macro_bias = early_bos["direction"]
+                state["macro_bias_confirmed"] = macro_bias
+                state["macro_bias_stale"]     = False
+                state["macro_leg_direction"]  = macro_bias
+                state["macro_leg_origin"]     = early_bos["impulse_start"]
+                state["macro_leg_extreme"]    = early_bos["impulse_end"]
+                bias_stale = False
+                save_state(state)
+            else:
+                print(
+                    "  [BIAS] 15M BOS ({}) vs stale 1H hold ({}) — NOT promoting yet: {}"
+                    .format(early_bos["direction"], macro_bias, promo_reason)
+                )
 
     # ── ATR ───────────────────────────────────────────────────────────────
     df_5m["ATR"] = atr(df_5m, period=14)
@@ -2953,7 +3153,8 @@ def scan():
 
     # ── BOS / Structure ───────────────────────────────────────────────────
     lookback      = df_15m.tail(SWING_LOOKBACK_15)
-    bos           = detect_bos_impulse(lookback, wing=FRACTAL_WING)
+    bos           = detect_bos_impulse(lookback, wing=FRACTAL_WING,
+                                        break_buffer_atr_mult=BOS_15M_BREAK_BUFFER_ATR_MULT)
     bos_check     = "N/A"
     bos_bias_check = "N/A"
     bias_reconfirmed_15m = False
@@ -2965,9 +3166,29 @@ def scan():
         # so the same window-aging bug (a still-alive leg's origin
         # fractal scrolling out of view and getting silently replaced or
         # lost) bites here more often, not less.
-        state["leg15_direction"] = bos["direction"]
-        state["leg15_origin"]    = bos["impulse_start"]
-        state["leg15_extreme"]   = bos["impulse_end"]
+        #
+        # Before overwriting, capture whether this is actually a NEW leg
+        # (different origin or direction from what was anchored before)
+        # and label it BOS (continuation — same direction) or CHoCH
+        # (reversal — direction flipped) vs the prior one. This label +
+        # timestamp becomes the first stage of the setup timeline used
+        # for signal-latency diagnostics further down.
+        prev_leg15_dir    = state.get("leg15_direction")
+        prev_leg15_origin = state.get("leg15_origin")
+        is_new_leg15 = (
+            bos["impulse_start"] != prev_leg15_origin or bos["direction"] != prev_leg15_dir
+        )
+        if is_new_leg15:
+            state["leg15_change_label"] = (
+                "BOS (first leg)" if prev_leg15_dir is None
+                else ("CHoCH" if bos["direction"] != prev_leg15_dir else "BOS")
+            )
+            state["leg15_confirmed_at"] = now_utc.isoformat()
+
+        state["leg15_direction"]   = bos["direction"]
+        state["leg15_origin"]      = bos["impulse_start"]
+        state["leg15_extreme"]     = bos["impulse_end"]
+        state["leg15_break_count"] = bos["break_count"]
     else:
         # Nothing in the current 48-bar window. Before falling all the
         # way back to STATE_MEMORY/fractals, check whether a standing 15M
@@ -2977,6 +3198,7 @@ def scan():
                 "direction":     state["leg15_direction"],
                 "impulse_start": state["leg15_origin"],
                 "impulse_end":   state["leg15_extreme"],
+                "break_count":   state.get("leg15_break_count", 1),
             }
             bos_from_anchor = True
             print(
@@ -2989,33 +3211,44 @@ def scan():
         # Stale-hold reconfirmation: the 1H side has no live structure of
         # its own right now (compute_macro_bias is coasting on a bias whose
         # supporting leg already invalidated — see bias_stale above). A
-        # 15M break AGAINST that stale hold is exactly the "fresh break, in
-        # either direction" that resolves the gap, not a timeframe
-        # conflict — promote it instead of suppressing it. This branch is
-        # unreachable when bias_stale is False, so a 15M break against a
-        # freshly-confirmed 1H bias still hits the conflict-suppress path
-        # below, unchanged from before.
+        # 15M break AGAINST that stale hold is a candidate to resolve the
+        # gap, not a timeframe conflict — but it still has to clear the
+        # same bar the 1H flip gate demands of itself (break_count >= 2 +
+        # EMA agreement, see _promotion_confirmed) before it's trusted
+        # enough to promote. This branch is unreachable when bias_stale is
+        # False, so a 15M break against a freshly-confirmed 1H bias still
+        # hits the conflict-suppress path below, unchanged from before —
+        # a 1H timeframe making clean higher-highs/higher-lows is never
+        # overridden by a lower timeframe read.
         if bias_stale and bos["direction"] != macro_bias:
-            print(
-                "  [BIAS] 15M BOS ({}) reconfirms over stale 1H hold ({}) — promoting."
-                .format(bos["direction"], macro_bias)
-            )
-            macro_bias = bos["direction"]
-            state["macro_bias_confirmed"] = macro_bias
-            state["macro_bias_stale"] = False
-            # Anchor this promotion too — otherwise next scan's
-            # compute_macro_bias finds no macro_leg_* anchor for the new
-            # direction, marks it stale again for lack of one, and we're
-            # right back to depending on 15M reconfirming every single
-            # scan just to stand still. The 15M leg's own range is a
-            # weaker anchor than a real 1H break, but it's the best
-            # evidence on hand and strictly better than none.
-            state["macro_leg_direction"] = macro_bias
-            state["macro_leg_origin"]    = bos["impulse_start"]
-            state["macro_leg_extreme"]   = bos["impulse_end"]
-            bias_stale = False
-            bias_reconfirmed_15m = True
-            save_state(state)
+            promo_ok, promo_reason = _promotion_confirmed(
+                bos.get("break_count", 1), df_1h, bos["direction"])
+            if promo_ok:
+                print(
+                    "  [BIAS] 15M BOS ({}) reconfirms over stale 1H hold ({}) — "
+                    "promoting ({}).".format(bos["direction"], macro_bias, promo_reason)
+                )
+                macro_bias = bos["direction"]
+                state["macro_bias_confirmed"] = macro_bias
+                state["macro_bias_stale"] = False
+                # Anchor this promotion too — otherwise next scan's
+                # compute_macro_bias finds no macro_leg_* anchor for the new
+                # direction, marks it stale again for lack of one, and we're
+                # right back to depending on 15M reconfirming every single
+                # scan just to stand still. The 15M leg's own range is a
+                # weaker anchor than a real 1H break, but it's the best
+                # evidence on hand and strictly better than none.
+                state["macro_leg_direction"] = macro_bias
+                state["macro_leg_origin"]    = bos["impulse_start"]
+                state["macro_leg_extreme"]   = bos["impulse_end"]
+                bias_stale = False
+                bias_reconfirmed_15m = True
+                save_state(state)
+            else:
+                print(
+                    "  [BIAS] 15M BOS ({}) vs stale 1H hold ({}) — NOT promoting yet: {}"
+                    .format(bos["direction"], macro_bias, promo_reason)
+                )
 
         bos_check = bos["direction"] + (" OK" if bos["direction"] == macro_bias else " WARN")
 
@@ -3145,6 +3378,67 @@ def scan():
     c_last = df_5m.iloc[-1]
     c_prev = df_5m.iloc[-2]
 
+    # ── Setup timeline (diagnostics) ──────────────────────────────────────
+    # Tracks, per structural setup, when each confirmation stage first
+    # happened: CHoCH/BOS -> price reaches the fib zone -> liquidity sweep
+    # -> engulfing candle -> signal actually sent. Plus MFE/MAE: how close
+    # price ever got to the ideal fib_zone price (best case) vs how far it
+    # ever drifted away (worst case) while waiting for confirmation. The
+    # point: if entry_distance is trending UP over these stages while the
+    # score barely moves, the wait bought nothing but a worse fill — this
+    # is what actually diagnoses which confirmation stage is the
+    # bottleneck, instead of guessing.
+    #
+    # Caveat: timestamps are quantized to the ~5-min scan interval, not
+    # exact intrabar tick time — this tells you which SCAN each stage
+    # first appeared in, not the literal second it happened live.
+    setup_key = "{}|{:.5f}|{:.5f}".format(macro_bias, swing_high, swing_low)
+    timeline = state.get("setup_timeline")
+    if not timeline or timeline.get("key") != setup_key:
+        timeline = {
+            "key":                  setup_key,
+            "direction":            macro_bias,
+            "swing_high":           swing_high,
+            "swing_low":            swing_low,
+            "structure_source":     structure_source,
+            "choch_bos_at":         state.get("leg15_confirmed_at") if structure_source == "BOS" else None,
+            "choch_bos_label":      state.get("leg15_change_label") if structure_source == "BOS" else "N/A",
+            "fib_entered_at":       None,
+            "sweep_at":             None,
+            "engulf_at":            None,
+            "signal_sent_at":       None,
+            "mfe_pips":             None,   # closest entry_distance ever got (best case)
+            "mae_pips":             None,   # farthest entry_distance ever drifted (worst case)
+            "entry_distance_samples": [],   # capped list of [iso, distance_pips]
+        }
+
+    zone_touched_now = (
+        c_last["Low"] <= fib_zone + zone_tol if macro_bias == "BULLISH"
+        else c_last["High"] >= fib_zone - zone_tol
+    )
+    if zone_touched_now and timeline["fib_entered_at"] is None:
+        timeline["fib_entered_at"] = now_utc.isoformat()
+    if sweep_valid and timeline["sweep_at"] is None:
+        timeline["sweep_at"] = now_utc.isoformat()
+
+    entry_distance_pips = abs(c_last["Close"] - fib_zone) / PIP_SIZE
+    timeline["mfe_pips"] = entry_distance_pips if timeline["mfe_pips"] is None else min(timeline["mfe_pips"], entry_distance_pips)
+    timeline["mae_pips"] = entry_distance_pips if timeline["mae_pips"] is None else max(timeline["mae_pips"], entry_distance_pips)
+    timeline["entry_distance_samples"].append([now_utc.isoformat(), round(entry_distance_pips, 1)])
+    timeline["entry_distance_samples"] = timeline["entry_distance_samples"][-30:]  # bounded
+
+    state["setup_timeline"] = timeline
+    save_state(state)
+
+    # Deep-retracement read for NEUTRAL_WATCH — computed here (not deep in
+    # the BULLISH/BEARISH block below) since it's independent of whether
+    # a trade signal fires this scan.
+    retrace_frac = leg_retrace_fraction(swing_high, swing_low, c_last["Close"], macro_bias)
+    deep_retrace = (
+        retrace_frac is not None
+        and NEUTRAL_WATCH_MIN_RETRACE <= retrace_frac < INVALIDATION_RETRACE
+    )
+
     # ── Fib zone staleness check (post-spike) ────────────────────────────
     # If a regime shift was active in any of the last few scans, verify
     # the spike candle (c_last or c_prev, whichever was more extreme)
@@ -3221,17 +3515,39 @@ def scan():
                     confirmation_passed, bias_stale=bias_stale,
                 )
                 if score >= SCORE_TIER_ACCEPTABLE:
-                    trade_signal  = "BUY"
-                    entry         = c_last["Close"]
-                    sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                    sl            = lowest_wick - sl_buffer
-                    risk          = entry - sl
-                    tp            = entry + (RR_RATIO * risk)
-                    risk_pips     = risk / PIP_SIZE
-                    reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-                    pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
-                        " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
-                    stats["pattern_passed"] += 1
+                    prospective_entry = c_last["Close"]
+                    sl_buffer         = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                    prospective_sl    = lowest_wick - sl_buffer
+                    prospective_risk  = prospective_entry - prospective_sl
+                    risk_ceiling_atr  = MAX_RISK_ATR_MULT * current_atr
+                    risk_ceiling_pips = MAX_RISK_PIPS * PIP_SIZE
+                    risk_too_wide     = (prospective_risk > risk_ceiling_atr or
+                                         prospective_risk > risk_ceiling_pips)
+
+                    if risk_too_wide:
+                        stats["risk_gate_suppressed"] += 1
+                        breach = []
+                        if prospective_risk > risk_ceiling_atr:
+                            breach.append("{:.1f}p > {:.1f}p ATR cap ({}x)".format(
+                                prospective_risk / PIP_SIZE, risk_ceiling_atr / PIP_SIZE, MAX_RISK_ATR_MULT))
+                        if prospective_risk > risk_ceiling_pips:
+                            breach.append("{:.1f}p > {}p flat cap".format(
+                                prospective_risk / PIP_SIZE, MAX_RISK_PIPS))
+                        pattern_check = (
+                            "PASS mechanically but SUPPRESSED — risk too wide ({}) [{} {}/100]"
+                            .format("; ".join(breach), score_emoji, score)
+                        )
+                    else:
+                        trade_signal  = "BUY"
+                        entry         = prospective_entry
+                        sl            = prospective_sl
+                        risk          = prospective_risk
+                        tp            = entry + (RR_RATIO * risk)
+                        risk_pips     = risk / PIP_SIZE
+                        reward_pips   = (RR_RATIO * risk) / PIP_SIZE
+                        pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
+                            " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
+                        stats["pattern_passed"] += 1
                 else:
                     pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
                         score_emoji, score, SCORE_TIER_ACCEPTABLE,
@@ -3283,17 +3599,39 @@ def scan():
                     confirmation_passed, bias_stale=bias_stale,
                 )
                 if score >= SCORE_TIER_ACCEPTABLE:
-                    trade_signal  = "SELL"
-                    entry         = c_last["Close"]
-                    sl_buffer     = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                    sl            = highest_wick + sl_buffer
-                    risk          = sl - entry
-                    tp            = entry - (RR_RATIO * risk)
-                    risk_pips     = risk / PIP_SIZE
-                    reward_pips   = (RR_RATIO * risk) / PIP_SIZE
-                    pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
-                        " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
-                    stats["pattern_passed"] += 1
+                    prospective_entry = c_last["Close"]
+                    sl_buffer         = max(SL_ATR_MULT * current_atr, SL_MIN_PIPS * PIP_SIZE)
+                    prospective_sl    = highest_wick + sl_buffer
+                    prospective_risk  = prospective_sl - prospective_entry
+                    risk_ceiling_atr  = MAX_RISK_ATR_MULT * current_atr
+                    risk_ceiling_pips = MAX_RISK_PIPS * PIP_SIZE
+                    risk_too_wide     = (prospective_risk > risk_ceiling_atr or
+                                         prospective_risk > risk_ceiling_pips)
+
+                    if risk_too_wide:
+                        stats["risk_gate_suppressed"] += 1
+                        breach = []
+                        if prospective_risk > risk_ceiling_atr:
+                            breach.append("{:.1f}p > {:.1f}p ATR cap ({}x)".format(
+                                prospective_risk / PIP_SIZE, risk_ceiling_atr / PIP_SIZE, MAX_RISK_ATR_MULT))
+                        if prospective_risk > risk_ceiling_pips:
+                            breach.append("{:.1f}p > {}p flat cap".format(
+                                prospective_risk / PIP_SIZE, MAX_RISK_PIPS))
+                        pattern_check = (
+                            "PASS mechanically but SUPPRESSED — risk too wide ({}) [{} {}/100]"
+                            .format("; ".join(breach), score_emoji, score)
+                        )
+                    else:
+                        trade_signal  = "SELL"
+                        entry         = prospective_entry
+                        sl            = prospective_sl
+                        risk          = prospective_risk
+                        tp            = entry - (RR_RATIO * risk)
+                        risk_pips     = risk / PIP_SIZE
+                        reward_pips   = (RR_RATIO * risk) / PIP_SIZE
+                        pattern_check = "PASS — {} {}/100 ({})".format(score_emoji, score, score_tier) + (
+                            " (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
+                        stats["pattern_passed"] += 1
                 else:
                     pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
                         score_emoji, score, SCORE_TIER_ACCEPTABLE,
@@ -3415,6 +3753,16 @@ def scan():
             is_watching = False
             save_state(state)
 
+    # Engulf stage timestamp — confirmation_passed is set by whichever of
+    # the BULLISH/BEARISH blocks above ran; capture the first scan it
+    # went True for this setup, regardless of whether score/zone also
+    # passed this same scan.
+    timeline = state.get("setup_timeline")
+    if timeline and timeline.get("key") == setup_key and confirmation_passed and timeline.get("engulf_at") is None:
+        timeline["engulf_at"] = now_utc.isoformat()
+        state["setup_timeline"] = timeline
+        save_state(state)
+
     # ── Signal / WATCHING alert logic ─────────────────────────────────────
     if trade_signal != "HOLD" and entry is not None:
         if regime_shifted or fib_stale or momentum_overshoot:
@@ -3511,6 +3859,17 @@ def scan():
                 "\n⚠️ " + " / ".join(score_warnings) + "\n" if score_warnings else ""
             )
 
+            timeline = state.get("setup_timeline")
+            timeline_block = ""
+            if timeline and timeline.get("key") == setup_key:
+                timeline["signal_sent_at"] = now_utc.isoformat()
+                timeline_block = "\n─────────────────────\n" + format_timeline_diagnostics(timeline, now_utc)
+                # Stash a copy for /journal-style review, then clear the
+                # active slot — this setup has concluded (fired). A new
+                # timeline starts fresh whenever the swing pair next changes.
+                stats["last_journal_timeline"] = timeline
+                state.pop("setup_timeline", None)
+
             msg = (
                 "🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
                 + direction_emoji + " *Action:* `" + trade_signal + "`\n"
@@ -3532,6 +3891,7 @@ def scan():
                 "⚠️ _Confirm higher-TF context before executing._"
                 + confirm_tag
                 + reconfirm_tag
+                + timeline_block
             )
             send_telegram(msg)
             # Save signal to state for the structural cooldown check on next scan
@@ -3585,6 +3945,49 @@ def scan():
         else:
             print("  [WATCHING] Active — price still in zone, no confirmation yet.")
 
+    elif (not in_zone and not bias_stale and deep_retrace
+          and not is_watching and trade_signal == "HOLD"):
+        # Confirmed leg (bias_stale is False — nothing has invalidated),
+        # never reached the entry zone, but has quietly retraced deep
+        # into its own range (>= NEUTRAL_WATCH_MIN_RETRACE, short of the
+        # 78.6% invalidation line). Not a trade, not a WATCHING zone —
+        # purely descriptive: structure is technically fine but weakening.
+        last_alert_iso = state.get("neutral_watch_sent_at")
+        leg_changed = (
+            state.get("neutral_watch_swing_high") != swing_high or
+            state.get("neutral_watch_swing_low")  != swing_low
+        )
+        cooldown_elapsed = True
+        if last_alert_iso and not leg_changed:
+            try:
+                last_alert_time = datetime.fromisoformat(last_alert_iso)
+                cooldown_elapsed = (now_utc - last_alert_time).total_seconds() >= NEUTRAL_WATCH_COOLDOWN_MINUTES * 60
+            except Exception:
+                cooldown_elapsed = True
+
+        if leg_changed or cooldown_elapsed:
+            state["neutral_watch_sent_at"]    = now_utc.isoformat()
+            state["neutral_watch_swing_high"] = swing_high
+            state["neutral_watch_swing_low"]  = swing_low
+            save_state(state)
+            stats["neutral_watch_alerts"] = stats.get("neutral_watch_alerts", 0) + 1
+            neutral_msg = (
+                "⚪ *SMC NEUTRAL — GBPUSD*\n\n"
+                "📊 *Bias:* `" + macro_bias + "` _(still confirmed, not stale)_ | "
+                "*Structure:* `" + structure_source + "`\n"
+                "📐 *SwH:* `{:.5f}` | *SwL:* `{:.5f}`\n".format(swing_high, swing_low) +
+                "📉 *Retracement:* `{:.0f}%` of the leg's range — deep, but short of "
+                "the 78.6% invalidation line\n".format(retrace_frac * 100) +
+                "─────────────────────\n"
+                "ℹ️ _No trade criteria met — this is an FYI, not a signal. Structure "
+                "hasn't invalidated but is weakening; treat any entry here with extra "
+                "caution._"
+            )
+            send_telegram(neutral_msg)
+            print("  [NEUTRAL] Sent — leg {:.0f}% retraced, still confirmed but weakening.".format(retrace_frac * 100))
+        else:
+            print("  [NEUTRAL] Suppressed — already alerted this leg within cooldown window.")
+
     # ── Save stats and send periodic summary ─────────────────────────────
     save_stats(stats)
 
@@ -3604,6 +4007,7 @@ def scan():
         "Consolidation: {consolidation_skip} | BOS conflict: {bos_conflict} | "
         "No structure: {no_structure} | Fib reached: {fib_reached} | "
         "Watching: {watching_alerts} | Confirmed: {watching_confirmed} | "
+        "Neutral: {neutral_watch_alerts} | Risk-gated: {risk_gate_suppressed} | "
         "Pattern passed: {pattern_passed} | Signals: {signals_sent} | "
         "W/L: {wins}W/{losses}L ({wr})".format(**stats, wr=wr_str)
     )
@@ -3611,4 +4015,5 @@ def scan():
 
 if __name__ == "__main__":
     scan()
- 
+
+                        

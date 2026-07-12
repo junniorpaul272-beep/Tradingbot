@@ -1,29 +1,116 @@
 """
-GBPUSD SMC Scanner V2 - GitHub Actions Edition
+GBPUSD SMC Scanner V3 — "Rule of Law" Edition
 ================================================
-- Data: Twelve Data API (800 calls/day free)
-- Runner: GitHub Actions (free, never goes offline)
-- Alerts: Telegram
-- Each run recomputes everything fresh from market data, with one
-  exception: a short, time-bounded memory of the last confirmed
-  dominant leg (state.json, capped at STATE_MAX_AGE_HOURS old) so a
-  run that can't redetect a leg in its short lookback window isn't
-  forced to fall all the way back to weaker logic.
+STAGE 3 — Tiers are fully implemented (no longer stubs), FVG has been
+removed from every LIVE decision path, and a full Shadow Pipeline of
+independent research experiments has been added alongside the live bot.
 
-V2 changes from V1:
-- Binary Signal/No-Signal replaced with a weighted confidence score
-  (see SCORE_WEIGHTS / compute_confidence_score). A clean reversal
-  (sweep + structure shift + fib + confirmation) outranks a valid
-  continuation missing one input, rather than the continuation being
-  hard-rejected for lacking a sweep.
-- Every state transition (WATCHING set/cleared, signal cooldown
-  released) is now caused by a market event — a new swing, a zone
-  failing, price running away, a fresh sweep — never by a clock or
-  scan count. The V1 WATCHING_TTL (a 10-25 min timer) is gone; the
-  V1 signal cooldown (30 min / 5 pips) is gone. Both are replaced by
-  structural checks: same dealing range = suppressed, new leg = fires.
-- Adaptive Fib zone and ATR gating are unchanged from V1 — reviewed
-  for this rewrite and still sound, no changes needed there.
+ARCHITECTURE
+------------
+    Market
+      |
+    MACRO BIAS          <- ONE authority: 1H timeframe. PURE — returns
+      |                    (bias, state_updates), never mutates state.
+    MARKET CONTEXT       <- Is the environment tradeable right now? PURE
+      |                    for the same reason.
+    MARKET FACTS          <- Pure OBSERVATION. Knows BOS, CHoCH, Order
+      |                    Blocks (bias-locked demand/supply zones),
+      |                    liquidity sweeps, swings, fib — and nothing
+      |                    about trading. Tiers ask it questions
+      |                    ("facts.has_order_block()"); it never says
+      |                    "this is a buy." NOTE: FVG is intentionally
+      |                    NOT exposed here — see FVG note below.
+    RULE OF LAW           <- Arbitration only. Decides WHICH tier owns
+      |                    the current leg. Higher-priority tiers may
+      |                    UPGRADE (steal) a WATCHING lower-priority
+      |                    owner; nothing can steal from a FIRED owner;
+      |                    each leg can be upgraded at most once.
+      +-- TIER 1: Premium POI Reaction    (Order Block only, no FVG)
+      +-- TIER 2: HTF Fib Pullback
+      +-- TIER 3: Structure Confirmation
+      |
+    TRADE MANAGEMENT      <- Risk gate, dedup backstop, alerting,
+                             active-trade freeze.
+      |
+    SHADOW PIPELINE        <- Research only, never touches a live
+                             decision. Runs every scan, independently of
+                             what the live bot did. See "SHADOW PIPELINE"
+                             section for the full experiment list.
+
+FVG — LIVE vs SHADOW
+---------------------
+Personal preference baked into this build: the live bot never trades an
+FVG. Its only POI is the Order Block, which is already bias-locked (a
+BULLISH leg can only ever produce a demand zone, a BEARISH leg only ever
+a supply zone — see detect_order_block()). FVG detection still exists
+(detect_fvg / detect_significant_fvg), but it is used ONLY by the Shadow
+Pipeline's Experiment 3 (POI), and even there it's filtered for quality
+(FVG_MIN_SIZE_ATR_MULT / FVG_MAX_AGE_CANDLES) — not every 3-candle gap
+gets logged, only ones big and fresh enough to plausibly matter.
+
+WHAT CHANGED SINCE STAGE 1
+-----------------------------
+1. MARKET FACTS LAYER (new). Tiers will receive a `MarketFacts` object,
+   never raw df_5m/df_15m/df_1h. If a tier needs new information about
+   the market, the fix is always "add a fact/method to MarketFacts,"
+   never "reach into the dataframes from inside a tier."
+
+2. PURITY. `compute_macro_bias()` and `evaluate_market_context()` no
+   longer mutate the `state` dict — they return (result, updates), and
+   the caller applies updates via `apply_state_updates()`, the ONLY
+   function that writes computed results into `state`. This also fixed
+   a second hidden mutation Stage 1 had: mutating the caller's df_5m
+   dataframe in place to attach an ATR column. Every ATR series is now
+   computed locally by whichever function needs it.
+
+   Note: `manage_active_trade()`, `apply_leg_ownership()`, and the
+   `claim/release` helpers are still *intentionally* imperative — they
+   ARE the "apply this decision" step, not a "compute a value" step.
+   Purity is for functions that compute a result; functions whose whole
+   job is "make this side effect happen" (send a Telegram message, write
+   leg ownership, close a trade) stay direct and clearly named as such.
+
+3. OWNERSHIP UPGRADE. Stage 1's Rule of Law was strictly monopolistic —
+   once a tier claimed a leg, nothing else was ever evaluated again
+   until that tier released it. Now: while the owner's status is
+   WATCHING (never FIRED — an open/locked trade is untouchable) and the
+   leg hasn't already been upgraded once, every tier with HIGHER
+   priority than the current owner gets evaluated too; the first one
+   that activates steals ownership. Lower-priority tiers never get a
+   chance to steal, and no leg can be upgraded more than once (guards
+   against ownership ping-ponging on a choppy leg).
+
+AUDIT FIXES (post-Stage-3 review)
+-----------------------------------
+Each confirmed with a targeted test before/after; see chat history for
+the actual test runs.
+  A. Tier 1 and Tier 2 could never actually reach a WATCHING state —
+     `activated` and `fired` were the same condition, so a leg went
+     straight from unclaimed to FIRED in one step. That silently made
+     the entire ownership-upgrade mechanism above unreachable (nothing
+     was ever left in WATCHING to upgrade FROM). Fixed by splitting
+     "structural conditions met, worth claiming" (activated) from
+     "rejection_candle() also confirmed" (fired) in both tiers. Tier 3
+     intentionally stays atomic — see the comment in its evaluate()
+     for why that's correct, not an oversight.
+  B. detect_order_block() matched candles by price overlap ONLY, with
+     no recency constraint — an unrelated candle from hours earlier
+     sharing the same price band could out-rank the real, current
+     displacement candle and get selected instead. Fixed by adding
+     origin_idx to detect_bos_impulse()'s return value and using it to
+     bound the order-block search to candles at or after the leg's own
+     origin. MarketFacts.order_block() now passes the same lookback
+     window bos_15m() used, so the index lines up correctly.
+  C. Experiment 4 and Experiment E's shadow leg_id included a value
+     that changes almost every scan (a candle timestamp / rounded
+     entry price), which defeated log_shadow_setup's dedup entirely —
+     the same real-world event was being logged as several separate,
+     correlated "trades," quietly inflating the research stats. Fixed
+     by anchoring both to stable leg/level identity instead, matching
+     how Experiments 1/2/3/6 already dedup.
+  D. SHADOW_ABLATION_VARIANTS's comment for "no_ema_agreement" described
+     a different proxy than what experiment_5_filter_ablation actually
+     implements — comment corrected to match the code.
 """
 
 import os
@@ -33,407 +120,237 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
 
-# -----------------------------------------------
-# CREDENTIALS - pulled from GitHub Secrets (never hardcoded)
-# -----------------------------------------------
-TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
-TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-TWELVE_DATA_KEY = os.environ["TWELVE_DATA_KEY"]
+# =========================================================================
+# CREDENTIALS
+# =========================================================================
+TELEGRAM_TOKEN    = os.environ["TELEGRAM_TOKEN"]
+TELEGRAM_CHAT_ID  = os.environ["TELEGRAM_CHAT_ID"]
+TWELVE_DATA_KEY   = os.environ["TWELVE_DATA_KEY"]
 
-PAIR = "GBP/USD"
-PIP_SIZE = 0.0001
 
-# Risk params
-RR_RATIO = 3.0
-SL_ATR_MULT = 1.5
-SL_MIN_PIPS = 5
-ATR_ENGULF_MIN = 0.4
+# =========================================================================
+# CONFIG — grouped by the architectural layer that owns each constant.
+# =========================================================================
 
-# Volatility-adjusted SL — when current 5M ATR is already spiking well
-# above the REGIME_SHIFT long-period baseline, volatility itself is
-# compensating for the risk. Stacking the full ATR-multiple buffer on
-# top of an already-wide bar produces stop-loss bloat (a wider stop than
-# the setup actually needs), so the multiplier tightens instead. Reuses
-# the regime_ratio already computed by detect_regime_shift() — no new
-# detection logic, just a second consumer of the existing signal.
-SL_VOL_SPIKE_RATIO     = 1.5   # regime_ratio (short/long ATR) above this = spike
-SL_ATR_MULT_COMPRESSED = 1.2   # multiplier used only during that spike
+# ---- GLOBAL ---------------------------------------------------------------
+PAIR      = "GBP/USD"
+PIP_SIZE  = 0.0001
+RR_RATIO  = 3.0
 
-# Engulf/rejection candle quality — WHERE the candle closed within its own
-# range, not just whether it technically contains the prior body. A candle
-# that engulfs but closes near its low (for a BUY) indicates aggressive
-# selling pressure that hasn't subsided even though the engulf condition
-# is met on paper. Applied to both the Tier 2 reversal candle and the
-# Tier 1 break-retest rejection wick below.
-ENGULF_CLOSE_LOCATION_MIN = 0.5   # BUY needs close in upper 50% of candle
-                                    # range; SELL needs close in lower 50%
-                                    # (checked as the complement).
+DIAGNOSTIC_MODE = os.environ.get("DIAGNOSTIC_MODE", "1") != "0"
 
-# Fib depth scoring — how deep into its own NEAR-FAR band the entry
-# actually reached, not just whether it crossed the near edge at all.
-# A near-edge touch is real evidence but weaker than a full discount-zone
-# entry; this scales the "fib" score component between these two floors
-# instead of awarding full credit for either.
-FIB_SCORE_MIN_FRACTION = 5 / 19   # near-edge touch gets this fraction of
-                                    # the full fib weight; deep pocket gets 1.0
+STATE_FILE           = "state.json"
+STATE_MAX_AGE_HOURS   = 6
+STATS_FILE            = "stats.json"
 
-# Prospective R:R gate — computed AFTER SL is known but BEFORE the signal
-# fires. Rejects trades whose entry-to-stop distance is disproportionate,
-# regardless of why it got that way (a big real-bodied confirmation candle
-# on a shallow adaptive-fib entry is the main driver in practice — see
-# adaptive_fib_ratio, which goes SHALLOWER exactly when volatility/candle
-# size goes up). Two independent ceilings, either one breached rejects
-# the trade — a trade must satisfy BOTH to pass:
-#   - MAX_RISK_ATR_MULT: risk relative to current volatility. Scales with
-#     conditions, so it doesn't unfairly reject a wider stop when ATR is
-#     genuinely elevated for good reason.
-#   - MAX_RISK_PIPS: flat absolute backstop, independent of ATR, so a
-#     data glitch or extreme-ATR reading can't wave through an
-#     arbitrarily large stop just because the ATR scaling grew with it.
-# Starting values, not backtested — tune against your own journal data.
-MAX_RISK_ATR_MULT = 3.0
-MAX_RISK_PIPS = 45
-
-NEUTRAL_WATCH_COOLDOWN_MINUTES = 60
-
-# Structure params
-HTF_BIAS_MIN_BARS = 100
-SWING_LOOKBACK_15 = 48
-FRACTAL_WING = 2
-INVALIDATION_RETRACE = 0.786
-
-# Consolidation detection (1H)
-HTF_EMA_SLOPE_BARS = 10
-HTF_CONSOLIDATION_ATR_MULT = 0.5
-HTF_EMA_FLAT_THRESHOLD = 0.15
-
-# Macro bias confirmation (1H)
-# HTF_STRUCTURE_WING: fractal wing size used to detect a real 1H BOS/CHoCH
-#   (an actual macro MSS). This is the ONLY thing that flips macro bias —
-#   a confirmed break of the last opposing 1H swing point. A bare EMA_100
-#   cross with no matching break does not flip bias; see compute_macro_bias().
-HTF_STRUCTURE_WING = 3
-
-# 15M structure noise filter
-# BOS_15M_BREAK_BUFFER_ATR_MULT: a 15M break must clear the opposing swing
-#   by this fraction of 15M ATR to count as broken at all — a neutral band
-#   around the swing price instead of a hard binary at the exact tick. Only
-#   applied to 15M structure reads (main-scan structure check, the stale-
-#   bias promotion paths, and the shadow pipeline); the 1H bias read is
-#   left unbuffered (0.0) since it is already gated separately via
-#   break_count/EMA in compute_macro_bias.
-BOS_15M_BREAK_BUFFER_ATR_MULT = 0.15
-# PROMOTION_MIN_BREAK_COUNT: a 15M break is only allowed to override/
-#   promote bias while the 1H hold is stale (i.e. the 1H leg has ALREADY
-#   invalidated — see compute_macro_bias's bias_stale semantics). Even
-#   then, it must clear the same bar the 1H flip gate itself requires:
-#   a confirmed follow-through break, not a single reversal wick. A 1H
-#   timeframe making clean higher-highs/higher-lows is never overridden
-#   by this — the promotion paths never fire while bias_stale is False,
-#   full stop.
-PROMOTION_MIN_BREAK_COUNT = 2
-
-# Adaptive entry zone
-FIB_ZONE_NEAR = 0.382
-FIB_ZONE_FAR = 0.618
-
-# NEUTRAL_WATCH: an FYI-only alert (no direction bias, no trade) for the
-# gap between "bias is stale" (already handled by macro_bias_stale) and
-# "everything's fine" — a leg that's still technically confirmed
-# (bias_stale is False, nothing has invalidated) but has quietly retraced
-# deep into its own range without reaching the 78.6% invalidation line
-# and without ever reaching the entry zone. Purely descriptive.
-NEUTRAL_WATCH_MIN_RETRACE = FIB_ZONE_FAR  # 0.618 — reuse the existing far-zone ratio
-
-# Momentum-overshoot guard — price is meant to GRADUALLY work its way into
-# the fib pocket across several candles, reacting as it goes. A single
-# large 15M candle that spans the entire pocket in one bar is a different
-# animal: that's displacement, not a pullback, and displacement candles
-# very often keep going and break clean through the zone rather than
-# reacting from it. This doesn't lower the score (it isn't a quality
-# gradient) — it's a structural "was this actually a controlled approach"
-# check, so like regime_shifted/fib_stale it suppresses the alert outright
-# rather than discounting it.
-MOMENTUM_OVERSHOOT_POCKET_MULT = 1.5   # 15M candle range must be at least this many
-                                          # times the pocket's own width to count as
-                                          # "moving with force" rather than the pocket
-                                          # just being naturally narrow that day.
-
-# Effort-invalidation guard — a second, independent definition of "momentum
-# candle" alongside the pocket-span one above. Geometry (did it wick through
-# the zone) isn't the only signature of a momentum candle; the other is
-# EFFORT: a leg that took a long, gradual grind to build (many candles / a
-# long time) can have most of that progress erased by one or two opposing
-# candles. That's disproportionate regardless of where price ends up
-# relative to the fib pocket, and it's the same underlying idea the person
-# who wrote this described directly: momentum candles invalidate effort,
-# not necessarily a fixed price zone or a fixed clock.
-#
-# Deliberately loose on all three knobs so this doesn't fire on ordinary
-# pullbacks — it needs a genuinely slow build (min_build_bars), a genuinely
-# large give-back (erase_min_fraction), AND genuinely fast erasure
-# (time_max_fraction) all at once. Any one of the three alone is normal
-# market behavior; only the combination is the "effort invalidated" pattern.
-EFFORT_MIN_BUILD_BARS       = 4     # leg must have taken at least this many 15M bars
-                                       # (~60 min) to build before this check applies at
-                                       # all — a fast-built leg reversing fast isn't
-                                       # disproportionate to anything.
-EFFORT_ERASE_MIN_FRACTION   = 0.5   # the reversal must have given back at least half
-                                       # the leg's total range — a minor pullback isn't
-                                       # "invalidated effort."
-EFFORT_TIME_MAX_FRACTION    = 0.25  # ...while taking no more than 25% of the bars the
-                                       # leg took to build. A slow give-back over a
-                                       # comparable stretch of time is just the market
-                                       # reversing normally, not a momentum candle.
-EFFORT_REVERSAL_WINDOW_BARS = 2     # candles counted as "the reversal" — matches the
-                                       # person's own framing of "one or sometimes two
-                                       # candles," not a longer counted losing streak.
-
-# Data sanity
-DATA_SPIKE_ATR_MULT = 8
-
-# Data freshness — confirms the scanner is trading on CURRENT market data,
-# not a cached/delayed/stuck feed. A "last closed candle" older than this
-# many multiples of its own interval is treated as a broken feed, not real
-# market silence — vendor outages and stuck caches don't announce
-# themselves, they just quietly serve the same bar forever.
+# ---- DATA QUALITY -----------------------------------------------------
+DATA_SPIKE_ATR_MULT           = 8
 FRESHNESS_MAX_CANDLE_AGE_MULT = 3
 
-# Margin of error — small pip buffers so near-misses don't get rejected for noise
-ZONE_TOLERANCE_PIPS   = 3    # fib zone: wick can be this many pips shy of the level
-ENGULF_TOLERANCE_PIPS = 1    # engulf body overlap: 1 pip of leniency on containment
+# ---- MACRO BIAS (1H — the ONE authority for direction) --------------------
+HTF_BIAS_MIN_BARS          = 100
+HTF_EMA_SLOPE_BARS         = 10
+HTF_CONSOLIDATION_ATR_MULT = 0.5
+HTF_EMA_FLAT_THRESHOLD     = 0.15
+HTF_STRUCTURE_WING         = 3
+PROMOTION_MIN_BREAK_COUNT  = 2
 
-# Liquidity sweep detection
-SWEEP_LOOKBACK_CANDLES = 3   # 3×5M = 1×15M candle — sweep must resolve within one 15M bar
-SWEEP_MAX_DISTANCE_PIPS = 6  # a sweep only counts toward in_zone if the actual entry
-                              # price (c_last close) is still within this many pips of
-                              # the zone. Without this, sweep_valid had no distance limit
-                              # at all - a confirmed sweep 3 candles ago would validate
-                              # an entry candle that had since drifted arbitrarily far
-                              # from the zone, at a worse price with a tighter effective
-                              # stop than the setup was meant to have. Sits between
-                              # ZONE_TOLERANCE_PIPS (3, for direct touches) and
-                              # WATCHING_EXIT_PIPS (8, a slower multi-scan give-up
-                              # threshold) since a sweep already proved the level once.
-
-# WATCHING state — event-driven invalidation only (V2)
-# V1 used a clock-based TTL ("expire after 15 minutes"). V2 removes that:
-# a WATCHING setup stays alive until a MARKET EVENT invalidates it, never
-# just because time passed. The two guards that remain are both events:
-#   - the zone structurally failing (15M close-through), and
-#   - price running away from the zone without confirming.
-# Neither depends on a clock.
-WATCHING_EXIT_PIPS    = 8    # auto-clear if price runs this many pips away from the zone,
-                              # in the direction of the original leg, without confirming.
-                              # e.g. bullish watching at 1.32300 - if price rallies to
-                              # 1.32380+ without ever printing the reversal candle, the
-                              # pullback was missed and chasing from here is a worse trade.
-                              # Distinct from the 15M close-through guard below, which
-                              # catches the zone failing in the OPPOSITE direction.
-
-# Signal "cooldown" — V2 replaces the V1 clock (30 min) + distance (5 pip)
-# timer with a structural check: a new signal in the same direction is only
-# suppressed if it's coming from the SAME dealing range (swing high/low)
-# that produced the last signal. If a new swing/leg has formed since, it's
-# a genuinely new setup and fires regardless of how little time has passed.
-# The pip tolerance below is noise tolerance for "is this the same swing",
-# not a timer — the same role ZONE_TOLERANCE_PIPS plays elsewhere.
-STRUCTURE_MATCH_TOLERANCE_PIPS = 5
-
-# ── Active-trade management (score freeze) ───────────────────────────────
-# Once a signal fires, the scanner stops evaluating new setups on this pair
-# entirely — no bias/zone/structure/scoring, no WATCHING messages — until
-# the open trade closes (SL/TP hit, or manual /win /loss). The score at
-# signal time is frozen into stats["active_trade"] and never recomputed;
-# what gets reported while a trade is open is trade status (P/L, distance
-# to TP/SL, time in trade), not a re-run of the confidence score. A score
-# is a pre-trade evidence read; recomputing it mid-trade and reporting the
-# drift as if it were new information is misleading — the inputs that
-# built the original number (e.g. a sweep) are historical facts about how
-# the trade was entered, not live conditions that can un-happen.
-TRADE_STATUS_UPDATE_MINUTES = 30   # minimum gap between "still open" status
-                                     # pings while a trade runs, so a live
-                                     # trade doesn't spam an update every scan.
-                                     # SL/TP-hit closes are still reported
-                                     # immediately regardless of this gap.
-
-# ATR minimum gate — hard floor on 5M ATR before any signal is allowed.
-# At 4 pip ATR, broker spread (1.5-2.5p) consumes 37-62% of the average
-# bar range, making the effective RR after spread far worse than the
-# nominal 1:3. This gate refuses to trade when volatility is so thin
-# that the spread itself is a structural headwind.
-# 6 pips = approximately 2× typical GBPUSD spread during London session.
-# Set to 0 to disable.
+# ---- MARKET CONTEXT (is the environment tradeable right now?) -------------
 ATR_MIN_PIPS = 6
 
-# Volatility regime shift detection
-# Compares short-term ATR (current micro-regime) against long-term ATR
-# (session baseline) to detect when a news spike or liquidity event has
-# shifted the volatility environment the strategy was calibrated on.
-#
-# When short_atr / long_atr exceeds REGIME_SHIFT_THRESHOLD, the signal
-# is suppressed but the checklist still prints and journal data is kept.
-# You never lose diagnostic information — you just don't act on
-# parameters that are now miscalibrated for the new volatility regime.
-#
-# SHORT_PERIOD = 5 bars  → last 25 minutes  (current micro-regime)
-# LONG_PERIOD  = 50 bars → last ~4 hours    (session baseline)
-# THRESHOLD    = 2.0     → short ATR 2× baseline = genuine regime shift
-#
-# OPEN_WARMUP_BARS: at session open, the long ATR still contains
-# overnight low-liquidity data which makes the ratio artificially high
-# even without a real news spike. Suppress regime detection for the
-# first N 5M bars to avoid false positives from normal open expansion.
+REGIME_SHIFT_ENABLED      = True
 REGIME_SHIFT_SHORT_PERIOD = 5
 REGIME_SHIFT_LONG_PERIOD  = 50
 REGIME_SHIFT_THRESHOLD    = 2.0
-REGIME_SHIFT_OPEN_WARMUP  = 6    # bars = ~30 min after session start
-REGIME_SHIFT_ENABLED      = True
-
-# Post-spike cooldown — continues suppressing for N bars after ratio
-# drops below threshold. N scales with spike severity (tested 7/7 pass):
-#   ratio=2.0 → 2 bars (10 min) | ratio=4.0 → 5 bars | ratio=8.0 → 10 bars (cap)
-# Stored in state.json so it persists across the 5-minute scan boundary.
+REGIME_SHIFT_OPEN_WARMUP  = 6
 POST_SPIKE_COOLDOWN_BASE  = 2
 POST_SPIKE_COOLDOWN_SCALE = 1.5
-POST_SPIKE_COOLDOWN_MAX   = 10   # hard cap = 50 minutes maximum suppression
+POST_SPIKE_COOLDOWN_MAX   = 10
 
-# STATE_MEMORY staleness guard — if current price is more than this many
-# pips away from the midpoint of the saved leg's SwH/SwL range, treat the
-# memory as stale and fall through to plain fractal detection instead.
-# Rationale: a leg saved 5H ago at completely different price levels
-# produces a geometrically valid but contextually meaningless Fib zone.
-STATE_MEMORY_MAX_DRIFT_PIPS = 80
-
-# ── Diagnostic mode ───────────────────────────────────────────────────────
-# Every scan that reaches a directional bias + valid structure but does NOT
-# end in a sent alert prints a single, plain-language rejection record:
-#   Trade rejected
-#
-#   Score: 82
-#
-#   Rejected because:
-#   ✓ Macro bias
-#   ✓ Structure
-#   ✓ Liquidity
-#   ✓ Confirmation
-#   ✗ Risk gate (47 pip stop > 45 max)
-#
-# Checks are listed in the order they're actually evaluated in scan(), so
-# a ✗ marks the FIRST gate that blocked the trade — everything after it
-# simply never ran, and is omitted rather than shown as a false ✓/✗. This
-# exists specifically to answer "which filter keeps killing my trades"
-# without having to reverse-engineer it from five different log lines.
-DIAGNOSTIC_MODE = os.environ.get("DIAGNOSTIC_MODE", "1") != "0"
-
-# ── Tier 1: Break-Retest anticipatory entry ──────────────────────────────
-# Classic SMC break-and-retest. detect_bos_impulse's "origin" (impulse_start)
-# IS the swing point that was broken to confirm the current BOS/CHoCH —
-# literally "the high/low of the break." Price very often pulls back to
-# sweep resting liquidity at that exact level before continuing in the
-# break direction, well before it ever reaches the deeper Tier 2 fib
-# pocket. This tier checks for that sweep+rejection directly against the
-# already-computed swing_high/swing_low (no new structure detection needed)
-# so the scanner can act on a fresh break immediately instead of only ever
-# entering late, deep into the range.
-# Gated to a short window after the 15M leg confirms — this is specifically
-# the immediate retest, not "any sweep of that level, whenever."
-TIER1_RETEST_ENABLED         = True
-TIER1_RETEST_MAX_AGE_MINUTES = 45   # ~9 5M bars — long enough for a real
-                                       # pullback, short enough to still be
-                                       # THE retest, not an unrelated later
-                                       # sweep of the same price.
-TIER1_REJECTION_ATR_MIN      = 0.3  # rejection candle body floor vs 5M ATR —
-                                       # same noise-filter role as
-                                       # ATR_ENGULF_MIN, scaled down since
-                                       # Tier 1 candles are typically smaller/
-                                       # faster than a full reversal engulf.
-
-# -----------------------------------------------
-# V2 — CONFIDENCE SCORING
-# -----------------------------------------------
-# Replaces the V1 binary "Signal / No Signal" output. Every setup that
-# reaches the zone gets scored on the evidence actually present, rather
-# than being hard-rejected for missing one input (e.g. no sweep). A clean
-# reversal (sweep + CHoCH + fib + confirmation) scores higher than a
-# continuation with no sweep, but the continuation still fires if it
-# clears the ACCEPTABLE floor — the bot ranks evidence instead of
-# hard-coding a single required path.
-#
-# htf_bias is intentionally NOT in this table. It used to be scored here
-# (worth 20 pts, awarded automatically since CONSOLIDATION already forces
-# an early return before any setup reaches scoring) which meant it was
-# padding every score with 20 free points rather than measuring anything.
-# It is now a hard binary pre-check (see htf_bias_gate()) that runs before
-# a setup is allowed anywhere near compute_confidence_score at all — a
-# regime question, not a quality question, so it can't be earned partial
-# credit for or outweighed by a great fib+liquidity+confirmation read.
-#
-# The remaining categories are the old weights rescaled proportionally
-# (old sum was 80 without htf_bias) so the total still runs 0-100 and the
-# existing SCORE_TIER_* thresholds stay meaningful until they're replaced
-# empirically per the threshold-calibration step.
-SCORE_WEIGHTS = {
-    "liquidity":    31,   # 31 = confirmed sweep, 15/16 = direct touch w/ no sweep, 0 = neither
-    "structure":    25,   # 25 = fresh BOS/CHoCH aligned with bias, 12/13 = fallback/state-memory structure
-    "fib":          19,   # price actually reached the discount/premium zone
-    "atr":           6,   # 6 = healthy ATR, 3 = regime-shifted/thin but still tradeable
-    "session":       6,   # scan occurred inside a liquid session window
-    "confirmation": 13,   # engulf/rejection confirmation candle present
-}
-assert sum(SCORE_WEIGHTS.values()) == 100
-
-SCORE_TIER_A_PLUS   = 90
-SCORE_TIER_STRONG   = 80
-SCORE_TIER_ACCEPTABLE = 70
-# Below SCORE_TIER_ACCEPTABLE = IGNORE. This is the only place "should this
-# fire" is decided post-zone; there's no separate hard engulf gate anymore
-# because "confirmation" is just one of the seven weighed inputs.
-
-# Session windows (UTC) — used only for the scoring bonus, not as a hard
-# gate. London and New York are GBPUSD's two liquid sessions; the overlap
-# (12:00-16:00 UTC) is the most liquid window of the day.
 SESSION_WINDOWS_UTC = [
     (7, 16),   # London
     (12, 21),  # New York
 ]
 
-# Result tracking — Telegram command to log trade outcomes manually.
-# Send "/win" or "/loss" to your bot to record the last signal's result.
-# The bot checks for incoming messages once per scan and updates stats.
-# Set to True to enable (requires bot to have getUpdates permission).
+# ---- STRUCTURE PRIMITIVES (shared building blocks for MarketFacts) --------
+FRACTAL_WING         = 2
+INVALIDATION_RETRACE = 0.786
+SWING_LOOKBACK_15    = 48
+
+BOS_15M_BREAK_BUFFER_ATR_MULT = 0.15
+STATE_MEMORY_MAX_DRIFT_PIPS   = 80
+
+ZONE_TOLERANCE_PIPS   = 3
+ENGULF_TOLERANCE_PIPS = 1
+ATR_ENGULF_MIN        = 0.4
+ENGULF_CLOSE_LOCATION_MIN = 0.5
+
+FIB_ZONE_NEAR = 0.382
+FIB_ZONE_FAR  = 0.618
+FIB_SCORE_MIN_FRACTION = 5 / 19
+
+SWEEP_LOOKBACK_CANDLES  = 3
+SWEEP_MAX_DISTANCE_PIPS = 6
+
+# ---- ORDER BLOCK (Tier 1's structural primitive) ---------------------------
+OB_MIN_DISPLACEMENT_ATR_MULT = 1.5
+OB_OPPOSING_LOOKBACK_CANDLES = 5
+
+# ---- FAIR VALUE GAP (SHADOW-ONLY — never used by a live tier) -------------
+# Personal preference: the live bot only ever trades a high-probability
+# Order Block (a demand zone in a BULLISH leg, a supply zone in a BEARISH
+# leg — see detect_order_block, which is already bias-locked because it's
+# derived from the BOS leg that IS the bias). FVG is kept only as a
+# research signal in the Shadow Pipeline (Experiment 3 — POI), and even
+# there it's filtered for "quality" — not every 3-candle gap gets logged.
+FVG_LOOKBACK_CANDLES       = 20    # how far back a gap is still considered "live"
+FVG_MIN_SIZE_ATR_MULT      = 0.5   # gap must be at least this many ATR(15m) wide
+FVG_MAX_AGE_CANDLES        = 12    # gap must have formed within this many candles (freshness)
+
+# ---- RULE OF LAW (arbitration — routing only, no quality judgment) --------
+TIER_PRIORITY = ["TIER_1_POI", "TIER_2_FIB", "TIER_3_STRUCTURE"]
+LEG_MATCH_TOLERANCE_PIPS = 5
+
+# ---- CONVICTION (Phase 3 — replaces the old score>=X? implicit gate) ------
+# UNVALIDATED PLACEHOLDERS. Every number below is a first guess, not a
+# derived threshold — do not treat these as final. Calibrate against
+# resolved journal/shadow R-outcomes (Experiment 5 ablation + Experiment E
+# rejected-live hypothetical R) before trusting them with real sizing.
+# Activation (mandatory gates, per tier's own evaluate()) is UNCHANGED and
+# stays a hard pass/fail. Conviction only decides what an ACTIVATED setup
+# is allowed to do: FIRE at what size, WATCH, or REJECT outright.
+CONVICTION_MIN_BY_TIER = {
+    "TIER_1_POI":       65,
+    "TIER_2_FIB":        60,
+    "TIER_3_STRUCTURE":  75,
+}
+
+# Management bands keyed by score, independent of which tier. Applied only
+# AFTER a tier clears its own CONVICTION_MIN_BY_TIER — a setup below its
+# tier's minimum never reaches this table, it's REJECTED before sizing is
+# even considered.
+#   size_mult    — suggested position-size multiplier (informational; this
+#                  bot sends signals, it doesn't place sized orders, so
+#                  this rides in the Telegram message for you to apply)
+#   target_r     — replaces the flat RR_RATIO for TP placement
+#   partial_r    — take partials at this R (None = no partial)
+#   breakeven_r  — move SL to breakeven at this R (None = don't)
+CONVICTION_MANAGEMENT_BANDS = [
+    # (score_floor, label,          size_mult, target_r, partial_r, breakeven_r)
+    (90,  "FULL_EXTENDED",  1.0, 3.0, 2.0, 1.0),
+    (80,  "FULL",           1.0, 3.0, 2.0, 1.0),
+    (70,  "NORMAL",         1.0, 2.5, 1.5, 1.0),
+    (0,   "CONSERVATIVE",   0.5, 2.0, None, 0.5),
+]
+
+
+def classify_conviction(tier_label, score):
+    """
+    Phase 3 — Execution. Pure function: (tier, score) -> decision. Does
+    NOT gate activation (that's each tier's own mandatory-condition
+    check) — only decides whether an ACTIVATED, structurally-confirmed
+    setup is allowed to fire, and if so, how it should be managed.
+
+    Returns a dict, always populated with `reason` so a REJECT/WATCH is
+    just as legible in the diagnostic report as a FIRE.
+    """
+    minimum = CONVICTION_MIN_BY_TIER.get(tier_label, 100)
+    below = score < minimum
+
+    band = None
+    for floor, label, size_mult, target_r, partial_r, breakeven_r in CONVICTION_MANAGEMENT_BANDS:
+        if score >= floor:
+            band = {
+                "band_label": label, "size_mult": size_mult, "target_r": target_r,
+                "partial_r": partial_r, "breakeven_r": breakeven_r,
+            }
+            break
+
+    if below:
+        return {
+            "decision": "REJECT", "score": score, "minimum": minimum,
+            "reason": f"{tier_label} conviction {score} < minimum {minimum} — activated but not convincing enough",
+            **(band or {"band_label": None, "size_mult": None, "target_r": None,
+                        "partial_r": None, "breakeven_r": None}),
+        }
+
+    return {
+        "decision": "FIRE", "score": score, "minimum": minimum,
+        "reason": f"{tier_label} conviction {score} >= minimum {minimum} — {band['band_label']} band",
+        **band,
+    }
+
+# ---- SHADOW PIPELINE (research only — never touches a live decision) ------
+# "What could we have learned from this setup?" Every experiment below
+# logs setups the live bot would never touch (or touches for a different
+# reason), and tracks them forward to 1R/2R/3R so the STATS answer the
+# question, not a gut feeling. Nothing here can ever set stats["active_trade"]
+# or state["leg_owner"] — it is strictly read-only against live state.
+SHADOW_STATE_FILE = "shadow_state.json"
+SHADOW_STATS_FILE = "shadow_stats.json"
+BIAS_AB_LOG_FILE  = "bias_ab_log.json"    # live (gated) vs shadow (old-rule) 1H bias, for /biasab
+BIAS_AB_LOG_MAX_ENTRIES = 500
+
+JOURNAL_MAX_ENTRIES = 100
+
+SHADOW_MAX_PENDING_BARS   = 200   # ~16.6h of 5M bars before a stale shadow setup is force-resolved
+SHADOW_MAX_PENDING_PER_EXPERIMENT = 20   # safety valve against runaway logging
+
+# Experiment 5 (Filter Ablation) — each variant strips exactly ONE filter
+# from an otherwise-Tier-3-shaped structure setup, so any R-multiple
+# difference vs Experiment 1 is attributable to that ONE filter.
+SHADOW_ABLATION_VARIANTS = [
+    "no_liquidity_sweep",   # Tier 3 shape but sweep NOT required
+    "no_ema_agreement",     # ignore _promotion_confirmed-style EMA filter
+                              # (proxy actually implemented: log even while
+                              # macro_bias_stale is True — see
+                              # experiment_5_filter_ablation. Comment fixed
+                              # during audit; previously described a
+                              # different, unimplemented proxy.)
+    "choch_only",           # require CHoCH specifically, not any BOS
+    "bias_15m",             # use 15M structure direction instead of 1H macro_bias
+]
+
+# ---- TRADE MANAGEMENT (shared regardless of which tier fired) -------------
+SL_ATR_MULT            = 1.5
+SL_MIN_PIPS             = 5
+SL_VOL_SPIKE_RATIO      = 1.5
+SL_ATR_MULT_COMPRESSED  = 1.2
+
+MAX_RISK_ATR_MULT = 3.0
+MAX_RISK_PIPS     = 45
+
+WATCHING_EXIT_PIPS             = 8
+TRADE_STATUS_UPDATE_MINUTES    = 30
+NEUTRAL_WATCH_COOLDOWN_MINUTES = 60
+NEUTRAL_WATCH_MIN_RETRACE      = FIB_ZONE_FAR
+
 RESULT_TRACKING_ENABLED = True
+STATS_SUMMARY_EVERY     = 50
 
-# State memory
-STATE_FILE = "state.json"
-STATE_MAX_AGE_HOURS = 6
 
-# Funnel analytics — persists across runs in the repo
-STATS_FILE = "stats.json"
+# =========================================================================
+# STATE / STATS PERSISTENCE
+# =========================================================================
+_REMOVE = object()   # sentinel: apply_state_updates() pops the key instead
+                        # of setting it when a computed update uses this
 
-# Shadow log — every scan, records what the OLD (ungated) bias rule would
-# have decided side-by-side with the live CHoCH+BOS+EMA-gated rule. Exists
-# purely to produce short-term A/B evidence on whether the stricter flip
-# gate is removing bad trades or just removing trades — the two look
-# identical from signal count alone, so this log is what actually answers
-# it, e.g. by end of week.
-SHADOW_LOG_FILE = "shadow_log.json"
-SHADOW_LOG_MAX_ENTRIES = 2000   # ~7 days at one 5-min-cadence entry/scan
 
-# Shadow TRADING pipeline (separate from the bias-only A/B log above) —
-# a full independent, loose-rule mirror of the live pipeline that takes
-# a meaningfully higher volume of paper trades for research. See the
-# "SHADOW PIPELINE" section further down for the full design notes.
-SHADOW_ATR_MIN_PIPS   = 5     # live floor is ATR_MIN_PIPS = 6
-SHADOW_STATE_FILE     = "shadow_pipeline_state.json"
-SHADOW_TRADES_FILE    = "shadow_pipeline_trades.json"
-SHADOW_MAX_OPEN_PER_DIRECTION = 2   # a little overlap allowed, not unbounded
-SHADOW_MAX_OPEN_TOTAL         = 6   # hard safety ceiling regardless of direction split
-SHADOW_RESOLVED_MAX           = 1000   # rolling cap on resolved shadow-trade history
-
-# How often to send a Telegram summary (every N scans)
-# Set to 0 to disable periodic summaries entirely
-STATS_SUMMARY_EVERY = 50
+def apply_state_updates(state, updates):
+    """
+    The ONLY function that writes a compute_*() function's returned
+    result into the live `state` dict. Every compute_macro_bias() /
+    evaluate_market_context() / tier evaluate() call returns a plain
+    (result, updates) pair; this is what actually applies `updates`.
+    A value of _REMOVE deletes that key instead of setting it — this is
+    how a pure function expresses "this should no longer be in state"
+    without being able to call state.pop() itself.
+    """
+    for k, v in updates.items():
+        if v is _REMOVE:
+            state.pop(k, None)
+        else:
+            state[k] = v
 
 
 def load_state():
@@ -466,28 +383,39 @@ def save_state(state):
         print("[STATE SAVE ERROR] " + str(e))
 
 
-# -----------------------------------------------
-# FUNNEL STATS
-# -----------------------------------------------
 _STATS_DEFAULTS = {
-    "total_scans":         0,
-    "consolidation_skip":  0,
-    "bos_conflict":        0,
-    "no_structure":        0,
-    "atr_too_low":         0,
-    "regime_shift_skip":   0,   # NEW: scans suppressed due to volatility regime shift
-    "fib_reached":         0,
-    "watching_alerts":     0,
-    "watching_confirmed":  0,
-    "pattern_passed":      0,
+    "total_scans":          0,
+    "consolidation_skip":   0,
+    "atr_too_low":          0,
+    "regime_shift_skip":    0,
+    "no_leg_owner":         0,
+    "tier1_signals":        0,
+    "tier2_signals":        0,
+    "tier3_signals":        0,
+    "ownership_upgrades":   0,
     "risk_gate_suppressed": 0,
-    "neutral_watch_alerts": 0,
-    "signals_sent":        0,
-    "wins":                0,
-    "losses":              0,
-    "first_scan":          None,
-    "last_scan":           None,
-    "last_update_id":      0,
+    "signals_sent":         0,
+    "wins":                 0,
+    "losses":               0,
+    "first_scan":           None,
+    "last_scan":            None,
+    "last_update_id":       0,
+    # ── Diagnostic / journal additions (ported from V6) ──────────────────
+    "result_logged_for_signal": None,
+    "last_closed_trade":        None,
+    "last_journal_signal":      None,
+    "last_journal_entry":       None,
+    "last_journal_tier_label":  None,
+    "last_journal_score":       None,
+    "last_journal_tier_rating": None,
+    "last_journal_time":        None,
+    "last_journal_timeline":    None,
+    "_pending_trade_query":     False,
+    # NOTE: "journal" and "pending_confirm" are deliberately NOT given
+    # mutable defaults here (dict/list defaults shared across
+    # dict(_STATS_DEFAULTS) calls would alias between loads that never
+    # got saved in between). Both are lazily created with
+    # stats.setdefault(...) at the point of first use instead.
 }
 
 
@@ -495,8 +423,6 @@ def load_stats():
     try:
         with open(STATS_FILE, "r") as f:
             saved = json.load(f)
-        # Merge with defaults so new keys added in future versions
-        # don't cause KeyErrors on old stats files
         stats = dict(_STATS_DEFAULTS)
         stats.update(saved)
         return stats
@@ -512,187 +438,27 @@ def save_stats(stats):
         print("[STATS SAVE ERROR] " + str(e))
 
 
-def load_shadow_log():
+def load_bias_ab_log():
+    """Ported from V6. Rolling log of live (gated) vs shadow (old-rule)
+    1H bias agreement, one entry per scan, for /biasab."""
     try:
-        with open(SHADOW_LOG_FILE, "r") as f:
+        with open(BIAS_AB_LOG_FILE, "r") as f:
             return json.load(f)
     except Exception:
         return []
 
 
-def save_shadow_log(log):
+def save_bias_ab_log(log):
     try:
-        with open(SHADOW_LOG_FILE, "w") as f:
-            # Capped so this doesn't grow unbounded across months of runs —
-            # short-term A/B evidence only needs a rolling recent window.
-            json.dump(log[-SHADOW_LOG_MAX_ENTRIES:], f, indent=2)
+        with open(BIAS_AB_LOG_FILE, "w") as f:
+            json.dump(log[-BIAS_AB_LOG_MAX_ENTRIES:], f, indent=2)
     except Exception as e:
-        print("[SHADOW LOG SAVE ERROR] " + str(e))
+        print("[BIAS AB LOG SAVE ERROR] " + str(e))
 
 
-def format_stats_summary(stats):
-    """
-    Formats the funnel breakdown exactly as requested:
-      Today's scans: 84
-      Consolidation skips: 19
-      BOS conflicts: 12
-      ...
-    Plus derived rates so you can immediately see which filter
-    is the bottleneck without doing the maths yourself.
-    """
-    n = stats["total_scans"]
-    if n == 0:
-        return "No scans recorded yet."
-
-    def pct(val):
-        return f"{val/n*100:.1f}%" if n > 0 else "—"
-
-    first = stats.get("first_scan", "?")
-    last  = stats.get("last_scan",  "?")
-
-    # Watching conversion rate
-    watching   = stats.get("watching_alerts", 0)
-    confirmed  = stats.get("watching_confirmed", 0)
-    watch_conv = f"{confirmed}/{watching} ({confirmed/watching*100:.0f}%)" if watching > 0 else "—"
-
-    # Win rate
-    wins   = stats.get("wins", 0)
-    losses = stats.get("losses", 0)
-    total_results = wins + losses
-    win_rate = f"{wins}/{total_results} ({wins/total_results*100:.0f}%)" if total_results > 0 else "no results yet"
-
-    # Expectancy (pips): (winrate × RR) - lossrate, normalised per pip risked
-    if total_results > 0:
-        wr = wins / total_results
-        expectancy = (wr * RR_RATIO) - (1 - wr)
-        exp_str = f"{expectancy:+.2f}R per trade"
-    else:
-        exp_str = "—"
-
-    lines = [
-        "",
-        "📊 *SMC Scanner — Funnel Stats*",
-        f"_Period: {first} → {last}_",
-        "─────────────────────",
-        f"🔍 Total scans:          `{n}`",
-        f"➖ Consolidation skip:   `{stats['consolidation_skip']}` ({pct(stats['consolidation_skip'])})",
-        f"⚠️ BOS conflict:         `{stats['bos_conflict']}` ({pct(stats['bos_conflict'])})",
-        f"❌ No structure:         `{stats['no_structure']}` ({pct(stats['no_structure'])})",
-        f"📉 ATR too low:          `{stats.get('atr_too_low', 0)}` ({pct(stats.get('atr_too_low', 0))})",
-        f"⚡ Regime shift skip:    `{stats.get('regime_shift_skip', 0)}` ({pct(stats.get('regime_shift_skip', 0))})",
-        f"🎯 Fib zone reached:     `{stats['fib_reached']}` ({pct(stats['fib_reached'])})",
-        f"👀 Watching alerts:      `{stats['watching_alerts']}` ({pct(stats['watching_alerts'])})",
-        f"🔄 Watch → Signal rate:  `{watch_conv}`",
-        f"✅ Pattern passed:       `{stats['pattern_passed']}` ({pct(stats['pattern_passed'])})",
-        f"🚨 Signals sent:         `{stats['signals_sent']}` ({pct(stats['signals_sent'])})",
-        "─────────────────────",
-        f"🏆 Win rate:             `{win_rate}`",
-        f"📐 Expectancy:           `{exp_str}`",
-        "─────────────────────",
-    ]
-
-    # Bottleneck diagnosis
-    if n > 20:
-        atr_skips = stats.get("atr_too_low", 0)
-        if atr_skips / n > 0.3:
-            lines.append("⚠️ _>30% of scans skipped — ATR_MIN_PIPS may be too high for current regime._")
-        elif stats["fib_reached"] == 0:
-            lines.append("⚠️ _Fib zone never reached — price not pulling back to zone._")
-        elif stats["watching_alerts"] == 0:
-            lines.append("⚠️ _Zone reached but WATCHING never triggered — check zone logic._")
-        elif stats["pattern_passed"] == 0:
-            lines.append("⚠️ _Pattern never passes — engulf filter may be too tight._")
-        elif watching > 5 and confirmed == 0:
-            lines.append("⚠️ _WATCHING fires but never converts — pattern too strict post-touch._")
-        elif total_results >= 10 and wins / total_results < 0.35:
-            lines.append("⚠️ _Win rate below 35% over 10+ trades — review entry logic._")
-        else:
-            lines.append("✅ _Funnel behaving as expected._")
-
-    if RESULT_TRACKING_ENABLED:
-        lines.append("_Send /win or /loss to log last trade result._")
-
-    return "\n".join(lines)
-
-
-def format_shadow_summary(shadow_log):
-    """
-    Summarizes the live CHoCH+BOS+EMA-gated bias vs the old ungated rule
-    (any 1H break flips immediately), scan-by-scan, from shadow_log.json.
-
-    This is the actual evidence for "is the stricter gate worth it" —
-    agreement rate alone plus a list of recent divergence windows, so it
-    can be read manually against how price actually moved during each
-    divergence (did the old rule's earlier flip get run over, or did it
-    call a real reversal sooner than the gated live rule did).
-    """
-    if not shadow_log:
-        return "🕶️ _No shadow log entries yet — give it a few scans._"
-
-    n = len(shadow_log)
-    agree = sum(1 for e in shadow_log if e.get("agree"))
-    diverge = n - agree
-    agree_pct = f"{agree/n*100:.0f}%"
-
-    first_t = shadow_log[0].get("time", "?")
-    last_t  = shadow_log[-1].get("time", "?")
-
-    lines = [
-        "",
-        "🕶️ *Shadow Log — Live (gated) vs Old Rule (ungated)*",
-        f"_Period: {first_t} → {last_t}_",
-        "─────────────────────",
-        f"🔍 Scans logged:     `{n}`",
-        f"🤝 Agreement:        `{agree}/{n}` ({agree_pct})",
-        f"↔️ Divergence:       `{diverge}`",
-        "─────────────────────",
-    ]
-
-    if diverge == 0:
-        lines.append("_No divergences yet — nothing for the gate to have blocked or delayed so far._")
-    else:
-        # Collapse consecutive divergent scans into contiguous windows so
-        # a multi-hour disagreement reads as one event, not dozens of
-        # near-duplicate lines.
-        windows = []
-        current = None
-        for e in shadow_log:
-            if not e.get("agree"):
-                if current is None:
-                    current = {"start": e["time"], "end": e["time"],
-                               "live": e["live_bias"], "shadow": e["shadow_bias"],
-                               "price_start": e["price"], "price_end": e["price"]}
-                else:
-                    current["end"] = e["time"]
-                    current["price_end"] = e["price"]
-            else:
-                if current is not None:
-                    windows.append(current)
-                    current = None
-        if current is not None:
-            windows.append(current)
-
-        lines.append(f"*Recent divergence windows* (last {min(len(windows), 8)} of {len(windows)}):")
-        for w in windows[-8:]:
-            price_move = w["price_end"] - w["price_start"]
-            lines.append(
-                f"  `{w['start']}` → `{w['end']}`\n"
-                f"     live=`{w['live']}` (held) vs old-rule=`{w['shadow']}`\n"
-                f"     price moved {price_move:+.5f} during the window"
-            )
-        lines.append("─────────────────────")
-        lines.append(
-            "_Read each window against price direction: if price kept moving "
-            "toward the old rule's call, the gate delayed/blocked a real move. "
-            "If price reverted back toward the live bias, the gate avoided a whipsaw._"
-        )
-
-    return "\n".join(lines)
-
-
-# -----------------------------------------------
+# =========================================================================
 # TELEGRAM
-# -----------------------------------------------
+# =========================================================================
 def send_telegram(message):
     url = "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage"
     payload = {
@@ -708,200 +474,9 @@ def send_telegram(message):
         print("[TELEGRAM ERROR] " + str(e))
 
 
-# -----------------------------------------------
-# ACTIVE-TRADE MANAGEMENT (score freeze)
-# -----------------------------------------------
-def format_trade_status(active, current_price, now_utc):
-    """
-    Trade-in-progress status message. Deliberately does NOT include a
-    recomputed confidence score — the score line here is the frozen
-    signal-time value, labeled as such, never a fresh read.
-    """
-    direction = active["direction"]
-    entry, sl, tp = active["entry"], active["sl"], active["tp"]
-    sign = 1 if direction == "BUY" else -1
-
-    pl_pips      = (current_price - entry) * sign / PIP_SIZE
-    dist_tp_pips = (tp - current_price) * sign / PIP_SIZE
-    dist_sl_pips = (current_price - sl) * sign / PIP_SIZE  # cushion left before stop
-
-    opened_at = datetime.fromisoformat(active["opened_at"])
-    elapsed   = now_utc - opened_at
-    total_min = int(elapsed.total_seconds() // 60)
-    hours, minutes = divmod(total_min, 60)
-    time_str = f"{hours}h {minutes}m" if hours else f"{minutes}m"
-
-    pl_emoji = "🟢" if pl_pips >= 0 else "🔴"
-    dir_emoji = "📈" if direction == "BUY" else "📉"
-
-    return (
-        "📊 *Trade Active — GBPUSD*\n\n"
-        f"{dir_emoji} *Direction:* `{direction}`\n"
-        f"📍 *Entry:* `{entry:.5f}`  →  *Now:* `{current_price:.5f}`\n"
-        f"{pl_emoji} *P/L:* `{pl_pips:+.1f} pips`\n"
-        f"🎯 *Distance to TP:* `{dist_tp_pips:.1f} pips`\n"
-        f"🛡 *Distance to SL:* `{dist_sl_pips:.1f} pips`\n"
-        f"⏱ *Time in trade:* `{time_str}`\n"
-        "─────────────────────\n"
-        f"_Signal-time score: {active.get('score', '?')}/100 "
-        f"({active.get('score_tier', '?')}) — frozen, not recomputed._"
-    )
-
-
-def format_trade_query_response(stats, current_price, now_utc):
-    """
-    On-demand answer for /trade. Three cases:
-      1. A live trade is currently open — full status (same content as
-         the periodic ping): direction, entry vs current, P/L, distance
-         to TP/SL, time in trade, frozen signal-time score.
-      2. No trade open, but the last one closed via SL/TP (auto-detected
-         by manage_active_trade) or was logged via /win or /loss — say
-         which level was hit (or which result was logged) and the pips.
-      3. Never had a trade this session — say so plainly.
-    """
-    active = stats.get("active_trade")
-    if active:
-        return format_trade_status(active, current_price, now_utc)
-
-    last_closed = stats.get("last_closed_trade")
-    if last_closed:
-        hit    = last_closed.get("hit", "?")
-        pips   = last_closed.get("pips", 0)
-        result = last_closed.get("result", "?")
-        icon   = "✅" if result == "WIN" else "❌"
-        try:
-            pips_str = f"{pips:+.1f} pips"
-        except (TypeError, ValueError):
-            pips_str = "?"
-        return (
-            f"📭 *No trade in session* — {hit} hit {icon}\n"
-            f"{last_closed.get('direction','?')} @ `{last_closed.get('entry','?')}` → "
-            f"`{last_closed.get('exit','?')}` ({pips_str})\n"
-            f"_Closed: {last_closed.get('closed_at','?')}_"
-        )
-
-    return "📭 *No trade in session.*"
-
-
-def check_trade_closed(active, c_last):
-    """
-    Checks the latest closed 5M candle's High/Low against the frozen SL/TP.
-    Returns "WIN", "LOSS", or None (still open).
-
-    If a single candle's range touches BOTH levels (a gap/spike bar), we
-    can't tell which was hit first from OHLC alone — we assume SL (the
-    worse outcome) rather than assume the better one. That's a
-    conservative approximation, not a claim about intrabar sequencing.
-    """
-    direction = active["direction"]
-    sl, tp = active["sl"], active["tp"]
-    high, low = c_last["High"], c_last["Low"]
-
-    if direction == "BUY":
-        hit_sl, hit_tp = low <= sl, high >= tp
-    else:
-        hit_sl, hit_tp = high >= sl, low <= tp
-
-    if hit_sl:
-        return "LOSS"
-    if hit_tp:
-        return "WIN"
-    return None
-
-
-def manage_active_trade(stats, df_5m, now_utc):
-    """
-    Runs BEFORE any bias/zone/scoring logic in scan(). If a trade is
-    already open on this pair, this function is the ONLY thing that runs
-    this cycle — no new signal can be generated and no score is
-    recomputed while a position is live.
-
-    Returns True if a trade is open (caller should stop scan() here after
-    saving stats), False if there is no active trade (caller proceeds
-    with normal signal detection).
-    """
-    active = stats.get("active_trade")
-    if not active:
-        return False
-
-    c_last = df_5m.iloc[-1]
-    outcome = check_trade_closed(active, c_last)
-
-    if outcome is not None:
-        # Auto-close: journal it exactly like a manual /win or /loss, then
-        # clear active_trade so normal scanning resumes next cycle.
-        exit_price = active["tp"] if outcome == "WIN" else active["sl"]
-        sign = 1 if active["direction"] == "BUY" else -1
-        pl_pips = (exit_price - active["entry"]) * sign / PIP_SIZE
-
-        if "journal" not in stats:
-            stats["journal"] = []
-        stats["journal"].append({
-            "time":      active.get("opened_at_display", "?"),
-            "logged_at": now_utc.strftime("%Y-%m-%d %H:%M UTC"),
-            "result":    outcome,
-            "note":      "auto-closed (SL/TP hit)",
-            "signal":    active["direction"],
-            "entry":     f"{active['entry']:.5f}",
-            "structure": active.get("structure_source", "?"),
-            "score":     active.get("score", "?"),
-            "score_breakdown": active.get("score_breakdown", "?"),
-        })
-        stats["journal"] = stats["journal"][-100:]
-        if outcome == "WIN":
-            stats["wins"] = stats.get("wins", 0) + 1
-        else:
-            stats["losses"] = stats.get("losses", 0) + 1
-        # Lock this signal against a stray manual /win or /loss arriving after auto-close.
-        stats["result_logged_for_signal"] = active.get("opened_at_display")
-
-        # Snapshot for the /trade command — "no trade in session, TP/SL hit".
-        stats["last_closed_trade"] = {
-            "direction":  active["direction"],
-            "entry":      f"{active['entry']:.5f}",
-            "exit":       f"{exit_price:.5f}",
-            "result":     outcome,
-            "hit":        "TP" if outcome == "WIN" else "SL",
-            "pips":       pl_pips,
-            "closed_at":  now_utc.strftime("%Y-%m-%d %H:%M UTC"),
-            "opened_at_display": active.get("opened_at_display", "?"),
-        }
-
-        icon = "✅" if outcome == "WIN" else "❌"
-        send_telegram(
-            f"{icon} *Trade closed — {outcome}* (auto-detected, GBPUSD)\n\n"
-            f"📍 *Entry:* `{active['entry']:.5f}`  →  *Exit:* `{exit_price:.5f}`\n"
-            f"{'🟢' if pl_pips >= 0 else '🔴'} *P/L:* `{pl_pips:+.1f} pips`\n"
-            f"_Signal-time score: {active.get('score', '?')}/100 ({active.get('score_tier', '?')})_"
-        )
-        print(f"  [TRADE] Auto-closed as {outcome} @ {exit_price:.5f} ({pl_pips:+.1f} pips).")
-        stats.pop("active_trade", None)
-        return False
-
-    # Still open — send a periodic status ping, not a rescored signal.
-    last_update = active.get("last_update_sent_at")
-    send_update = True
-    if last_update:
-        try:
-            gap = now_utc - datetime.fromisoformat(last_update)
-            send_update = gap.total_seconds() >= TRADE_STATUS_UPDATE_MINUTES * 60
-        except ValueError:
-            send_update = True
-
-    if send_update:
-        send_telegram(format_trade_status(active, c_last["Close"], now_utc))
-        active["last_update_sent_at"] = now_utc.isoformat()
-        stats["active_trade"] = active
-        print("  [TRADE] Status update sent — trade still open.")
-    else:
-        print("  [TRADE] Still open — skipping status ping (update interval not elapsed).")
-
-    return True
-
-
-# -----------------------------------------------
-# DATA - Twelve Data
-# -----------------------------------------------
+# =========================================================================
+# DATA LAYER
+# =========================================================================
 def fetch_ohlc(interval, outputsize=200):
     url = "https://api.twelvedata.com/time_series"
     params = {
@@ -932,13 +507,7 @@ def fetch_ohlc(interval, outputsize=200):
 
 
 def is_forex_weekend(now_utc):
-    """
-    FX closes roughly Fri 21:00 UTC -> Sun 21:00 UTC. Checked loosely by
-    weekday/hour, not to the minute — this only exists so the freshness
-    check below doesn't false-positive on data that's legitimately stale
-    because the market itself is shut, not because the feed is broken.
-    """
-    wd = now_utc.weekday()  # Mon=0 ... Sun=6
+    wd = now_utc.weekday()
     if wd == 5:
         return True
     if wd == 6:
@@ -949,17 +518,8 @@ def is_forex_weekend(now_utc):
 
 
 def check_data_freshness(df, interval_minutes, label, now_utc):
-    """
-    Confirms this is CURRENT market data, not a cached/delayed/stuck feed.
-    Compares the last closed candle's timestamp against now_utc; if it's
-    older than a lag budget of FRESHNESS_MAX_CANDLE_AGE_MULT × interval,
-    something's wrong upstream (stuck cache, vendor outage, wrong
-    symbol/interval) and the scan must not trade off stale bars as if
-    they were live. Skipped during the FX weekend close, when staleness
-    is expected and not a symptom of anything broken.
-    """
     if df is None or df.empty:
-        return True  # handled separately by the None/empty check upstream
+        return True
 
     if is_forex_weekend(now_utc):
         return True
@@ -971,8 +531,7 @@ def check_data_freshness(df, interval_minutes, label, now_utc):
     if age_minutes > max_age:
         print(
             "[STALE DATA] {}: last closed candle is {:.0f} min old "
-            "(max allowed {:.0f} min) — feed may be delayed or stuck, "
-            "refusing to trade on this as current market data.".format(
+            "(max allowed {:.0f} min) — feed may be delayed or stuck.".format(
                 label, age_minutes, max_age)
         )
         return False
@@ -980,9 +539,31 @@ def check_data_freshness(df, interval_minutes, label, now_utc):
     return True
 
 
-# -----------------------------------------------
+def data_looks_sane(df, label, max_spike_mult=DATA_SPIKE_ATR_MULT):
+    if df is None or df.empty:
+        return False
+
+    ohlc = df[["Open", "High", "Low", "Close"]]
+    if ohlc.isna().any().any():
+        print("[DATA WARNING] " + label + ": contains NaN values.")
+        return False
+    if (ohlc <= 0).any().any():
+        print("[DATA WARNING] " + label + ": contains zero/negative prices.")
+        return False
+
+    bar_range = df["High"] - df["Low"]
+    avg_range = bar_range.rolling(20, min_periods=5).mean()
+    spike = bar_range > (avg_range * max_spike_mult)
+    if spike.tail(5).any():
+        print("[DATA WARNING] " + label + ": possible bad tick in recent bars.")
+        return False
+
+    return True
+
+
+# =========================================================================
 # INDICATORS
-# -----------------------------------------------
+# =========================================================================
 def atr(df, period=14):
     prev_close = df["Close"].shift(1)
     tr = pd.concat([
@@ -993,6 +574,19 @@ def atr(df, period=14):
     return tr.ewm(span=period, adjust=False).mean()
 
 
+def close_location(candle):
+    """0 (closed at the low) to 1 (closed at the high)."""
+    rng = candle["High"] - candle["Low"]
+    if rng <= 0:
+        return 0.5
+    return (candle["Close"] - candle["Low"]) / rng
+
+
+# =========================================================================
+# MACRO BIAS — the ONE authority for direction (1H only). PURE: every
+# function here returns a result; state is only ever changed by the
+# caller applying the returned updates via apply_state_updates().
+# =========================================================================
 def find_all_fractals(df, wing=2):
     highs = df["High"].values
     lows = df["Low"].values
@@ -1015,15 +609,9 @@ def find_all_fractals(df, wing=2):
 def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE,
                         break_buffer_atr_mult=0.0):
     """
-    break_buffer_atr_mult: when > 0, a close must clear the opposing swing
-    by at least this fraction of that bar's ATR to count as a break — not
-    just cross it by a tick. Without this, a break is a hard binary at
-    the exact swing price, so a noise-level wick a fraction of a pip
-    through the level counts identically to a decisive push through it.
-    This matters most on noisier/shorter timeframes (15M) where such
-    wicks are common; default is 0.0 (off) so existing callers —
-    including the 1H bias read, which is already gated separately via
-    break_count/EMA — are unaffected unless they opt in.
+    Fractal-based dominant-leg tracker. Returns the current confirmed
+    BOS/CHoCH leg (direction, origin, extreme, break_count) or None.
+    Pure — takes a dataframe, returns a value, touches no external state.
     """
     fractals = find_all_fractals(df, wing=wing)
     if len(fractals) < 2:
@@ -1041,13 +629,6 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE,
     candidate_low_origin = None
     candidate_high_origin = None
     dominant = None
-    # Counts discrete break events belonging to the CURRENT dominant leg.
-    # The break that founds/flips a leg (a CHoCH when it reverses an
-    # opposing dominant leg) counts as 1. Any further break in that SAME
-    # direction — a genuine follow-through BOS — increments it. A caller
-    # deciding whether to flip a held bias can require break_count >= 2
-    # to demand "CHoCH AND a confirming BOS", not just a single reversal
-    # wick, before trusting the new direction.
     leg_break_count = 0
 
     fractal_iter = iter(fractals)
@@ -1056,16 +637,6 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE,
     for i in range(n):
         while next_fractal is not None and next_fractal["idx"] == i:
             if next_fractal["type"] == "high":
-                # ORIGIN-CREEP FIX: only replace the candidate origin if the
-                # new fractal is MORE extreme than what's already held. A
-                # shallower high (e.g. a lower high formed mid-decline)
-                # must never overwrite a deeper, still-unconsumed swing
-                # high — that was causing the origin to walk forward/down
-                # through a stairstep move instead of anchoring to the
-                # true swing extreme. The candidate is only cleared (see
-                # below) once it's actually consumed as the origin of a
-                # confirmed leg, at which point tracking restarts fresh
-                # for the *next* leg.
                 if candidate_high_origin is None or next_fractal["price"] > candidate_high_origin["price"]:
                     candidate_high_origin = next_fractal
                 if external_high is None:
@@ -1102,7 +673,6 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE,
                     dominant = None
 
         new_candidate = None
-
         buf = 0.0
         if atr_vals is not None and not pd.isna(atr_vals[i]):
             buf = atr_vals[i] * break_buffer_atr_mult
@@ -1116,10 +686,6 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE,
             }
             external_high = close
             external_low = None
-            # Origin consumed — start tracking the NEXT low fractal fresh
-            # instead of comparing future candidates against this one
-            # forever (which would wrongly pin the origin to ancient
-            # history once price has genuinely moved on).
             candidate_low_origin = None
 
         if external_low is not None and close < external_low - buf and candidate_high_origin is not None:
@@ -1138,21 +704,8 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE,
                 dominant = new_candidate
                 leg_break_count = 1
             elif new_candidate["direction"] == dominant["direction"]:
-                # Same-direction break: the existing leg just produced a
-                # genuine follow-through break — this is the BOS half of
-                # a CHoCH-then-BOS pattern if the leg started as a flip.
                 leg_break_count += 1
             else:
-                # Opposite-direction break while a leg was still active —
-                # this IS the CHoCH: character changed on a break of the
-                # most recent opposing swing, before the old leg was ever
-                # invalidated by origin/78.6% retrace. Promote the new leg
-                # now instead of waiting for the old leg's own invalidation
-                # to eventually catch up (which may lag several bars, or
-                # never trigger at all if price just chops below the break
-                # without also blowing through the old origin). This
-                # founding break is the CHoCH itself, not yet a confirming
-                # BOS — reset the counter to 1.
                 dominant = new_candidate
                 leg_break_count = 1
 
@@ -1170,6 +723,12 @@ def detect_bos_impulse(df, wing=2, invalidation_retrace=INVALIDATION_RETRACE,
         "impulse_start": dominant["origin"],
         "impulse_end": dominant["extreme"],
         "break_count": leg_break_count,
+        # Index (within the dataframe passed in) of the fractal that
+        # founded this leg. Purely additive — existing callers that only
+        # read direction/impulse_start/impulse_end/break_count are
+        # unaffected. Added so detect_order_block() can bound its search
+        # by RECENCY, not just price overlap (see its docstring).
+        "origin_idx": dominant.get("origin_idx"),
     }
 
 
@@ -1197,30 +756,22 @@ def fractal_swings(df, wing=2):
     )
 
 
-def _refresh_leg_anchor(state, prefix, window_df, invalidation_retrace=INVALIDATION_RETRACE):
+def check_leg_anchor_survival(state, prefix, window_df, invalidation_retrace=INVALIDATION_RETRACE):
     """
-    Checks a standing leg anchor — state[prefix+"_direction"/"_origin"/
-    "_extreme"] — directly against the low/high of window_df, independent
-    of whatever a fresh fractal recompute on that same window does or
-    doesn't find.
-
-    This is what makes "the leg's origin fractal scrolled out of the
-    fetch window" distinguishable from "the leg actually broke." Without
-    it, a window-limited detect_bos_impulse recompute has no memory and
-    treats both cases identically — silently picking a different origin/
-    range/retrace-threshold with no real price event behind the change.
-
-    On survival: updates the anchor's extreme in state and returns True.
-    On invalidation (origin broken, or retraced past threshold): drops
-    the anchor keys from state and returns False.
-    Returns False immediately if no anchor is currently set.
+    PURE version of what used to be `_refresh_leg_anchor` — reads a
+    standing leg anchor (state[prefix+"_direction"/"_origin"/"_extreme"])
+    and checks it directly against window_df's High/Low, WITHOUT
+    mutating state. Returns (survived: bool, updates: dict) — apply via
+    apply_state_updates(). This is what distinguishes "the origin
+    fractal scrolled out of the fetch window" from "the leg actually
+    broke," without the caller losing visibility into what changed.
     """
     anchor_dir     = state.get(prefix + "_direction")
     anchor_origin  = state.get(prefix + "_origin")
     anchor_extreme = state.get(prefix + "_extreme")
 
     if anchor_dir not in ("BULLISH", "BEARISH") or anchor_origin is None or anchor_extreme is None:
-        return False
+        return False, {}
 
     window_low  = window_df["Low"].min()
     window_high = window_df["High"].max()
@@ -1237,301 +788,331 @@ def _refresh_leg_anchor(state, prefix, window_df, invalidation_retrace=INVALIDAT
         retrace_violated = leg_range > 0 and (window_high - new_extreme) / leg_range >= invalidation_retrace
 
     if origin_violated or retrace_violated:
-        state.pop(prefix + "_direction", None)
-        state.pop(prefix + "_origin", None)
-        state.pop(prefix + "_extreme", None)
-        return False
+        return False, {
+            prefix + "_direction": _REMOVE,
+            prefix + "_origin": _REMOVE,
+            prefix + "_extreme": _REMOVE,
+        }
 
-    state[prefix + "_extreme"] = new_extreme
-    return True
-
-
-def _persist_macro_swing(state, direction, origin, extreme):
-    """
-    Saves the actual 1H swing points backing the current confirmed macro
-    bias as explicit, auditable state — separate from macro_leg_origin/
-    extreme (which are direction-agnostic anchor fields used for
-    invalidation checks). These are labeled swing_high/swing_low the way
-    a person reading state.json would expect, plus a timestamp, so it's
-    possible to look at state.json at any time and see exactly which
-    swing points and when last justified the current bias — the same gap
-    that made "why is it reading bearish" require three rounds of manual
-    digging earlier in this conversation.
-    """
-    if direction == "BULLISH":
-        state["macro_swing_low"]  = origin
-        state["macro_swing_high"] = extreme
-    else:
-        state["macro_swing_high"] = origin
-        state["macro_swing_low"]  = extreme
-    state["macro_swing_confirmed_at"] = datetime.now(timezone.utc).isoformat()
+    return True, {prefix + "_extreme": new_extreme}
 
 
 def _promotion_confirmed(break_count, df_1h, direction, min_break_count=PROMOTION_MIN_BREAK_COUNT):
     """
     Gates whether a 15M break is strong enough to promote/override a
-    STALE 1H hold (this is only ever called from within a bias_stale
-    branch — it never runs, and never can run, while the 1H is actively
-    holding a confirmed bias; see compute_macro_bias's flip gate for that
-    separate, harder wall). Mirrors the exact bar the 1H CHoCH-flip gate
-    applies to itself before trusting a reversal:
-      1. break_count >= min_break_count — a confirmed follow-through
-         break on the new leg, not just the single reversal wick that
-         founded it.
-      2. EMA agreement — 1H close on the correct side of EMA_100 for the
-         proposed direction.
-    A 15M wick is weaker, noisier evidence than a 1H wick (shorter
-    memory, more of them per hour), so it must never be trusted with a
-    LOWER bar than the 1H timeframe already demands of itself. Returns
-    (confirmed: bool, reason: str).
+    STALE 1H hold. Only meaningful while bias is already stale. Pure.
+      1. break_count >= min_break_count (confirmed follow-through, not
+         just the single reversal wick that founded it)
+      2. EMA agreement — 1H close on the correct side of EMA_100
     """
     if break_count < min_break_count:
-        return False, f"only {break_count} break(s) on 15M — needs follow-through (>= {min_break_count})"
+        return False, f"break_count {break_count} < {min_break_count} required"
 
-    ema_now = df_1h["Close"].ewm(span=100, adjust=False).mean().iloc[-1]
-    close_now = df_1h["Close"].iloc[-1]
-    ema_agrees = (close_now > ema_now) if direction == "BULLISH" else (close_now < ema_now)
-    if not ema_agrees:
-        return False, "1H close hasn't crossed EMA_100 for this direction yet"
-
-    return True, f"{break_count} breaks + EMA agree"
-
-
-def compute_macro_bias(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
-                        flat_atr_mult=HTF_CONSOLIDATION_ATR_MULT,
-                        flat_slope_atr_mult=HTF_EMA_FLAT_THRESHOLD,
-                        structure_wing=HTF_STRUCTURE_WING):
-    """
-    Bias is driven by a confirmed 1H structure break (a real macro MSS via
-    detect_bos_impulse on the 1H series) or by a flat-EMA CONSOLIDATION
-    read. A bare EMA_100 cross with no matching 1H break does NOT flip
-    bias on its own — see the FLIP GATE below for the one specific case
-    where EMA does play a role.
-
-    FLIP GATE (CHoCH confirmed by BOS, plus EMA agreement):
-    When a fresh 1H break points OPPOSITE to the currently confirmed
-    bias, that break alone is a CHoCH candidate — a change of character,
-    not yet a confirmed reversal. Flipping the live bias on a single
-    reversal wick is exactly the kind of thing that produces a FALLBACK
-    -quality flip-flop. So a flip only completes when ALL of:
-      1. CHoCH — a break opposite the currently held bias occurred.
-      2. BOS follow-through — detect_bos_impulse's break_count for that
-         new leg is >= 2, i.e. the new direction broke a FURTHER swing
-         point after the initial reversal break, not just the one wick.
-      3. EMA agreement — close is on the correct side of EMA_100 for the
-         new direction (extra confirmation layer, not a hard structural
-         requirement on its own — see htf_bias_gate design).
-    Until all three line up, the OLD bias is held (not flipped, and not
-    marked "stale" either — a pending flip is a distinct, more specific
-    state than a plain hold-over with nothing challenging it) and the
-    candidate is recorded in state["macro_bias_pending_flip"] so it's
-    visible in state.json and doesn't need to be re-detected from scratch
-    if the window rolls before it fully confirms.
-
-    Mutates state["macro_bias_confirmed"] every call — caller must
-    save_state(state) right after, since several downstream code paths
-    return early before any other save_state() runs.
-
-    Also mutates state["macro_bias_stale"]:
-      - False whenever a fresh 1H BOS/CHoCH+BOS is what produced this bias.
-      - True whenever the bias is a hold-over — the leg that last
-        confirmed it has since invalidated (origin break / 78.6% retrace)
-        and nothing has replaced it yet, OR this is a raw EMA cold-start
-        seed with no structural confirmation at all.
-    This flag exists so callers (the 15M BOS-conflict gate, the WATCHING
-    invalidation guard) can tell "bias is live and structurally backed"
-    apart from "bias is a placeholder waiting on the next break" — before
-    this flag existed the two looked identical downstream, which meant a
-    genuine 15M reversal against a stale hold was indistinguishable from
-    one against a freshly confirmed bias, and got suppressed as a
-    "conflict" either way.
-
-    Also persists state["macro_leg_direction"/"macro_leg_origin"/
-    "macro_leg_extreme"] as a standing anchor for the confirmed leg,
-    independent of the fetch window, plus state["macro_swing_high"/
-    "macro_swing_low"/"macro_swing_confirmed_at"] as the explicit,
-    human-readable swing points backing that leg (see _persist_macro_swing).
-    detect_bos_impulse is re-run on only the last ~120 1H bars every scan
-    and has no memory of its own — if the origin fractal that anchors the
-    current dominant leg is older than that window, it silently ages out
-    and detect_bos_impulse picks whatever fractal happens to still be
-    visible as a new "origin," producing a different leg/range/retrace
-    -threshold with no real price event behind the change. The anchor
-    below is checked directly against whatever price data IS available
-    each scan (which necessarily postdates the anchor's origin, in or out
-    of window) so a leg that's still genuinely alive isn't misread as
-    invalidated just because its origin fractal scrolled out of view.
-    """
     df_1h = df_1h.copy()
     df_1h["EMA_100"] = df_1h["Close"].ewm(span=100, adjust=False).mean()
-    df_1h["ATR_1H"] = atr(df_1h, period=14)
-
     close_now = df_1h["Close"].iloc[-1]
     ema_now = df_1h["EMA_100"].iloc[-1]
-    atr_now = df_1h["ATR_1H"].iloc[-1]
 
+    ema_agrees = (direction == "BULLISH" and close_now > ema_now) or \
+                 (direction == "BEARISH" and close_now < ema_now)
+    if not ema_agrees:
+        return False, "1H close disagrees with EMA_100"
+
+    return True, f"break_count {break_count} >= {min_break_count} and EMA agrees"
+
+
+def _macro_swing_updates(direction, origin, extreme):
+    """PURE helper — builds the state-update dict for the auditable 1H
+    swing points backing the current confirmed bias, so state.json
+    always shows exactly which swing points justify the current bias."""
+    if direction == "BULLISH":
+        swing_low, swing_high = origin, extreme
+    else:
+        swing_high, swing_low = origin, extreme
+    return {
+        "macro_swing_low": swing_low,
+        "macro_swing_high": swing_high,
+        "macro_swing_confirmed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def compute_macro_bias(df_1h, df_15m, state):
+    """
+    PURE. The single authority for direction. Returns (bias, updates) —
+    `state` is read-only here; the caller applies `updates` via
+    apply_state_updates(). Returns "BULLISH", "BEARISH", or
+    "CONSOLIDATION".
+
+    Flip gate: ONLY a confirmed 1H BOS/CHoCH can change the held
+    direction. A bare EMA_100 cross with no matching structural break
+    does not flip bias.
+
+    Also owns stale-bias promotion end-to-end: if the confirmed 1H leg
+    has gone stale (invalidated with nothing fresh to replace it), a
+    strong enough 15M BOS/CHoCH can promote a new direction — folded in
+    here (rather than left for a tier or scan() to reach back into bias
+    bookkeeping) so Macro Bias is the ONE place direction gets decided,
+    full stop.
+    """
+    updates = {}
+    df_1h_x = df_1h.copy()
+    df_1h_x["EMA_100"] = df_1h_x["Close"].ewm(span=100, adjust=False).mean()
+    df_1h_x["ATR_1H"] = atr(df_1h_x, period=14)
+
+    close_now = df_1h_x["Close"].iloc[-1]
+    ema_now = df_1h_x["EMA_100"].iloc[-1]
+    atr_now = df_1h_x["ATR_1H"].iloc[-1]
     confirmed = state.get("macro_bias_confirmed")
 
-    # --- Flatness / consolidation gate (unchanged criteria) -------------
     is_flat = False
-    if not (pd.isna(atr_now) or atr_now == 0 or len(df_1h) <= slope_bars):
-        ema_then = df_1h["EMA_100"].iloc[-1 - slope_bars]
+    if not (pd.isna(atr_now) or atr_now == 0 or len(df_1h_x) <= HTF_EMA_SLOPE_BARS):
+        ema_then = df_1h_x["EMA_100"].iloc[-1 - HTF_EMA_SLOPE_BARS]
         dist_in_atr = abs(close_now - ema_now) / atr_now
         slope_in_atr = abs(ema_now - ema_then) / atr_now
-        is_flat = dist_in_atr < flat_atr_mult and slope_in_atr < flat_slope_atr_mult
+        is_flat = dist_in_atr < HTF_CONSOLIDATION_ATR_MULT and slope_in_atr < HTF_EMA_FLAT_THRESHOLD
 
     if is_flat:
-        state["macro_bias_confirmed"] = "CONSOLIDATION"
-        state["macro_bias_stale"] = False
-        return "CONSOLIDATION"
+        updates["macro_bias_confirmed"] = "CONSOLIDATION"
+        updates["macro_bias_stale"] = False
+        return "CONSOLIDATION", updates
 
-    # --- Only bias driver: a confirmed 1H structure break (real MSS) ----
-    bos_1h = detect_bos_impulse(df_1h, wing=structure_wing)
+    bos_1h = detect_bos_impulse(df_1h_x, wing=HTF_STRUCTURE_WING)
     if bos_1h is not None:
-        structural_bias = bos_1h["direction"]
+        bias = bos_1h["direction"]
+        updates.update({
+            "macro_bias_confirmed": bias,
+            "macro_bias_stale": False,
+            "macro_leg_direction": bias,
+            "macro_leg_origin": bos_1h["impulse_start"],
+            "macro_leg_extreme": bos_1h["impulse_end"],
+        })
+        updates.update(_macro_swing_updates(bias, bos_1h["impulse_start"], bos_1h["impulse_end"]))
+        return bias, updates
 
-        if confirmed in ("BULLISH", "BEARISH") and structural_bias != confirmed:
-            # A break AGAINST the currently confirmed bias — a CHoCH
-            # candidate. Gate it: require BOS follow-through AND EMA
-            # agreement before actually flipping.
-            break_count = bos_1h.get("break_count", 1)
-            choch_confirmed_by_bos = break_count >= 2
-            ema_agrees = (close_now > ema_now) if structural_bias == "BULLISH" else (close_now < ema_now)
+    survived, anchor_updates = check_leg_anchor_survival(state, "macro_leg", df_1h_x)
+    if survived:
+        updates.update(anchor_updates)
+        bias = state.get("macro_leg_direction")
+        updates["macro_bias_confirmed"] = bias
+        updates["macro_bias_stale"] = False
+        return bias, updates
 
-            if choch_confirmed_by_bos and ema_agrees:
-                state["macro_bias_confirmed"] = structural_bias
-                state["macro_bias_stale"] = False
-                state["macro_bias_pending_flip"] = None
-                state["macro_leg_direction"] = structural_bias
-                state["macro_leg_origin"]    = bos_1h["impulse_start"]
-                state["macro_leg_extreme"]   = bos_1h["impulse_end"]
-                _persist_macro_swing(state, structural_bias, bos_1h["impulse_start"], bos_1h["impulse_end"])
-                print(
-                    "  [BIAS FLIP] {} -> {} CONFIRMED — CHoCH + BOS follow-through "
-                    "({} breaks) + EMA agree.".format(confirmed, structural_bias, break_count)
-                )
-                return structural_bias
-            else:
-                reasons = []
-                if not choch_confirmed_by_bos:
-                    reasons.append(f"needs BOS follow-through (only {break_count} break so far)")
-                if not ema_agrees:
-                    reasons.append("price hasn't crossed EMA_100 yet")
-                state["macro_bias_pending_flip"] = {
-                    "direction": structural_bias,
-                    "break_count": break_count,
-                    "ema_agrees": ema_agrees,
-                    "reason": ", ".join(reasons),
-                }
-                print("  [BIAS] CHoCH vs {} detected ({}) but NOT confirmed — {}".format(
-                    confirmed, structural_bias, ", ".join(reasons)))
-                # Old bias held — not flipped, not marked stale (a pending
-                # challenger is more specific than a plain unchallenged hold).
-                return confirmed
-
-        # No flip in play: either this reconfirms the already-held bias,
-        # or it's a true cold start with nothing to conflict against —
-        # accept immediately, same as before the flip gate existed.
-        state["macro_bias_confirmed"] = structural_bias
-        state["macro_bias_stale"] = False
-        state["macro_bias_pending_flip"] = None
-        # Anchor this fresh leg so a future window-rollover doesn't get
-        # mistaken for invalidation.
-        state["macro_leg_direction"] = structural_bias
-        state["macro_leg_origin"]    = bos_1h["impulse_start"]
-        state["macro_leg_extreme"]   = bos_1h["impulse_end"]
-        _persist_macro_swing(state, structural_bias, bos_1h["impulse_start"], bos_1h["impulse_end"])
-        return structural_bias
-
-    # detect_bos_impulse found nothing IN THE CURRENT WINDOW. Before
-    # treating that as invalidation, check whether we already have a
-    # standing anchor for the leg the window just lost track of — if so,
-    # test it directly against the price data on hand instead of trusting
-    # the window-limited fractal recompute.
-    if _refresh_leg_anchor(state, "macro_leg", df_1h):
-        anchor_dir = state["macro_leg_direction"]
-        state["macro_bias_confirmed"] = anchor_dir
-        state["macro_bias_stale"]     = False
-        _persist_macro_swing(state, anchor_dir, state["macro_leg_origin"], state["macro_leg_extreme"])
-        return anchor_dir
-
-    # No 1H leg detected. Hold the last confirmed bias — do NOT flip on
-    # EMA position alone. Mark it stale: the structure that backed this
-    # bias has invalidated and nothing fresh has replaced it yet.
     if confirmed in ("BULLISH", "BEARISH"):
-        state["macro_bias_stale"] = True
-        return confirmed
+        bias = confirmed
+        stale = True
 
-    # True cold start: no prior confirmed bias and no 1H leg yet. Seed
-    # from raw EMA position once so the bot isn't permanently bias-less;
-    # this seed is provisional and will be immediately superseded the
-    # moment a real 1H break occurs. Also marked stale — it's not a
-    # structural confirmation, just a placeholder.
+        # ── Stale-bias promotion via 15M structure ──────────────────
+        early_lookback = df_15m.tail(SWING_LOOKBACK_15)
+        early_bos = detect_bos_impulse(
+            early_lookback, wing=FRACTAL_WING,
+            break_buffer_atr_mult=BOS_15M_BREAK_BUFFER_ATR_MULT,
+        )
+        if early_bos is None:
+            survived_15, anchor_updates_15 = check_leg_anchor_survival(state, "leg15", early_lookback)
+            if survived_15:
+                updates.update(anchor_updates_15)
+                early_bos = {
+                    "direction": state.get("leg15_direction"),
+                    "impulse_start": state.get("leg15_origin"),
+                    "impulse_end": anchor_updates_15.get("leg15_extreme", state.get("leg15_extreme")),
+                    "break_count": state.get("leg15_break_count", 1),
+                }
+        else:
+            updates["leg15_break_count"] = early_bos["break_count"]
+
+        if early_bos is not None and early_bos.get("direction") not in (None, bias):
+            promo_ok, promo_reason = _promotion_confirmed(
+                early_bos.get("break_count", 1), df_1h_x, early_bos["direction"])
+            if promo_ok:
+                bias = early_bos["direction"]
+                stale = False
+                updates.update({
+                    "macro_bias_confirmed": bias,
+                    "macro_bias_stale": False,
+                    "macro_leg_direction": bias,
+                    "macro_leg_origin": early_bos["impulse_start"],
+                    "macro_leg_extreme": early_bos["impulse_end"],
+                })
+                updates.update(_macro_swing_updates(bias, early_bos["impulse_start"], early_bos["impulse_end"]))
+                print(f"  [BIAS] 15M BOS ({bias}) reconfirms over stale 1H hold — {promo_reason}")
+
+        if stale:
+            updates["macro_bias_stale"] = True
+        return bias, updates
+
     raw_bias = "BULLISH" if close_now > ema_now else "BEARISH"
-    state["macro_bias_confirmed"] = raw_bias
-    state["macro_bias_stale"] = True
-    return raw_bias
+    updates["macro_bias_confirmed"] = raw_bias
+    updates["macro_bias_stale"] = True
+    return raw_bias, updates
 
 
-def compute_macro_bias_shadow_old_rule(df_1h, state, slope_bars=HTF_EMA_SLOPE_BARS,
-                                        flat_atr_mult=HTF_CONSOLIDATION_ATR_MULT,
-                                        flat_slope_atr_mult=HTF_EMA_FLAT_THRESHOLD,
-                                        structure_wing=HTF_STRUCTURE_WING):
+def compute_macro_bias_shadow_old_rule(df_1h, state):
     """
-    SHADOW ONLY — never used for trading decisions or signals. Mirrors the
-    exact pre-gate compute_macro_bias behavior: any 1H break, in either
-    direction, flips bias immediately (no CHoCH+BOS follow-through
-    requirement, no EMA agreement check). Runs alongside the live gated
-    rule purely to produce side-by-side evidence of whether the new gate
-    is filtering out bad flips or just delaying/blocking good ones.
-
-    Deliberately self-contained and reads/writes only shadow_-prefixed
-    state keys — it must never share state with, or influence, the real
-    macro_bias_confirmed/macro_leg_* keys the live system trades on.
+    SHADOW ONLY — never used for trading decisions. PURE, same
+    (result, updates) shape as compute_macro_bias. Mirrors the pre-gate
+    behavior: any 1H break, either direction, flips bias immediately (no
+    CHoCH+BOS follow-through requirement, no EMA agreement). Reads/
+    writes only shadow_-prefixed keys.
     """
-    df_1h = df_1h.copy()
-    df_1h["EMA_100"] = df_1h["Close"].ewm(span=100, adjust=False).mean()
-    df_1h["ATR_1H"] = atr(df_1h, period=14)
+    updates = {}
+    df_1h_x = df_1h.copy()
+    df_1h_x["EMA_100"] = df_1h_x["Close"].ewm(span=100, adjust=False).mean()
+    df_1h_x["ATR_1H"] = atr(df_1h_x, period=14)
 
-    close_now = df_1h["Close"].iloc[-1]
-    ema_now = df_1h["EMA_100"].iloc[-1]
-    atr_now = df_1h["ATR_1H"].iloc[-1]
-
+    close_now = df_1h_x["Close"].iloc[-1]
+    ema_now = df_1h_x["EMA_100"].iloc[-1]
+    atr_now = df_1h_x["ATR_1H"].iloc[-1]
     confirmed = state.get("shadow_macro_bias_confirmed")
 
     is_flat = False
-    if not (pd.isna(atr_now) or atr_now == 0 or len(df_1h) <= slope_bars):
-        ema_then = df_1h["EMA_100"].iloc[-1 - slope_bars]
+    if not (pd.isna(atr_now) or atr_now == 0 or len(df_1h_x) <= HTF_EMA_SLOPE_BARS):
+        ema_then = df_1h_x["EMA_100"].iloc[-1 - HTF_EMA_SLOPE_BARS]
         dist_in_atr = abs(close_now - ema_now) / atr_now
         slope_in_atr = abs(ema_now - ema_then) / atr_now
-        is_flat = dist_in_atr < flat_atr_mult and slope_in_atr < flat_slope_atr_mult
+        is_flat = dist_in_atr < HTF_CONSOLIDATION_ATR_MULT and slope_in_atr < HTF_EMA_FLAT_THRESHOLD
 
     if is_flat:
-        state["shadow_macro_bias_confirmed"] = "CONSOLIDATION"
-        return "CONSOLIDATION"
+        updates["shadow_macro_bias_confirmed"] = "CONSOLIDATION"
+        return "CONSOLIDATION", updates
 
-    bos_1h = detect_bos_impulse(df_1h, wing=structure_wing)
+    bos_1h = detect_bos_impulse(df_1h_x, wing=HTF_STRUCTURE_WING)
     if bos_1h is not None:
-        structural_bias = bos_1h["direction"]
-        state["shadow_macro_bias_confirmed"]  = structural_bias
-        state["shadow_macro_leg_direction"]   = structural_bias
-        state["shadow_macro_leg_origin"]      = bos_1h["impulse_start"]
-        state["shadow_macro_leg_extreme"]     = bos_1h["impulse_end"]
-        return structural_bias
+        updates["shadow_macro_bias_confirmed"] = bos_1h["direction"]
+        updates["shadow_macro_leg_direction"]  = bos_1h["direction"]
+        updates["shadow_macro_leg_origin"]     = bos_1h["impulse_start"]
+        updates["shadow_macro_leg_extreme"]    = bos_1h["impulse_end"]
+        return bos_1h["direction"], updates
 
-    if _refresh_leg_anchor(state, "shadow_macro_leg", df_1h):
-        return state["shadow_macro_leg_direction"]
+    survived, anchor_updates = check_leg_anchor_survival(state, "shadow_macro_leg", df_1h_x)
+    if survived:
+        updates.update(anchor_updates)
+        return state.get("shadow_macro_leg_direction"), updates
 
     if confirmed in ("BULLISH", "BEARISH"):
-        return confirmed
+        return confirmed, updates
 
     raw_bias = "BULLISH" if close_now > ema_now else "BEARISH"
-    state["shadow_macro_bias_confirmed"] = raw_bias
-    return raw_bias
+    updates["shadow_macro_bias_confirmed"] = raw_bias
+    return raw_bias, updates
 
 
+# =========================================================================
+# MARKET CONTEXT — is the environment tradeable right now? PURE: returns
+# (ctx, reason, updates); caller applies updates via apply_state_updates.
+# =========================================================================
+def is_active_session(now_utc, windows=SESSION_WINDOWS_UTC):
+    hour = now_utc.hour
+    for start, end in windows:
+        if start <= hour < end:
+            return True
+    return False
+
+
+def detect_regime_shift(df_5m, current_atr, now_utc):
+    """Compares short-term ATR (~25min) vs long-term ATR (~4h session
+    baseline). Ratio above threshold = a news spike/liquidity event
+    shifted the volatility environment. Pure."""
+    if not REGIME_SHIFT_ENABLED:
+        return False, 0.0, 0.0
+
+    if len(df_5m) < REGIME_SHIFT_LONG_PERIOD + 2:
+        return False, 0.0, 0.0
+
+    session_open = now_utc.replace(hour=8, minute=0, second=0, microsecond=0)
+    bars_since_open = int((now_utc - session_open).total_seconds() / 300)
+    if 0 <= bars_since_open < REGIME_SHIFT_OPEN_WARMUP:
+        return False, 0.0, 0.0
+
+    atr_series = atr(df_5m, period=14)
+    short_atr = atr_series.rolling(
+        REGIME_SHIFT_SHORT_PERIOD, min_periods=REGIME_SHIFT_SHORT_PERIOD
+    ).mean().iloc[-1]
+    long_atr = atr_series.rolling(
+        REGIME_SHIFT_LONG_PERIOD, min_periods=REGIME_SHIFT_LONG_PERIOD // 2
+    ).mean().iloc[-1]
+
+    if pd.isna(short_atr) or pd.isna(long_atr) or long_atr == 0:
+        return False, 0.0, 0.0
+
+    ratio = short_atr / long_atr
+    return ratio >= REGIME_SHIFT_THRESHOLD, ratio, short_atr / PIP_SIZE
+
+
+def scaled_cooldown_bars(regime_ratio):
+    bars = POST_SPIKE_COOLDOWN_BASE + (regime_ratio - REGIME_SHIFT_THRESHOLD) * POST_SPIKE_COOLDOWN_SCALE
+    return int(min(max(bars, POST_SPIKE_COOLDOWN_BASE), POST_SPIKE_COOLDOWN_MAX))
+
+
+class MarketContext:
+    """Single bundled read of 'is now tradeable at all,' handed to every
+    tier so none of them repeat this work or disagree about it."""
+    def __init__(self, atr_ok, current_atr, current_atr_pips,
+                 regime_shifted, regime_ratio, post_spike_active, session_active):
+        self.atr_ok = atr_ok
+        self.current_atr = current_atr
+        self.current_atr_pips = current_atr_pips
+        self.regime_shifted = regime_shifted
+        self.regime_ratio = regime_ratio
+        self.post_spike_active = post_spike_active
+        self.session_active = session_active
+
+    @property
+    def tradeable(self):
+        """Hard gate only — ATR floor. Regime shift/post-spike are NOT
+        gates here; they're passed through so tiers weigh them on their
+        own terms (a Tier 1 POI reaction may reasonably care less about
+        a regime shift than a Tier 2 gradual pullback does)."""
+        return self.atr_ok
+
+
+def evaluate_market_context(df_5m, state, now_utc):
+    """
+    PURE. Builds one MarketContext for this scan. Returns
+    (ctx, reason, updates) — updates carries the new
+    post_spike_cooldown_remaining value only; caller applies via
+    apply_state_updates(). Computes its own ATR series locally rather
+    than depending on the caller having attached one to df_5m (Stage 1
+    mutated the caller's dataframe to do this — fixed here).
+    """
+    atr_series = atr(df_5m, period=14)
+    current_atr = atr_series.iloc[-1]
+    if pd.isna(current_atr) or current_atr == 0:
+        return (MarketContext(False, current_atr, 0.0, False, 0.0, False, False),
+                "ATR invalid (NaN/0)", {})
+
+    current_atr_pips = current_atr / PIP_SIZE
+    atr_ok = current_atr_pips >= ATR_MIN_PIPS
+
+    regime_shifted, regime_ratio, _short_pips = detect_regime_shift(df_5m, current_atr, now_utc)
+
+    cooldown_remaining = state.get("post_spike_cooldown_remaining", 0)
+    if regime_shifted:
+        cooldown_remaining = scaled_cooldown_bars(regime_ratio)
+    elif cooldown_remaining > 0:
+        cooldown_remaining -= 1
+    updates = {"post_spike_cooldown_remaining": max(0, cooldown_remaining)}
+    post_spike_active = updates["post_spike_cooldown_remaining"] > 0
+
+    session_active = is_active_session(now_utc)
+
+    ctx = MarketContext(
+        atr_ok=atr_ok, current_atr=current_atr, current_atr_pips=current_atr_pips,
+        regime_shifted=regime_shifted, regime_ratio=regime_ratio,
+        post_spike_active=post_spike_active, session_active=session_active,
+    )
+    reason = None if atr_ok else f"ATR {current_atr_pips:.1f}p < {ATR_MIN_PIPS}p floor"
+    return ctx, reason, updates
+
+
+# =========================================================================
+# STRUCTURE PRIMITIVES — pure building blocks the MarketFacts layer
+# wraps. None of these decide whether a tier fires.
+# =========================================================================
 def adaptive_fib_ratio(df_5m, current_atr, near=FIB_ZONE_NEAR, far=FIB_ZONE_FAR, lookback=50):
-    avg_atr = df_5m["ATR"].rolling(lookback, min_periods=10).mean().iloc[-1]
+    """Fib zone gets SHALLOWER as volatility expands relative to its own
+    recent average."""
+    atr_series = atr(df_5m, period=14)
+    avg_atr = atr_series.rolling(lookback, min_periods=10).mean().iloc[-1]
     if pd.isna(avg_atr) or avg_atr == 0 or pd.isna(current_atr):
         return (near + far) / 2
 
@@ -1541,213 +1122,9 @@ def adaptive_fib_ratio(df_5m, current_atr, near=FIB_ZONE_NEAR, far=FIB_ZONE_FAR,
     return far - (t * (far - near))
 
 
-def fallback_structure(lookback_df, macro_bias, state, wing=2):
-    if (
-        state.get("status") == "ACTIVE_LEG"
-        and state.get("direction") == macro_bias
-        and "impulse_start" in state
-        and "impulse_end" in state
-    ):
-        if macro_bias == "BULLISH":
-            return state["impulse_end"], state["impulse_start"], "STATE_MEMORY"
-        else:
-            return state["impulse_start"], state["impulse_end"], "STATE_MEMORY"
-
-    sh, sl = fractal_swings(lookback_df, wing=wing)
-    return sh, sl, "FALLBACK_FRACTAL"
-
-
-def detect_liquidity_sweep(df_5m, df_15m, fib_zone, macro_bias,
-                            lookback_candles=SWEEP_LOOKBACK_CANDLES):
-    """
-    Checks whether a liquidity sweep into the fib zone occurred within
-    the last `lookback_candles` closed 5M bars (not counting c_last or c_prev,
-    since those are already handled by the direct zone check).
-
-    A valid sweep requires two things:
-      1. A 5M candle wicked through the zone but CLOSED back on the correct
-         side — price hunted liquidity below/above the zone but rejected it.
-      2. The last closed 15M candle also closed on the correct side — meaning
-         at the 15M level it was only a wick, not a close through. This is the
-         15M confirmation the user identified: 3×5M = 1×15M, so if the 15M
-         didn't close through the zone, the sweep was just a wick on the higher
-         timeframe and the zone is still institutionally respected.
-
-    Returns (swept: bool, label: str) for use in the checklist and in_zone logic.
-    """
-    # Candles before c_prev — the sweep would have happened here, with c_prev
-    # and c_last being the post-sweep reaction candles we're trading off.
-    recent = df_5m.iloc[-(lookback_candles + 2):-2]
-
-    if macro_bias == "BULLISH":
-        # Wick below zone, close above it
-        swept = recent[(recent["Low"] < fib_zone) & (recent["Close"] > fib_zone)]
-        if swept.empty:
-            return False, "no sweep"
-        # 15M close confirmation: last closed 15M must have closed above zone
-        if df_15m.iloc[-1]["Close"] <= fib_zone:
-            return False, "15M closed below zone"
-        return True, "SWEEP CONFIRMED ✅"
-
-    else:  # BEARISH
-        # Wick above zone, close below it
-        swept = recent[(recent["High"] > fib_zone) & (recent["Close"] < fib_zone)]
-        if swept.empty:
-            return False, "no sweep"
-        # 15M close confirmation: last closed 15M must have closed below zone
-        if df_15m.iloc[-1]["Close"] >= fib_zone:
-            return False, "15M closed above zone"
-        return True, "SWEEP CONFIRMED ✅"
-
-
-def close_location(candle):
-    """
-    Where the candle closed within its own High-Low range, as a fraction
-    0 (closed at the low) to 1 (closed at the high). Used to require that
-    a bullish rejection/engulf closes in the upper half of its range (and
-    a bearish one in the lower half) — an engulf that technically contains
-    the prior body but closes near its own low still shows unresolved
-    selling pressure, and vice versa.
-    """
-    rng = candle["High"] - candle["Low"]
-    if rng <= 0:
-        return 0.5
-    return (candle["Close"] - candle["Low"]) / rng
-
-
-def detect_break_retest(df_5m, swing_level, direction, current_atr, state, now_utc,
-                          max_age_minutes=TIER1_RETEST_MAX_AGE_MINUTES):
-    """
-    Tier 1 anticipatory entry (break-and-retest). Checks whether the two
-    most recent 5M candles swept and rejected the ORIGIN swing point of
-    the current 15M BOS/CHoCH — swing_level here is the same swing_high/
-    swing_low the caller already computed from bos["impulse_start"], i.e.
-    literally "the high/low of the break" itself, not the deeper fib
-    pocket further inside the range.
-
-    Only live within `max_age_minutes` of state["leg15_confirmed_at"] —
-    this is deliberately narrow so it can only fire on the immediate
-    retest of a fresh break, never on some unrelated later touch of the
-    same price level.
-
-    Returns (triggered: bool, reason: str, entry_price, rejection_extreme).
-    """
-    confirmed_at = state.get("leg15_confirmed_at")
-    if not confirmed_at:
-        return False, "no fresh 15M leg confirmation on record", None, None
-    try:
-        age_minutes = (now_utc - datetime.fromisoformat(confirmed_at)).total_seconds() / 60
-    except (ValueError, TypeError):
-        return False, "unparseable leg confirmation timestamp", None, None
-    if age_minutes < 0 or age_minutes > max_age_minutes:
-        return False, "break is {:.0f}m old — outside {:.0f}m retest window".format(
-            age_minutes, max_age_minutes), None, None
-
-    c_last, c_prev = df_5m.iloc[-1], df_5m.iloc[-2]
-    body_last = abs(c_last["Close"] - c_last["Open"])
-    atr_threshold = TIER1_REJECTION_ATR_MIN * current_atr
-    if body_last < atr_threshold:
-        return False, "rejection candle body too small vs ATR", None, None
-
-    zone_tol = ZONE_TOLERANCE_PIPS * PIP_SIZE
-    loc = close_location(c_last)
-
-    if direction == "BULLISH":
-        # swing_level is the origin LOW that was broken to confirm the
-        # up-leg. Retest sweeps at/below it, then closes back above.
-        low_touch = min(c_prev["Low"], c_last["Low"])
-        swept = low_touch <= swing_level + zone_tol
-        closed_back_above = c_last["Close"] > swing_level
-        loc_ok = loc >= ENGULF_CLOSE_LOCATION_MIN
-        if not (swept and closed_back_above and loc_ok):
-            return False, "no clean sweep+reject of break-origin low", None, None
-        return True, "BREAK-RETEST CONFIRMED \u2705 (origin low swept & rejected)", c_last["Close"], low_touch
-
-    else:  # BEARISH
-        high_touch = max(c_prev["High"], c_last["High"])
-        swept = high_touch >= swing_level - zone_tol
-        closed_back_below = c_last["Close"] < swing_level
-        loc_ok = loc <= (1 - ENGULF_CLOSE_LOCATION_MIN)
-        if not (swept and closed_back_below and loc_ok):
-            return False, "no clean sweep+reject of break-origin high", None, None
-        return True, "BREAK-RETEST CONFIRMED \u2705 (origin high swept & rejected)", c_last["Close"], high_touch
-
-
-def is_duplicate_signal(state, trade_signal, swing_high, swing_low):
-    """
-    V2: "duplicate" is a STRUCTURAL question, not a clock/distance one.
-    A new signal in the same direction is suppressed only if it's still
-    anchored to the same dealing range (swing high/low, within noise
-    tolerance) that produced the last signal. The moment a new swing or
-    a fresh BOS/CHoCH redraws that range, this returns False regardless
-    of how many minutes or pips separate the two signals — a new leg is
-    definitionally a new setup.
-    """
-    last_dir = state.get("last_signal_direction")
-    last_sh  = state.get("last_signal_swing_high")
-    last_sl  = state.get("last_signal_swing_low")
-
-    if not (last_dir and last_sh is not None and last_sl is not None):
-        return False
-    if last_dir != trade_signal:
-        return False
-
-    tol = STRUCTURE_MATCH_TOLERANCE_PIPS * PIP_SIZE
-    same_high = abs(swing_high - float(last_sh)) <= tol
-    same_low  = abs(swing_low  - float(last_sl)) <= tol
-    return same_high and same_low
-
-
-def is_active_session(now_utc, windows=SESSION_WINDOWS_UTC):
-    """Returns True if the current UTC hour falls inside a liquid session
-    window. Used only as a small scoring bonus, never as a hard gate —
-    GBPUSD trades outside London/NY too, it's just thinner."""
-    hour = now_utc.hour
-    for start, end in windows:
-        if start <= hour < end:
-            return True
-    return False
-
-
-def htf_bias_gate(macro_bias, proposed_direction):
-    """
-    Hard binary pre-check — NOT a scored factor. A setup whose proposed
-    direction disagrees with the 1H regime must never reach
-    compute_confidence_score, no matter how clean its liquidity, structure,
-    fib, or confirmation read. Bias answers "is there a regime to trade
-    with, and which way" — that's a yes/no gate, not a spectrum, so it
-    can't be partially satisfied or outscored by the other components.
-
-    Structurally, scan() only ever proposes a BULLISH setup when
-    macro_bias is BULLISH (same for BEARISH), so today this gate should
-    never actually trip. It's kept as an explicit, callable, testable
-    choke point anyway — if a future change (e.g. a counter-trend fade
-    variant) ever proposes a setup direction independent of macro_bias,
-    it is forced through here before it can touch the scoring system.
-
-    Returns (passed: bool, reason: str).
-    """
-    if macro_bias not in ("BULLISH", "BEARISH"):
-        return False, f"1H regime is {macro_bias} — no tradeable bias"
-    if proposed_direction not in ("BULLISH", "BEARISH"):
-        return False, f"invalid proposed direction {proposed_direction!r}"
-    if proposed_direction != macro_bias:
-        return False, f"setup direction {proposed_direction} runs against 1H bias {macro_bias}"
-    return True, ""
-
-
 def compute_fib_fraction(swing_high, swing_low, extremity, macro_bias,
                           near=FIB_ZONE_NEAR, far=FIB_ZONE_FAR):
-    """
-    How deep the entry actually reached into its own NEAR-FAR band, as a
-    0-1 fraction: 0 at the near edge (barely qualifies as "in zone"), 1 at
-    or beyond the far edge (deep discount/premium pocket). `extremity` is
-    the wick extreme actually used for the in-zone check (lowest_wick /
-    highest_wick) — reusing it means no new price read is needed here.
-    A near-edge entry offers a worse structural discount than a deep-pocket
-    one, which should score lower even though both technically "reached
-    the zone" under the current binary in_zone check.
-    """
+    """How deep an entry reached into its own NEAR-FAR band, 0-1."""
     structural_range = swing_high - swing_low
     if structural_range <= 0:
         return 0.0
@@ -1761,138 +1138,1524 @@ def compute_fib_fraction(swing_high, swing_low, extremity, macro_bias,
     return max(0.0, min(1.0, fraction))
 
 
-def compute_confidence_score(sweep_usable, in_zone_direct,
-                              structure_source, in_zone, atr_ok, regime_shifted,
-                              session_active, confirmation_passed, bias_stale=False,
-                              fib_fraction=None):
+def detect_liquidity_sweep(df_5m, df_15m, level, macro_bias,
+                            lookback_candles=SWEEP_LOOKBACK_CANDLES):
+    """Generic sweep detector against ANY level. Returns (swept, label)."""
+    recent = df_5m.iloc[-(lookback_candles + 2):-2]
+
+    if macro_bias == "BULLISH":
+        swept = recent[(recent["Low"] < level) & (recent["Close"] > level)]
+        if swept.empty:
+            return False, "no sweep"
+        if df_15m.iloc[-1]["Close"] <= level:
+            return False, "15M closed below level"
+        return True, "SWEEP CONFIRMED"
+    else:
+        swept = recent[(recent["High"] > level) & (recent["Close"] < level)]
+        if swept.empty:
+            return False, "no sweep"
+        if df_15m.iloc[-1]["Close"] >= level:
+            return False, "15M closed above level"
+        return True, "SWEEP CONFIRMED"
+
+
+def detect_order_block(df_15m, bos, atr_series,
+                        min_displacement_atr_mult=OB_MIN_DISPLACEMENT_ATR_MULT,
+                        opposing_lookback=OB_OPPOSING_LOOKBACK_CANDLES):
     """
-    V2 confidence score. Replaces the V1 binary Signal/No-Signal decision
-    with a weighted evaluation of the evidence actually present, so a
-    clean reversal (sweep+CHoCH+fib+confirmation) naturally outranks a
-    valid continuation missing one input (e.g. no sweep) instead of the
-    continuation being hard-rejected outright.
+    Locates the supply/demand order block behind a confirmed BOS
+    impulse: "the candle which led OR is immediately followed by an
+    aggressive move which led to a strong BOS displacement." See Stage 1
+    for the full method writeup. Returns a dict or None.
 
-    HTF bias DIRECTION is a pass/fail regime gate handled by
-    htf_bias_gate() before this is ever called, not a component that
-    contributes points here — this function scores QUALITY only.
-
-    bias_stale, however, is not a direction question — it's a QUALITY
-    question about the same 1H macro bias htf_bias_gate() already passed,
-    and it belongs here. structure_source == "BOS" as passed into this
-    function means "a fresh 15M leg aligned with the current macro bias",
-    which says nothing about whether the 1H bias itself is a live,
-    confirmed break or a day-old carryover nothing has re-tested. A 15M
-    BOS riding a stale 1H hold is real evidence, but it is not the same
-    thing as a 15M BOS riding a bias that a fresh 1H MSS just confirmed —
-    treating them identically is exactly how a FALLBACK_FRACTAL-quality
-    setup (unconfirmed higher timeframe, weaker lower timeframe read)
-    ended up scoring the same as the system's actual best setup (both
-    timeframes freshly confirmed). The two losses in the journal so far
-    were both non-BOS structure; this makes sure a stale bias can't
-    quietly borrow full BOS-tier structure credit either.
-
-    Returns (score: int, breakdown: dict[str, int], tier: str, emoji: str,
-    warnings: list[str]).
+    FIX (found during audit): candles are bounded by BOTH price overlap
+    AND recency (bos["origin_idx"] onward). Price overlap alone is not
+    enough — GBPUSD frequently revisits the same handful of pips over a
+    trading day, so an unrelated candle from hours earlier that happens
+    to share the current leg's price band was able to win the
+    displacement search (its local ATR context could easily make its
+    ratio look larger than the real, current displacement candle's).
+    `df_15m` passed in here MUST be the same window bos was computed
+    from, so bos["origin_idx"] indexes correctly into it — see
+    MarketFacts.order_block(), which passes the same lookback slice used
+    for bos_15m() for exactly this reason.
     """
-    breakdown = {}
+    if bos is None:
+        return None
 
-    # Liquidity — confirmed sweep beats a direct touch with no sweep,
-    # which still beats nothing (price never reached the zone at all).
-    if sweep_usable:
-        breakdown["liquidity"] = SCORE_WEIGHTS["liquidity"]
-    elif in_zone_direct:
-        breakdown["liquidity"] = SCORE_WEIGHTS["liquidity"] // 2
-    else:
-        breakdown["liquidity"] = 0
+    direction = bos["direction"]
+    start_price, end_price = bos["impulse_start"], bos["impulse_end"]
+    origin_idx = bos.get("origin_idx")
 
-    # Structure — a fresh BOS/CHoCH aligned with bias beats structure
-    # pulled from fallback/state-memory, which beats no structure.
-    # A stale macro bias caps this at fallback-tier credit regardless of
-    # the 15M read: the higher timeframe itself is unconfirmed, so the
-    # combined structure picture can't be graded as the system's best case
-    # (BOS + confirmed bias) even when the lower timeframe looks clean.
-    if structure_source == "BOS" and not bias_stale:
-        breakdown["structure"] = SCORE_WEIGHTS["structure"]
-    elif structure_source == "BOS" and bias_stale:
-        breakdown["structure"] = SCORE_WEIGHTS["structure"] // 2
-    elif structure_source in ("STATE_MEMORY", "FALLBACK_FRACTAL") or "memory stale" in str(structure_source):
-        breakdown["structure"] = SCORE_WEIGHTS["structure"] // 2
-    else:
-        breakdown["structure"] = 0
+    lo_bound, hi_bound = sorted([start_price, end_price])
+    price_mask = (df_15m["High"] >= lo_bound) & (df_15m["Low"] <= hi_bound)
 
-    # Fib — did price actually reach the discount/premium zone, and how
-    # deep. A near-edge touch still qualifies as "in zone" but is a weaker
-    # structural discount than a deep 50-61.8% pocket entry, so it's
-    # scored proportionally rather than as a flat pass/fail. fib_fraction
-    # of None (legacy callers) preserves the old flat behavior.
-    if not in_zone:
-        breakdown["fib"] = 0
-    elif fib_fraction is None:
-        breakdown["fib"] = SCORE_WEIGHTS["fib"]
+    if origin_idx is not None and 0 <= origin_idx < len(df_15m):
+        recency_mask = pd.Series(False, index=df_15m.index)
+        recency_mask.iloc[origin_idx:] = True
+        in_leg_mask = price_mask & recency_mask
     else:
-        frac = max(0.0, min(1.0, fib_fraction))
-        breakdown["fib"] = round(
-            SCORE_WEIGHTS["fib"] * (FIB_SCORE_MIN_FRACTION + (1 - FIB_SCORE_MIN_FRACTION) * frac)
+        # Defensive fallback only — every live call path now supplies
+        # origin_idx. Keeps old price-only behavior rather than
+        # silently returning None if it's ever missing.
+        in_leg_mask = price_mask
+
+    leg_idx = df_15m.index[in_leg_mask]
+    if len(leg_idx) < 2:
+        return None
+    leg_df = df_15m.loc[leg_idx]
+    leg_atr = atr_series.loc[leg_idx]
+
+    candle_range = leg_df["High"] - leg_df["Low"]
+    displacement_ratio = candle_range / leg_atr.replace(0, np.nan)
+    if displacement_ratio.isna().all():
+        return None
+
+    displacement_pos = displacement_ratio.values.argmax()
+    displacement_ratio_val = displacement_ratio.iloc[displacement_pos]
+    if pd.isna(displacement_ratio_val) or displacement_ratio_val < min_displacement_atr_mult:
+        return None
+
+    displacement_idx_label = leg_df.index[displacement_pos]
+    displacement_pos_global = df_15m.index.get_loc(displacement_idx_label)
+
+    ob_candle = None
+    ob_pos_global = None
+    window_start = max(0, displacement_pos_global - opposing_lookback)
+    for pos in range(displacement_pos_global - 1, window_start - 1, -1):
+        candle = df_15m.iloc[pos]
+        is_bear_candle = candle["Close"] < candle["Open"]
+        is_bull_candle = candle["Close"] > candle["Open"]
+        if direction == "BULLISH" and is_bear_candle:
+            ob_candle, ob_pos_global = candle, pos
+            break
+        if direction == "BEARISH" and is_bull_candle:
+            ob_candle, ob_pos_global = candle, pos
+            break
+
+    if ob_candle is None and displacement_pos_global > 0:
+        ob_pos_global = displacement_pos_global - 1
+        ob_candle = df_15m.iloc[ob_pos_global]
+
+    if ob_candle is None:
+        return None
+
+    return {
+        "high": float(ob_candle["High"]),
+        "low": float(ob_candle["Low"]),
+        "origin_idx": ob_pos_global,
+        "displacement_idx": displacement_pos_global,
+        "direction": direction,
+        "mitigated": False,   # TODO (Stage 3): real mitigation tracking
+    }
+
+
+def detect_fvg(df, direction, lookback=FVG_LOOKBACK_CANDLES):
+    """
+    Fair Value Gap — classic 3-candle imbalance: candle[i-2] and
+    candle[i] don't overlap at all, meaning candle[i-1] traded through a
+    range neither neighbor retraced into.
+
+      BULLISH gap: candle[i-2].High < candle[i].Low
+      BEARISH gap: candle[i-2].Low  > candle[i].High
+
+    Only returns gaps still OPEN as of the end of `df` — a gap counts as
+    closed once a later candle has fully traded back through it.
+    Returns a list of {high, low, idx} dicts, oldest first.
+    """
+    window = df.tail(lookback)
+    highs, lows = window["High"].values, window["Low"].values
+    n = len(window)
+    gaps = []
+
+    for i in range(2, n):
+        if direction == "BULLISH":
+            if highs[i - 2] < lows[i]:
+                gap_low, gap_high = highs[i - 2], lows[i]
+                closed = (lows[i + 1:] <= gap_low).any() if i + 1 < n else False
+                if not closed:
+                    gaps.append({"high": float(gap_high), "low": float(gap_low), "idx": i})
+        else:
+            if lows[i - 2] > highs[i]:
+                gap_low, gap_high = highs[i], lows[i - 2]
+                closed = (highs[i + 1:] >= gap_high).any() if i + 1 < n else False
+                if not closed:
+                    gaps.append({"high": float(gap_high), "low": float(gap_low), "idx": i})
+
+    return gaps
+
+
+def detect_significant_fvg(df_15m, direction, atr_series,
+                            lookback=FVG_LOOKBACK_CANDLES,
+                            min_size_atr_mult=FVG_MIN_SIZE_ATR_MULT,
+                            max_age_candles=FVG_MAX_AGE_CANDLES):
+    """
+    SHADOW-ONLY. "Not every FVG is important" — this is the quality gate
+    that keeps Experiment 3 (POI) from just logging every 3-candle
+    imbalance. A gap only counts if BOTH:
+      1. size >= min_size_atr_mult * ATR(15m as of the gap's middle
+         candle) — a gap smaller than that is noise, not an imbalance
+         institutions actually need to come back and fill.
+      2. it formed within the last `max_age_candles` candles — an old,
+         technically-still-open gap that price has drifted away from is
+         a stale reference, not a live one.
+    Returns the same list shape as detect_fvg(), each dict additionally
+    carrying "size_atr_ratio" and "age_candles" for later logging/analysis.
+    """
+    window = df_15m.tail(lookback)
+    atr_window = atr_series.reindex(window.index)
+    n = len(window)
+    raw_gaps = detect_fvg(df_15m, direction, lookback=lookback)
+
+    quality_gaps = []
+    for gap in raw_gaps:
+        age = (n - 1) - gap["idx"]
+        if age > max_age_candles:
+            continue
+        gap_atr = atr_window.iloc[gap["idx"]]
+        if pd.isna(gap_atr) or gap_atr == 0:
+            continue
+        size = gap["high"] - gap["low"]
+        size_atr_ratio = size / gap_atr
+        if size_atr_ratio < min_size_atr_mult:
+            continue
+        enriched = dict(gap)
+        enriched["size_atr_ratio"] = float(size_atr_ratio)
+        enriched["age_candles"] = int(age)
+        quality_gaps.append(enriched)
+
+    return quality_gaps
+
+
+def is_fib_zone_stale(c_spike, swing_high, swing_low, fib_zone, current_price):
+    """Post-spike staleness check for a Tier 2 fib zone."""
+    structural_range = swing_high - swing_low
+    spike_range = c_spike["High"] - c_spike["Low"]
+
+    if spike_range > structural_range:
+        return True, (
+            f"spike range {spike_range/PIP_SIZE:.1f}p > structural range "
+            f"{structural_range/PIP_SIZE:.1f}p"
         )
+    if c_spike["Close"] > swing_high:
+        return True, f"spike close {c_spike['Close']:.5f} broke above SwH {swing_high:.5f}"
+    if c_spike["Close"] < swing_low:
+        return True, f"spike close {c_spike['Close']:.5f} broke below SwL {swing_low:.5f}"
 
-    # ATR — healthy vol beats a regime-shifted/thin reading (still logged,
-    # already passed the hard ATR_MIN_PIPS floor upstream).
-    if atr_ok and not regime_shifted:
-        breakdown["atr"] = SCORE_WEIGHTS["atr"]
-    elif atr_ok:
-        breakdown["atr"] = SCORE_WEIGHTS["atr"] // 2
-    else:
-        breakdown["atr"] = 0
+    zone_drift = abs(current_price - fib_zone) / structural_range
+    if zone_drift > 0.5:
+        return True, (
+            f"price {abs(current_price - fib_zone)/PIP_SIZE:.1f}p from zone "
+            f"(>{structural_range * 0.5 / PIP_SIZE:.1f}p threshold)"
+        )
+    return False, "zone still valid"
 
-    # Session — bonus only, never a gate.
-    breakdown["session"] = SCORE_WEIGHTS["session"] if session_active else 0
 
-    # Confirmation candle — engulf/rejection present.
-    breakdown["confirmation"] = SCORE_WEIGHTS["confirmation"] if confirmation_passed else 0
+# =========================================================================
+# MARKET FACTS LAYER — pure observation. Knows BOS, CHoCH, Order Blocks,
+# FVG, liquidity sweeps, swings, fib. Knows NOTHING about trading. Tiers
+# ask it questions; it never says "this is a buy." Computed once per
+# scan and handed to every tier — if a tier needs new information about
+# the market that isn't here, add a fact HERE, never reach into raw OHLC
+# from inside a tier.
+# =========================================================================
+class MarketFacts:
+    def __init__(self, df_5m, df_15m, df_1h, macro_bias, swing_high, swing_low, now_utc):
+        self.df_5m = df_5m
+        self.df_15m = df_15m
+        self.df_1h = df_1h
+        self.macro_bias = macro_bias
+        self.swing_high = swing_high
+        self.swing_low = swing_low
+        self.now_utc = now_utc
 
-    score = sum(breakdown.values())
+        self._atr_5m_series = atr(df_5m, period=14)
+        self._atr_15m_series = atr(df_15m, period=14)
 
-    # ── Critical-zero warning ──────────────────────────────────────────
-    # A high total built by compensating for one dead-zero factor worth
-    # 20+ points is a different (riskier) setup than one that scored
-    # broadly across every component, even when the two totals match.
-    # This flags that case; it does not change the score or the tier.
-    warnings = []
-    for component, weight in SCORE_WEIGHTS.items():
-        if weight >= 20 and breakdown.get(component, 0) == 0:
-            warnings.append(
-                f"WARNING: {component} scored 0 (worth {weight} pts) — "
-                f"total may be masking a critical gap"
+        # lazy caches — computed at most once per instance regardless of
+        # how many tiers ask the same question this scan
+        self._bos_15m_cache = "UNSET"
+        self._ob_cache = "UNSET"
+
+    # ---- raw candle access (still "facts," just at candle grain) ------
+    def last_candle_5m(self):
+        return self.df_5m.iloc[-1]
+
+    def prev_candle_5m(self):
+        return self.df_5m.iloc[-2]
+
+    def current_atr_5m(self):
+        return self._atr_5m_series.iloc[-1]
+
+    def current_atr_5m_pips(self):
+        return self.current_atr_5m() / PIP_SIZE
+
+    # ---- structure facts ------------------------------------------------
+    def bos_15m(self):
+        """Fresh 15M BOS/CHoCH leg, or None."""
+        if self._bos_15m_cache == "UNSET":
+            lookback = self.df_15m.tail(SWING_LOOKBACK_15)
+            self._bos_15m_cache = detect_bos_impulse(
+                lookback, wing=FRACTAL_WING,
+                break_buffer_atr_mult=BOS_15M_BREAK_BUFFER_ATR_MULT,
             )
+        return self._bos_15m_cache
 
-    if bias_stale:
-        warnings.append(
-            "WARNING: macro bias is STALE (no live 1H break confirms it) — "
-            "this setup is riding a carried-over bias, not a freshly confirmed one"
-        )
+    def has_fresh_bos_aligned_with_bias(self):
+        b = self.bos_15m()
+        return b is not None and b["direction"] == self.macro_bias
 
-    if score >= SCORE_TIER_A_PLUS:
-        tier, emoji = "A+ SETUP", "🟢"
-    elif score >= SCORE_TIER_STRONG:
-        tier, emoji = "STRONG SETUP", "🟢"
-    elif score >= SCORE_TIER_ACCEPTABLE:
-        tier, emoji = "ACCEPTABLE SETUP", "🟡"
+    def has_choch_15m(self):
+        """Whether the current 15M leg is a direction FLIP versus the
+        immediately preceding leg (a CHoCH), not a same-direction
+        follow-through BOS. break_count==1 is set exactly when a leg
+        flips (see detect_bos_impulse)."""
+        b = self.bos_15m()
+        return b is not None and b.get("break_count") == 1
+
+    def has_order_block(self):
+        return self.order_block() is not None
+
+    def order_block(self):
+        if self._ob_cache == "UNSET":
+            bos = self.bos_15m()
+            if bos is None:
+                self._ob_cache = None
+            else:
+                # Must be the SAME window bos_15m() computed against, so
+                # bos["origin_idx"] indexes correctly (see the recency-
+                # bounding fix in detect_order_block's docstring).
+                lookback = self.df_15m.tail(SWING_LOOKBACK_15)
+                atr_lookback = self._atr_15m_series.loc[lookback.index]
+                self._ob_cache = detect_order_block(lookback, bos, atr_lookback)
+        return self._ob_cache
+
+    def price_in_order_block(self, tolerance_pips=ZONE_TOLERANCE_PIPS):
+        ob = self.order_block()
+        if ob is None:
+            return False
+        tol = tolerance_pips * PIP_SIZE
+        c = self.last_candle_5m()
+        return (c["Low"] <= ob["high"] + tol) and (c["High"] >= ob["low"] - tol)
+
+    # NOTE: FVG is intentionally NOT exposed here. The live bot only ever
+    # trades a high-probability Order Block — a demand zone while bias is
+    # BULLISH, a supply zone while bias is BEARISH (order_block() above is
+    # already bias-locked, since it's derived from the BOS leg that IS the
+    # bias). FVG lives exclusively in the Shadow Pipeline's POI experiment,
+    # gated by a size/freshness quality filter — see detect_significant_fvg().
+
+    # ---- fib / zone facts (parametrized — a level is a fact input, not
+    # a hardcoded field, since different tiers ask about different levels) -
+    def fib_zone(self, near=FIB_ZONE_NEAR, far=FIB_ZONE_FAR):
+        ratio = adaptive_fib_ratio(self.df_5m, self.current_atr_5m(), near=near, far=far)
+        if self.macro_bias == "BULLISH":
+            return self.swing_high - ratio * (self.swing_high - self.swing_low)
+        else:
+            return self.swing_low + ratio * (self.swing_high - self.swing_low)
+
+    def fib_fraction(self, extremity, near=FIB_ZONE_NEAR, far=FIB_ZONE_FAR):
+        return compute_fib_fraction(self.swing_high, self.swing_low, extremity,
+                                     self.macro_bias, near, far)
+
+    def price_in_zone(self, level, tolerance_pips=ZONE_TOLERANCE_PIPS):
+        tol = tolerance_pips * PIP_SIZE
+        c, c_prev = self.last_candle_5m(), self.prev_candle_5m()
+        if self.macro_bias == "BULLISH":
+            return min(c["Low"], c_prev["Low"]) <= level + tol
+        else:
+            return max(c["High"], c_prev["High"]) >= level - tol
+
+    def has_liquidity_sweep(self, level):
+        swept, _ = detect_liquidity_sweep(self.df_5m, self.df_15m, level, self.macro_bias)
+        return swept
+
+    def liquidity_sweep_label(self, level):
+        _, label = detect_liquidity_sweep(self.df_5m, self.df_15m, level, self.macro_bias)
+        return label
+
+    # ---- candle-quality facts -------------------------------------------
+    def rejection_candle(self, direction=None):
+        """Engulf/rejection on the last closed 5M bar: prior candle
+        opposite color, last candle correct color, engulfs prior body
+        (within tolerance), real body vs ATR, closes in the correct half
+        of its own range."""
+        direction = direction or self.macro_bias
+        c_last, c_prev = self.last_candle_5m(), self.prev_candle_5m()
+        atr_now = self.current_atr_5m()
+        body_last = abs(c_last["Close"] - c_last["Open"])
+        atr_threshold = ATR_ENGULF_MIN * atr_now
+        engulf_tol = ENGULF_TOLERANCE_PIPS * PIP_SIZE
+
+        if direction == "BULLISH":
+            bear_prev = c_prev["Close"] < c_prev["Open"]
+            bull_last = c_last["Close"] > c_last["Open"]
+            engulfs = (c_last["Close"] >= c_prev["Open"] - engulf_tol and
+                       c_last["Open"]  <= c_prev["Close"] + engulf_tol)
+            loc_ok = close_location(c_last) >= ENGULF_CLOSE_LOCATION_MIN
+            return bool(bear_prev and bull_last and engulfs and body_last > atr_threshold and loc_ok)
+        else:
+            bull_prev = c_prev["Close"] > c_prev["Open"]
+            bear_last = c_last["Close"] < c_last["Open"]
+            engulfs = (c_last["Close"] <= c_prev["Open"] + engulf_tol and
+                       c_last["Open"]  >= c_prev["Close"] - engulf_tol)
+            loc_ok = close_location(c_last) <= (1 - ENGULF_CLOSE_LOCATION_MIN)
+            return bool(bull_prev and bear_last and engulfs and body_last > atr_threshold and loc_ok)
+
+
+# =========================================================================
+# RULE OF LAW — arbitration only. Never judges setup quality; decides
+# WHICH tier gets to evaluate the current leg, applies ownership
+# UPGRADES from higher-priority tiers, and makes sure exactly one tier
+# can hold a leg at a time.
+# =========================================================================
+def compute_leg_id(macro_bias, swing_high, swing_low):
+    return "{}|{:.5f}|{:.5f}".format(macro_bias, swing_high, swing_low)
+
+
+def _same_leg(leg_id_a, leg_id_b, tolerance_pips=LEG_MATCH_TOLERANCE_PIPS):
+    if leg_id_a == leg_id_b:
+        return True
+    try:
+        dir_a, hi_a, lo_a = leg_id_a.split("|")
+        dir_b, hi_b, lo_b = leg_id_b.split("|")
+    except (AttributeError, ValueError):
+        return False
+    if dir_a != dir_b:
+        return False
+    tol = tolerance_pips * PIP_SIZE
+    return abs(float(hi_a) - float(hi_b)) <= tol and abs(float(lo_a) - float(lo_b)) <= tol
+
+
+def get_leg_owner(state):
+    return state.get("leg_owner")
+
+
+def apply_leg_ownership(state, decision):
+    """
+    The ONLY function that mutates state["leg_owner"]. Every place that
+    used to call claim_leg()/release_leg() directly now builds a
+    decision dict and passes it here — one auditable choke point for
+    every ownership change, and every change is logged.
+
+    decision: {"action": "claim", "tier": ..., "leg_id": ..., "status": ...,
+               "upgraded": bool}
+           or {"action": "release", "reason": ...}
+    """
+    if decision["action"] == "release":
+        owner = state.get("leg_owner")
+        if owner:
+            print(f"  [RULE OF LAW] Released {owner.get('tier')} ownership of leg "
+                  f"{owner.get('leg_id')} — {decision.get('reason','')}")
+        state.pop("leg_owner", None)
+    elif decision["action"] == "claim":
+        state["leg_owner"] = {
+            "leg_id": decision["leg_id"],
+            "tier": decision["tier"],
+            "status": decision["status"],
+            "upgraded": decision.get("upgraded", False),
+            "claimed_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+
+def release_leg(state, reason=""):
+    """Thin convenience wrapper around apply_leg_ownership for call
+    sites outside the Rule of Law module itself (e.g. manage_active_trade
+    releasing ownership when a trade closes)."""
+    apply_leg_ownership(state, {"action": "release", "reason": reason})
+
+
+def bias_to_side(macro_bias):
+    """BULLISH/BEARISH (structure vocabulary) -> BUY/SELL (trade vocabulary)."""
+    return "BUY" if macro_bias == "BULLISH" else "SELL"
+
+
+def tier_rating_from_score(score):
+    if score >= 85:
+        return "A"
+    if score >= 65:
+        return "B"
+    return "C"
+
+
+class TierResult:
+    """
+    Uniform return shape every tier's evaluate() produces.
+
+    activated:   did this tier's activation trigger fire at all this
+                 scan? Independent of `fired` — a tier can be activated
+                 and sit in its own WATCHING state for several scans.
+    fired:       ready to hand off to Trade Management this scan
+    direction / entry / sl_raw: only meaningful if fired. sl_raw is an
+                 UN-buffered structural reference (Trade Management
+                 applies the shared ATR/SL_MIN buffer + risk gate).
+    tier_label:  e.g. "TIER_1_POI"
+    score / tier_rating / breakdown: THIS TIER'S OWN scoring — each tier
+                 has its own weights/formula, not a shared 0-100 table.
+    reason:      human-readable, always populated.
+    state_updates: this tier's OWN namespaced state bookkeeping (e.g. a
+                 break-retest timing window) as a plain dict, applied by
+                 the caller via apply_state_updates() — tiers do not
+                 mutate `state` directly, same discipline as Macro Bias
+                 and Market Context.
+    """
+    def __init__(self, activated=False, fired=False, direction=None,
+                 entry=None, sl_raw=None, tier_label=None,
+                 score=None, tier_rating=None, breakdown=None,
+                 reason="", state_updates=None, conviction=None):
+        self.activated = activated
+        self.fired = fired
+        self.direction = direction
+        self.entry = entry
+        self.sl_raw = sl_raw
+        self.tier_label = tier_label
+        self.score = score
+        self.tier_rating = tier_rating
+        self.breakdown = breakdown or {}
+        self.reason = reason
+        self.state_updates = state_updates or {}
+        # conviction: output of classify_conviction() — decision/minimum/
+        # band_label/size_mult/target_r/partial_r/breakeven_r/reason.
+        # Only populated once a tier's mandatory activation conditions
+        # AND its structural fire-trigger (rejection candle / CHoCH) have
+        # already passed — conviction never gates activation, only what
+        # an activated setup is allowed to do next.
+        self.conviction = conviction
+
+
+# =========================================================================
+# DIAGNOSTIC REPORT — ported from V6. V6's version had keys matching its
+# own single-pass scoring model (macro_bias/structure/liquidity/
+# confirmation/htf_gate/confidence_score/risk_gate/volatility_filter/
+# duplicate_check). V3 has no equivalent single scoring pass — it has a
+# tier-arbitration model instead — so the keys below are remapped to what
+# V3 ACTUALLY evaluates, in the order scan() actually evaluates them:
+#
+#   macro_bias      — CONSOLIDATION vs directional, and stale/confirmed
+#   market_context  — ctx.tradeable (ATR floor, regime shift, session)
+#   tier_evaluation — did any tier ACTIVATE on the current leg
+#   leg_ownership   — did the activated tier actually FIRE (own leg,
+#                     not just WATCHING) this scan
+#   risk_gate       — dual ATR/flat-pip risk ceiling
+#
+# Only gates that were actually reached are populated (None = never
+# ran, an earlier gate already stopped the scan) — same "honest record"
+# principle as V6's version.
+# =========================================================================
+def new_diagnostic():
+    keys = ["macro_bias", "market_context", "tier_evaluation",
+            "leg_ownership", "risk_gate"]
+    return {k: None for k in keys}
+
+
+DIAGNOSTIC_LABELS = {
+    "macro_bias":      "Macro bias (1H)",
+    "market_context":  "Market context (ATR/session/regime)",
+    "tier_evaluation": "Tier evaluation",
+    "leg_ownership":   "Leg ownership / fire",
+    "risk_gate":       "Risk gate",
+}
+
+
+def diag_set(diag, key, passed, reason=None):
+    """Record one gate's outcome. No-op if the key isn't tracked or diag
+    is None (DIAGNOSTIC_MODE off)."""
+    if diag is not None and key in diag:
+        diag[key] = (bool(passed), reason)
+    return diag
+
+
+def build_diagnostic_report(diag, header="No signal this scan"):
+    """
+    Renders the diag dict into a plain-language record, e.g.:
+
+        No signal this scan
+
+        Because:
+        ✓ Macro bias (1H)
+        ✓ Market context (ATR/session/regime)
+        ✗ Tier evaluation (no tier activated on this leg)
+
+    Console-only (matches V6 — this is a per-scan developer record, not
+    something worth pushing to Telegram every time nothing fires).
+    """
+    lines = [header, "", "Because:"]
+    for key in diag:
+        entry = diag[key]
+        if entry is None:
+            continue
+        passed, reason = entry
+        mark  = "✓" if passed else "✗"
+        label = DIAGNOSTIC_LABELS.get(key, key)
+        suffix = f" ({reason})" if (not passed and reason) else ""
+        lines.append(f"{mark} {label}{suffix}")
+    if len(lines) == 3:
+        lines.append("_(no gates recorded)_")
+    return "\n".join(lines)
+
+
+# =========================================================================
+# SIGNAL TIMELINE — ported from V6's format_timeline_diagnostics. Tracks,
+# per LEG (reset whenever leg_id changes — see evaluate_rule_of_law),
+# when each confirmation stage was first observed. Populated
+# opportunistically from MarketFacts each scan a leg is alive; read back
+# via /last once a signal fires.
+# =========================================================================
+def compute_signal_timeline_reset(state, leg_id):
+    """PURE. Same trigger as leg-ownership release: a new 1H leg means a
+    new hypothetical setup, so prior stage timestamps stop meaning
+    anything. Returns an updates dict (possibly empty) for the caller to
+    apply via apply_state_updates — never mutates `state` itself."""
+    if state.get("signal_timeline_leg_id") != leg_id:
+        return {"signal_timeline_leg_id": leg_id, "signal_timeline": {}}
+    return {}
+
+
+def compute_signal_timeline_updates(facts, timeline, now_utc):
+    """
+    PURE. `timeline` is read-only (the CURRENT state["signal_timeline"]
+    dict, already reset for this leg if needed). Returns only the NEW
+    stage keys to merge in — a stage already stamped is never
+    overwritten, so re-observing the same True fact next scan is a
+    no-op. Caller merges and applies via apply_state_updates(), same
+    discipline as every other compute_*() in this file.
+    """
+    updates = {}
+
+    def _stage(stage_key, label=None):
+        at_key = f"{stage_key}_at"
+        if timeline.get(at_key) is None and at_key not in updates:
+            updates[at_key] = now_utc.isoformat()
+            if label is not None:
+                updates[f"{stage_key}_label"] = label
+
+    if facts.has_choch_15m() or facts.has_fresh_bos_aligned_with_bias():
+        label = "CHoCH" if facts.has_choch_15m() else "BOS"
+        _stage("choch_bos", label)
+
+    zone = facts.fib_zone()
+    if facts.price_in_zone(zone):
+        _stage("fib_entered")
+        if facts.has_liquidity_sweep(zone):
+            _stage("sweep")
+
+    if facts.rejection_candle():
+        _stage("engulf")
+
+    return updates
+
+
+def format_timeline_diagnostics(timeline, now_utc):
+    """Ported near-verbatim from V6 — compact per-signal stage timing."""
+    def _parse(iso):
+        try:
+            return datetime.fromisoformat(iso) if iso else None
+        except Exception:
+            return None
+
+    stages = [
+        ("CHoCH/BOS",   _parse(timeline.get("choch_bos_at")),   timeline.get("choch_bos_label") or "N/A"),
+        ("Fib entered", _parse(timeline.get("fib_entered_at")), None),
+        ("Sweep",       _parse(timeline.get("sweep_at")),       None),
+        ("Engulf",      _parse(timeline.get("engulf_at")),      None),
+        ("Signal sent", now_utc,                                None),
+    ]
+    anchor = next((t for _, t, _ in stages if t is not None), None)
+
+    lines = []
+    for label, ts, tag in stages:
+        if ts is None:
+            lines.append(f"     {label}: —")
+            continue
+        lag = f" (+{int((ts - anchor).total_seconds() // 60)}m)" if anchor and ts != anchor else ""
+        tag_str = f" [{tag}]" if tag and tag != "N/A" else ""
+        lines.append(f"     {label}: {ts.strftime('%H:%M UTC')}{lag}{tag_str}")
+
+    return "🕒 *Timeline:*\n" + "\n".join(lines)
+
+
+# ---- TIERS (Stage 3 — live) -------------------------------------------------
+# Signature is (facts, ctx, state, now_utc) — a tier receives the
+# MarketFacts object and MarketContext, and read-only `state` for its own
+# historical bookkeeping. It must return a TierResult; any state it wants
+# persisted goes in TierResult.state_updates, never a direct mutation.
+def _tier1_poi_evaluate(facts, ctx, state, now_utc):
+    """
+    TIER 1 — Premium POI Reaction.
+
+    The live bot's ONLY point of interest is the Order Block, because
+    detect_order_block() is already bias-locked: it's carved out of the
+    BOS impulse that defines the current bias, so in a BULLISH leg it can
+    only ever be a demand zone, and in a BEARISH leg only ever a supply
+    zone. There is no FVG check here on purpose — see the note on
+    MarketFacts and FVG_MIN_SIZE_ATR_MULT in CONFIG. If you personally
+    want FVG reactions, that lives in the Shadow Pipeline's Experiment 3
+    (POI) only, gated by a quality filter.
+
+    Mandatory:
+      - facts.has_fresh_bos_aligned_with_bias()  (the leg backing the OB
+        is still the live, bias-aligned leg — not a stale/superseded one)
+      - facts.has_order_block()            (the zone itself)
+      - facts.price_in_order_block()        (price is actually reacting AT it)
+      - facts.rejection_candle()            (real rejection, not just a touch)
+
+    Optional (score only, never gates):
+      - facts.has_choch_15m()  (a flip-driven OB > a mere continuation OB)
+    """
+    label = "TIER_1_POI"
+
+    if not facts.has_fresh_bos_aligned_with_bias():
+        return TierResult(tier_label=label, reason="no fresh 15M BOS aligned with 1H bias")
+
+    if not facts.has_order_block():
+        return TierResult(tier_label=label, reason="no order block behind the current BOS impulse")
+
+    if not facts.price_in_order_block():
+        return TierResult(tier_label=label, reason="price not currently inside the order block zone")
+
+    # FIX (found during audit): activated and fired used to be the same
+    # condition, meaning this tier went straight from unclaimed to FIRED
+    # in one step — no tier could ever be claimed as WATCHING, which
+    # silently made the Rule of Law ownership-upgrade mechanism
+    # unreachable (nothing to upgrade FROM). Splitting them here: the
+    # structural conditions above (aligned BOS + order block + price
+    # there) are enough to CLAIM/WATCH the leg; rejection_candle() is
+    # the separate trigger that promotes WATCHING to FIRED. This also
+    # gives a higher-priority tier a real multi-scan window to steal the
+    # leg before this one actually fires.
+    if not facts.rejection_candle():
+        return TierResult(activated=True, fired=False, tier_label=label,
+                           reason="price inside order block, watching for rejection candle")
+
+    ob = facts.order_block()
+    direction = facts.macro_bias
+    side = bias_to_side(direction)
+    c_last = facts.last_candle_5m()
+
+    choch = facts.has_choch_15m()
+    loc = close_location(c_last)
+    rejection_strength = loc if side == "BUY" else (1 - loc)
+
+    score = 55
+    breakdown = {
+        "order_block": True, "rejection_candle": True,
+        "fresh_bos_aligned": True, "choch": choch,
+    }
+    if choch:
+        score += 25
+        breakdown["choch_bonus"] = 25
+    if rejection_strength >= 0.7:
+        score += 15
+        breakdown["strong_rejection_bonus"] = 15
+    elif rejection_strength >= 0.55:
+        score += 8
+        breakdown["rejection_bonus"] = 8
+
+    entry = float(c_last["Close"])
+    # sl_raw: UN-buffered structural reference — the far edge of the zone
+    # itself. Trade Management applies the shared ATR/SL_MIN buffer.
+    sl_raw = ob["low"] if side == "BUY" else ob["high"]
+
+    # Phase 3 — Execution. Structural conditions + rejection candle are
+    # enough to be an ACTIVATED, confirmed Tier 1 setup — they are not
+    # enough to FIRE on their own anymore. Conviction decides that.
+    conviction = classify_conviction(label, score)
+    fire = conviction["decision"] == "FIRE"
+    base_reason = "Order block reaction ({} zone){}, rejection strength {:.2f}".format(
+        "demand" if side == "BUY" else "supply",
+        " + CHoCH" if choch else "", rejection_strength)
+
+    return TierResult(
+        activated=True, fired=fire, direction=side,
+        entry=entry, sl_raw=sl_raw, tier_label=label,
+        score=score, tier_rating=tier_rating_from_score(score),
+        breakdown=breakdown, conviction=conviction,
+        reason=base_reason + " — " + conviction["reason"],
+    )
+
+
+def _tier2_fib_evaluate(facts, ctx, state, now_utc):
+    """
+    TIER 2 — HTF Fib Pullback.
+
+    Mandatory:
+      - facts.price_in_zone(facts.fib_zone())   (price has retraced into
+        the adaptive fib pocket)
+      - facts.rejection_candle()                 (a real reaction there,
+        not just a touch-and-continue)
+
+    Optional (score only, never gates):
+      - facts.has_fresh_bos_aligned_with_bias()  (BOS "optional toggle" —
+        confirms momentum has resumed, but a pure pullback entry doesn't
+        need it)
+      - facts.has_liquidity_sweep(zone)          (a swept pocket is a
+        cleaner reaction than an untouched one)
+
+    Supply/demand (order block) is NOT required — that's Tier 1's job.
+    """
+    label = "TIER_2_FIB"
+    direction = facts.macro_bias
+    side = bias_to_side(direction)
+    zone = facts.fib_zone()
+
+    if not facts.price_in_zone(zone):
+        return TierResult(tier_label=label, reason="price not in the HTF fib pocket")
+
+    # Same fix as Tier 1 — see its comment. Price being in the pocket is
+    # enough to WATCH; rejection_candle() is the separate FIRE trigger.
+    # This is also a closer match to your own framework's "1H locates,
+    # 15M confirms, 5M executes" split: arriving at the pocket is the
+    # 1H/15M "location" step, the rejection candle is the "confirms" step.
+    if not facts.rejection_candle():
+        return TierResult(activated=True, fired=False, tier_label=label,
+                           reason="price in HTF fib pocket, watching for rejection candle")
+
+    bos_aligned = facts.has_fresh_bos_aligned_with_bias()
+    swept = facts.has_liquidity_sweep(zone)
+
+    score = 50
+    breakdown = {"in_fib_zone": True, "rejection_candle": True,
+                 "bos_aligned": bos_aligned, "liquidity_sweep": swept}
+    if bos_aligned:
+        score += 15
+        breakdown["bos_bonus"] = 15
+    if swept:
+        score += 20
+        breakdown["sweep_bonus"] = 20
+    c_last = facts.last_candle_5m()
+    reaction_extremity = c_last["Low"] if side == "BUY" else c_last["High"]
+    fraction = facts.fib_fraction(reaction_extremity)
+    if fraction >= 0.6:
+        score += 10
+        breakdown["deep_pullback_bonus"] = 10
+
+    entry = float(c_last["Close"])
+    # sl_raw: structural reference is the FAR edge of the fib band (a
+    # fixed FIB_ZONE_FAR retrace, not the adaptive zone itself) — if price
+    # retraces beyond that, the pullback thesis is simply wrong.
+    if side == "BUY":
+        sl_raw = facts.swing_high - FIB_ZONE_FAR * (facts.swing_high - facts.swing_low)
     else:
-        tier, emoji = "IGNORE", "🔴"
+        sl_raw = facts.swing_low + FIB_ZONE_FAR * (facts.swing_high - facts.swing_low)
 
-    return score, breakdown, tier, emoji, warnings
+    conviction = classify_conviction(label, score)
+    fire = conviction["decision"] == "FIRE"
+    base_reason = "HTF fib pullback reaction{}{}".format(
+        " + aligned BOS" if bos_aligned else "",
+        " + swept" if swept else "")
+
+    return TierResult(
+        activated=True, fired=fire, direction=side,
+        entry=entry, sl_raw=sl_raw, tier_label=label,
+        score=score, tier_rating=tier_rating_from_score(score),
+        breakdown=breakdown, conviction=conviction,
+        reason=base_reason + " — " + conviction["reason"],
+    )
 
 
-def _apply_risk_gate_and_finalize(prospective_entry, prospective_sl, direction,
-                                    current_atr, stats, score, score_emoji, tier_label=""):
+def _tier3_structure_evaluate(facts, ctx, state, now_utc):
     """
-    Shared final stage for both Tier 1 (break-retest) and Tier 2 (fib
-    pocket) entries: the prospective R:R risk-ceiling check, then trade
-    field assembly. Pulled out so both tiers apply IDENTICAL risk
-    discipline — a Tier 1 entry is earlier, not looser.
-    Returns a dict: {"fired": bool, "pattern_check": str, and if fired,
-    "entry"/"sl"/"tp"/"risk_pips"/"reward_pips"}.
+    TIER 3 — Structure Confirmation. V2's old "Tier 1 break-retest" logic,
+    reframed under its own gate set (lowest priority — only gets a look
+    when nothing at Tier 1/2 has already claimed the leg).
+
+    Mandatory:
+      - facts.has_choch_15m()   (a genuine flip, not a same-direction
+        continuation BOS — this tier trades the FIRST confirmation of a
+        new leg, not the fifth)
+      - facts.bos_15m() aligned with HTF bias (implied by has_choch_15m()
+        returning True only for the live leg, but checked explicitly for
+        clarity/robustness)
+
+    Strongly preferred (heavy score weight, not a hard gate — matches the
+    "strongly preferred" language in the spec):
+      - facts.has_liquidity_sweep(level) against the leg's own origin
+
+    Optional (light score bonus):
+      - price already inside the fib pocket (fib is optional here, Tier 2
+        owns fib primarily)
     """
+    label = "TIER_3_STRUCTURE"
+
+    # NOTE: unlike Tier 1/2, this tier's STRUCTURAL trigger (a CHoCH) is
+    # atomic, not a zone to sit and wait in — by the time
+    # facts.has_choch_15m() is true, the confirming break has already
+    # happened, so there's no structural WATCHING state to pass through.
+    # activated is therefore always True here once the mandatory gates
+    # pass. `fired`, however, is now gated by conviction (Phase 3) same
+    # as Tier 1/2 — a low-conviction Tier 3 setup is REJECTED, not
+    # fired, even though the CHoCH event itself already happened. This
+    # means Tier 3 CAN now sit as an activated-but-not-fired (REJECTED)
+    # owner — it just never sits as WATCHING, since there's nothing
+    # structural left to wait for; only conviction stands between it
+    # and firing.
+
+    if not facts.has_choch_15m():
+        return TierResult(tier_label=label, reason="current 15M leg is a continuation BOS, not a CHoCH")
+
+    bos = facts.bos_15m()
+    if bos is None or bos["direction"] != facts.macro_bias:
+        return TierResult(tier_label=label, reason="no 15M structure aligned with 1H bias")
+
+    direction = facts.macro_bias
+    side = bias_to_side(direction)
+    swept = facts.has_liquidity_sweep(bos["impulse_start"])
+
+    score = 45
+    breakdown = {"choch": True, "bos_aligned": True, "liquidity_sweep": swept}
+    if swept:
+        score += 30
+        breakdown["sweep_bonus"] = 30
+    else:
+        score -= 10
+        breakdown["no_sweep_penalty"] = -10
+
+    if facts.price_in_zone(facts.fib_zone()):
+        score += 10
+        breakdown["fib_confluence_bonus"] = 10
+
+    entry = float(facts.last_candle_5m()["Close"])
+    # sl_raw: the leg's own origin fractal — if price trades back through
+    # the point the CHoCH originated from, the new structure is invalid.
+    sl_raw = bos["impulse_start"]
+
+    conviction = classify_conviction(label, score)
+    fire = conviction["decision"] == "FIRE"
+    base_reason = "CHoCH/BOS structure confirmation{}".format(" + swept origin" if swept else " (unswept)")
+
+    return TierResult(
+        activated=True, fired=fire, direction=side,
+        entry=entry, sl_raw=sl_raw, tier_label=label,
+        score=score, tier_rating=tier_rating_from_score(score),
+        breakdown=breakdown, conviction=conviction,
+        reason=base_reason + " — " + conviction["reason"],
+    )
+
+
+TIER_REGISTRY = {
+    "TIER_1_POI":       _tier1_poi_evaluate,
+    "TIER_2_FIB":        _tier2_fib_evaluate,
+    "TIER_3_STRUCTURE":  _tier3_structure_evaluate,
+}
+
+
+def evaluate_rule_of_law(facts, ctx, state, stats, now_utc):
+    """
+    The arbitration layer. Returns the winning tier's TierResult (or an
+    empty TierResult if nothing activated). Every state mutation this
+    function needs goes through apply_leg_ownership() / apply_state_updates()
+    — nothing here pokes state["leg_owner"] directly.
+
+    Ownership rules:
+      1. Compute leg_id from the current confirmed 1H swing. If the
+         existing owner's leg_id no longer matches (a genuinely new 1H
+         leg formed), release immediately regardless of which tier held it.
+      2. If a tier still owns this leg:
+           - status == "FIRED": untouchable. Only the owner is evaluated.
+             (In practice manage_active_trade() already freezes the whole
+             scan before this runs once a trade is open — this branch
+             mainly covers the brief window between an entry firing and
+             the trade being recorded.)
+           - status == "WATCHING" and not yet upgraded: every
+             STRICTLY-HIGHER-priority tier is evaluated first. The first
+             one that activates STEALS ownership (an "upgrade") and is
+             returned immediately — lower/equal-priority tiers, including
+             the current owner, are not re-checked this scan.
+           - No higher tier activated (or the leg was already upgraded
+             once): fall through to re-evaluating the current owner only.
+      3. Leg is unclaimed: walk TIER_PRIORITY top to bottom, first
+         activation claims it. Lower-priority tiers are never evaluated
+         once a higher one has already activated.
+      4. Nothing activates: leg stays unclaimed, counted in stats.
+    """
+    leg_id = compute_leg_id(facts.macro_bias, facts.swing_high, facts.swing_low)
+    owner = get_leg_owner(state)
+
+    if owner is not None and not _same_leg(owner["leg_id"], leg_id):
+        apply_leg_ownership(state, {"action": "release", "reason": "1H leg changed"})
+        owner = None
+
+    # Timeline resets whenever the underlying leg changes, same trigger as
+    # leg ownership above — a new leg means a new hypothetical setup, so
+    # stage timestamps from the previous leg are no longer meaningful.
+    # PURE compute + apply_state_updates(), same discipline as every
+    # other section of this function.
+    apply_state_updates(state, compute_signal_timeline_reset(state, leg_id))
+    timeline_now = state.get("signal_timeline", {})
+    new_stages = compute_signal_timeline_updates(facts, timeline_now, now_utc)
+    if new_stages:
+        merged_timeline = dict(timeline_now)
+        merged_timeline.update(new_stages)
+        apply_state_updates(state, {"signal_timeline": merged_timeline})
+
+    def _run(tier_label):
+        result = TIER_REGISTRY[tier_label](facts, ctx, state, now_utc)
+        apply_state_updates(state, result.state_updates)
+        return result
+
+    if owner is not None and owner["status"] == "FIRED":
+        # Hard short-circuit — a FIRED owner is never re-evaluated, by
+        # anyone, for any reason. In practice manage_active_trade()
+        # already freezes the whole scan before this function runs again
+        # once a trade is genuinely open, so this branch only guards
+        # against leg_owner and stats["active_trade"] ever desyncing —
+        # but if that happens, silently downgrading a FIRED owner back to
+        # WATCHING (which re-running its stub would do, since a stub has
+        # no memory of "I already fired") would be worse than a no-op.
+        return TierResult(activated=True, fired=False, tier_label=owner["tier"],
+                           reason=f"{owner['tier']} owns this leg as FIRED — untouchable, not re-evaluated")
+
+    if owner is not None:
+        owner_priority = TIER_PRIORITY.index(owner["tier"])
+        can_upgrade = owner["status"] == "WATCHING" and not owner.get("upgraded", False)
+
+        if can_upgrade:
+            for tier_label in TIER_PRIORITY[:owner_priority]:
+                result = _run(tier_label)
+                if result.activated:
+                    apply_leg_ownership(state, {
+                        "action": "claim", "tier": tier_label, "leg_id": leg_id,
+                        "status": "FIRED" if result.fired else "WATCHING",
+                        "upgraded": True,
+                    })
+                    stats["ownership_upgrades"] = stats.get("ownership_upgrades", 0) + 1
+                    print(f"  [RULE OF LAW] {tier_label} UPGRADES ownership from "
+                          f"{owner['tier']} — {result.reason}")
+                    return result
+
+        result = _run(owner["tier"])
+        if not result.activated:
+            apply_leg_ownership(state, {
+                "action": "release",
+                "reason": f"{owner['tier']} deactivated — {result.reason}",
+            })
+        else:
+            apply_leg_ownership(state, {
+                "action": "claim", "tier": owner["tier"], "leg_id": leg_id,
+                "status": "FIRED" if result.fired else "WATCHING",
+                "upgraded": owner.get("upgraded", False),
+            })
+        return result
+
+    # Unclaimed leg — priority walk, first activation wins.
+    for tier_label in TIER_PRIORITY:
+        result = _run(tier_label)
+        if result.activated:
+            apply_leg_ownership(state, {
+                "action": "claim", "tier": tier_label, "leg_id": leg_id,
+                "status": "FIRED" if result.fired else "WATCHING",
+                "upgraded": False,
+            })
+            print(f"  [RULE OF LAW] {tier_label} claims leg {leg_id} — {result.reason}")
+            return result
+
+    stats["no_leg_owner"] = stats.get("no_leg_owner", 0) + 1
+    return TierResult(reason="no tier activated on this leg")
+
+
+# =========================================================================
+# SHADOW PIPELINE — research only. "What could we have learned from this
+# setup?" Nothing in this section can ever touch stats["active_trade"] or
+# state["leg_owner"] — every experiment below is READ-ONLY against live
+# state and free-running against its own shadow_state.json/shadow_stats.json.
+#
+# These are called "experiments," not "tiers": in the live system tiers
+# represent PRIORITY (who gets the leg). In research nothing has priority
+# — every experiment runs every scan, independently, logging whatever it
+# logs regardless of what any other experiment or the live bot decided.
+#
+#   Experiment 1 — Structure        every clean CHoCH/BOS continuation
+#   Experiment 2 — Fib              every quality HTF pullback (rejection
+#                                    candle ignored on purpose), 3 variants
+#                                    (adaptive / fixed 38.2 / fixed 50) so
+#                                    "is 38.2 better than 50?" has an answer
+#   Experiment 3 — POI              every Order Block reaction AND every
+#                                    quality-filtered FVG reaction, logged
+#                                    and tagged separately so "which type
+#                                    performs best?" is answerable
+#   Experiment 4 — Liquidity        every liquidity sweep against the
+#                                    macro swing level, confirmed or not
+#   Experiment 5 — Filter Ablation  a Tier-3-shaped setup with exactly ONE
+#                                    filter stripped per variant
+#   Experiment 6 — Alternative Bias the OLD bias rule's hypothetical trade,
+#                                    whenever it diverges from live bias
+#   Experiment E — Rejected Live    every scan the live bot said NO, log
+#                                    WHY (mandatory-condition breakdown per
+#                                    tier) and track the hypothetical R
+#                                    outcome anyway
+# =========================================================================
+import uuid
+
+
+# ---- persistence -----------------------------------------------------------
+def load_shadow_state():
+    try:
+        with open(SHADOW_STATE_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {"pending": [], "last_leg": {}}
+
+
+def save_shadow_state(shadow_state):
+    try:
+        with open(SHADOW_STATE_FILE, "w") as f:
+            json.dump(shadow_state, f)
+    except Exception as e:
+        print("[SHADOW STATE SAVE ERROR] " + str(e))
+
+
+_SHADOW_STATS_EXPERIMENT_KEYS = [
+    "EXP1_STRUCTURE", "EXP2_FIB", "EXP3_POI", "EXP4_LIQUIDITY",
+    "EXP5_ABLATION", "EXP6_ALT_BIAS", "EXPE_REJECTED_LIVE",
+]
+
+
+def _empty_experiment_stat():
+    return {"logged": 0, "resolved": 0, "wins": 0, "losses": 0,
+            "timed_out": 0, "sum_r": 0.0, "hit_1r": 0, "hit_2r": 0, "hit_3r": 0}
+
+
+def load_shadow_stats():
+    try:
+        with open(SHADOW_STATS_FILE, "r") as f:
+            stats = json.load(f)
+    except Exception:
+        stats = {}
+    for key in _SHADOW_STATS_EXPERIMENT_KEYS:
+        stats.setdefault(key, _empty_experiment_stat())
+    return stats
+
+
+def save_shadow_stats(shadow_stats):
+    try:
+        with open(SHADOW_STATS_FILE, "w") as f:
+            json.dump(shadow_stats, f, indent=2)
+    except Exception as e:
+        print("[SHADOW STATS SAVE ERROR] " + str(e))
+
+
+# ---- building + tracking setups --------------------------------------------
+def build_shadow_setup(experiment, direction, entry, sl_raw, now_utc,
+                        variant=None, tags=None, note=""):
+    """A hypothetical trade for research purposes only. Returns None if the
+    risk is degenerate (entry == sl_raw)."""
+    risk = (entry - sl_raw) if direction == "BUY" else (sl_raw - entry)
+    if risk is None or risk <= 0:
+        return None
+    sign = 1 if direction == "BUY" else -1
+    return {
+        "id": uuid.uuid4().hex[:12],
+        "experiment": experiment,
+        "variant": variant,
+        "direction": direction,
+        "entry": float(entry),
+        "sl": float(sl_raw),
+        "r1": float(entry + sign * 1 * risk),
+        "r2": float(entry + sign * 2 * risk),
+        "r3": float(entry + sign * 3 * risk),
+        "opened_at": now_utc.isoformat(),
+        "bars_open": 0,
+        "max_r_reached": 0,
+        "tags": tags or {},
+        "note": note,
+    }
+
+
+def _dedup_key(experiment, variant):
+    return experiment if variant is None else f"{experiment}::{variant}"
+
+
+def log_shadow_setup(shadow_state, shadow_stats, setup, leg_id):
+    """Applies the per-experiment dedup (one log per leg_id) and the
+    per-experiment pending cap, then appends + bumps 'logged' count."""
+    if setup is None:
+        return
+    key = _dedup_key(setup["experiment"], setup["variant"])
+    last_leg = shadow_state["last_leg"]
+    if last_leg.get(key) == leg_id:
+        return  # already logged this exact leg for this experiment/variant
+
+    pending_count = sum(1 for p in shadow_state["pending"] if p["experiment"] == setup["experiment"])
+    if pending_count >= SHADOW_MAX_PENDING_PER_EXPERIMENT:
+        return
+
+    last_leg[key] = leg_id
+    shadow_state["pending"].append(setup)
+    shadow_stats[setup["experiment"]]["logged"] += 1
+
+
+def update_pending_shadow_setups(shadow_state, shadow_stats, df_5m, now_utc):
+    """Walks every pending shadow setup forward one bar using the latest
+    closed 5M candle: updates max_r_reached, resolves (WIN/LOSS/TIMEOUT)
+    and rolls the outcome into shadow_stats. Runs every scan regardless of
+    what the live bot or any experiment logs THIS scan."""
+    c_last = df_5m.iloc[-1]
+    high, low = float(c_last["High"]), float(c_last["Low"])
+    still_pending = []
+
+    for setup in shadow_state["pending"]:
+        setup["bars_open"] += 1
+        direction = setup["direction"]
+        exp_stats = shadow_stats.setdefault(setup["experiment"], _empty_experiment_stat())
+
+        if direction == "BUY":
+            hit_sl = low <= setup["sl"]
+            for r_level, r_val in ((setup["r3"], 3), (setup["r2"], 2), (setup["r1"], 1)):
+                if high >= r_level:
+                    setup["max_r_reached"] = max(setup["max_r_reached"], r_val)
+                    break
+        else:
+            hit_sl = high >= setup["sl"]
+            for r_level, r_val in ((setup["r3"], 3), (setup["r2"], 2), (setup["r1"], 1)):
+                if low <= r_level:
+                    setup["max_r_reached"] = max(setup["max_r_reached"], r_val)
+                    break
+
+        timed_out = setup["bars_open"] >= SHADOW_MAX_PENDING_BARS
+        reached_3r = setup["max_r_reached"] >= 3
+
+        if hit_sl and setup["max_r_reached"] == 0:
+            exp_stats["resolved"] += 1
+            exp_stats["losses"] += 1
+            exp_stats["sum_r"] += -1.0
+            continue  # resolved — drop from pending
+
+        if reached_3r:
+            exp_stats["resolved"] += 1
+            exp_stats["wins"] += 1
+            exp_stats["hit_1r"] += 1
+            exp_stats["hit_2r"] += 1
+            exp_stats["hit_3r"] += 1
+            exp_stats["sum_r"] += 3.0
+            continue
+
+        if hit_sl or timed_out:
+            # SL hit AFTER already banking some R, or ran out the clock —
+            # either way, resolve at whatever R was actually reached.
+            exp_stats["resolved"] += 1
+            if timed_out and not hit_sl:
+                exp_stats["timed_out"] += 1
+            r = setup["max_r_reached"]
+            if r > 0:
+                exp_stats["wins"] += 1
+            else:
+                exp_stats["losses"] += 1
+            exp_stats["sum_r"] += float(r) if r > 0 else -1.0
+            if r >= 1:
+                exp_stats["hit_1r"] += 1
+            if r >= 2:
+                exp_stats["hit_2r"] += 1
+            continue
+
+        still_pending.append(setup)
+
+    shadow_state["pending"] = still_pending
+
+
+# ---- Experiment 1: Structure Only ------------------------------------------
+def experiment_1_structure(facts, shadow_state, shadow_stats, now_utc):
+    """Logs every clean CHoCH/BOS continuation aligned with 1H bias —
+    answers: does structure alone have an edge, and how often does it
+    reach 1R/2R/3R?"""
+    if not facts.has_fresh_bos_aligned_with_bias():
+        return
+    bos = facts.bos_15m()
+    side = bias_to_side(facts.macro_bias)
+    leg_id = "{}|{:.5f}|{:.5f}".format(side, bos["impulse_start"], bos["impulse_end"])
+    setup = build_shadow_setup(
+        "EXP1_STRUCTURE", side, float(facts.last_candle_5m()["Close"]), bos["impulse_start"], now_utc,
+        tags={"choch": facts.has_choch_15m()},
+        note="clean CHoCH/BOS continuation aligned with 1H bias",
+    )
+    log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+
+# ---- Experiment 2: Fib Only -------------------------------------------------
+def experiment_2_fib(facts, shadow_state, shadow_stats, now_utc):
+    """Logs every quality HTF pullback — rejection candle is IGNORED on
+    purpose (per spec: 'ignore rejection candles if necessary'). Logs 3
+    variants of the SAME leg (adaptive / fixed 38.2 / fixed 50) so their
+    R-outcomes can be compared head to head."""
+    side = bias_to_side(facts.macro_bias)
+    leg_id = "{}|{:.5f}|{:.5f}".format(side, facts.swing_high, facts.swing_low)
+
+    variants = [
+        ("adaptive", facts.fib_zone()),
+        ("fixed_382", facts.fib_zone(near=0.382, far=0.382)),
+        ("fixed_50", facts.fib_zone(near=0.5, far=0.5)),
+    ]
+    for variant_name, zone in variants:
+        if not facts.price_in_zone(zone):
+            continue
+        setup = build_shadow_setup(
+            "EXP2_FIB", side, float(facts.last_candle_5m()["Close"]), zone, now_utc,
+            variant=variant_name,
+            tags={"rejection_candle_present": facts.rejection_candle()},
+            note=f"HTF fib pullback ({variant_name}), rejection candle not required",
+        )
+        log_shadow_setup(shadow_state, shadow_stats, setup, leg_id + "|" + variant_name)
+
+
+# ---- Experiment 3: POI Only (Order Block AND quality-filtered FVG) --------
+def experiment_3_poi(facts, atr_15m_series, shadow_state, shadow_stats, now_utc):
+    """Logs every Order Block reaction AND every quality FVG reaction,
+    tagged separately (variant="order_block" / variant="fvg") — answers:
+    are order blocks carrying the strategy, and which POI type performs
+    best? Rejection candle is NOT required here (unlike live Tier 1) —
+    tagged instead, so it can be sliced afterward."""
+    side = bias_to_side(facts.macro_bias)
+
+    ob = facts.order_block()
+    if ob is not None and facts.price_in_order_block():
+        leg_id = "ob|{}|{:.5f}|{:.5f}".format(side, ob["high"], ob["low"])
+        setup = build_shadow_setup(
+            "EXP3_POI", side, float(facts.last_candle_5m()["Close"]),
+            ob["low"] if side == "BUY" else ob["high"], now_utc,
+            variant="order_block",
+            tags={"rejection_candle_present": facts.rejection_candle(),
+                  "choch": facts.has_choch_15m()},
+            note="Order block reaction",
+        )
+        log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+    quality_gaps = detect_significant_fvg(facts.df_15m, facts.macro_bias, atr_15m_series)
+    if quality_gaps:
+        gap = quality_gaps[-1]  # nearest/most-recent quality gap
+        leg_id = "fvg|{}|{}".format(side, gap["idx"])
+        gap_level = gap["low"] if side == "BUY" else gap["high"]
+        setup = build_shadow_setup(
+            "EXP3_POI", side, float(facts.last_candle_5m()["Close"]), gap_level, now_utc,
+            variant="fvg",
+            tags={"size_atr_ratio": round(gap["size_atr_ratio"], 2),
+                  "age_candles": gap["age_candles"],
+                  "rejection_candle_present": facts.rejection_candle()},
+            note="Quality-filtered FVG reaction (size>={}x ATR, age<={} candles)".format(
+                FVG_MIN_SIZE_ATR_MULT, FVG_MAX_AGE_CANDLES),
+        )
+        log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+
+# ---- Experiment 4: Liquidity Sweep -----------------------------------------
+def experiment_4_liquidity(facts, shadow_state, shadow_stats, now_utc):
+    """Logs every liquidity sweep of the macro swing level that would
+    matter for the CURRENT bias, confirmed or not — answers: does every
+    sweep need confirmation, and which sweep distance works best?"""
+    side = bias_to_side(facts.macro_bias)
+    level = facts.swing_low if facts.macro_bias == "BULLISH" else facts.swing_high
+    swept = facts.has_liquidity_sweep(level)
+    if not swept:
+        return
+
+    label = facts.liquidity_sweep_label(level)
+    confirmed = "CONFIRMED" in label
+    c_last = facts.last_candle_5m()
+    distance_pips = abs((c_last["Low"] if side == "BUY" else c_last["High"]) - level) / PIP_SIZE
+    # FIX (found during audit): this used to include the current candle's
+    # timestamp, which changes every single scan — that defeats
+    # log_shadow_setup's dedup entirely (it compares exact leg_id
+    # equality), and detect_liquidity_sweep's window keeps a given sweep
+    # candle "visible" for up to 3 consecutive scans, so the SAME sweep
+    # was getting logged as up to 3 separate correlated "trades." Keyed
+    # on side+level only now, matching how Experiments 1/2/3/6 already
+    # dedup (a genuinely new leg has a different level anyway, since
+    # `level` comes from the current macro swing).
+    leg_id = "{}|{:.5f}".format(side, level)
+
+    setup = build_shadow_setup(
+        "EXP4_LIQUIDITY", side, float(c_last["Close"]), level, now_utc,
+        tags={"confirmed": confirmed, "distance_pips": round(distance_pips, 1)},
+        note=f"Liquidity sweep of macro swing level ({label})",
+    )
+    log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+
+# ---- Experiment 5: Filter Ablation ------------------------------------------
+def experiment_5_filter_ablation(facts, ctx, state, df_15m, shadow_state, shadow_stats, now_utc):
+    """A Tier-3-shaped setup (CHoCH + aligned BOS) with exactly ONE filter
+    stripped per variant, so any R-multiple difference vs Experiment 1 (or
+    vs each other) is attributable to that ONE filter."""
+    if not facts.has_fresh_bos_aligned_with_bias():
+        return
+    bos = facts.bos_15m()
+    side = bias_to_side(facts.macro_bias)
+    choch = facts.has_choch_15m()
+    swept = facts.has_liquidity_sweep(bos["impulse_start"])
+    bias_stale = state.get("macro_bias_stale", False)
+    entry = float(facts.last_candle_5m()["Close"])
+
+    # variant: no_liquidity_sweep — only log the un-swept subset (the
+    # swept subset is already fully covered by Experiment 1 / Tier 3).
+    if choch and not swept:
+        leg_id = "nls|{}|{:.5f}".format(side, bos["impulse_start"])
+        setup = build_shadow_setup("EXP5_ABLATION", side, entry, bos["impulse_start"], now_utc,
+                                    variant="no_liquidity_sweep",
+                                    note="CHoCH+BOS setup that would be REJECTED by a sweep-required gate")
+        log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+    # variant: no_ema_agreement — proxy: log even while the 1H bias is
+    # STALE (i.e. ignore the distrust a stale bias normally earns).
+    if choch and bias_stale:
+        leg_id = "nea|{}|{:.5f}".format(side, bos["impulse_start"])
+        setup = build_shadow_setup("EXP5_ABLATION", side, entry, bos["impulse_start"], now_utc,
+                                    variant="no_ema_agreement",
+                                    note="CHoCH+BOS setup taken despite a STALE 1H bias")
+        log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+    # variant: choch_only — isolated CHoCH-only bucket (excludes plain
+    # continuation BOS, which Experiment 1 mixes in).
+    if choch:
+        leg_id = "co|{}|{:.5f}".format(side, bos["impulse_start"])
+        setup = build_shadow_setup("EXP5_ABLATION", side, entry, bos["impulse_start"], now_utc,
+                                    variant="choch_only",
+                                    note="Pure CHoCH-only bucket, continuation BOS excluded")
+        log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+    # variant: bias_15m — use the 15M structure's OWN direction as the
+    # authority instead of the 1H macro bias (may DISAGREE with facts.macro_bias).
+    bos_15m_only = detect_bos_impulse(df_15m.tail(SWING_LOOKBACK_15), wing=FRACTAL_WING,
+                                       break_buffer_atr_mult=BOS_15M_BREAK_BUFFER_ATR_MULT)
+    if bos_15m_only is not None:
+        alt_side = bias_to_side(bos_15m_only["direction"])
+        leg_id = "b15|{}|{:.5f}|{:.5f}".format(alt_side, bos_15m_only["impulse_start"], bos_15m_only["impulse_end"])
+        setup = build_shadow_setup("EXP5_ABLATION", alt_side, entry, bos_15m_only["impulse_start"], now_utc,
+                                    variant="bias_15m",
+                                    tags={"agrees_with_1h_bias": alt_side == side},
+                                    note="15M structure used AS the bias authority (may diverge from 1H)")
+        log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+
+# ---- Experiment 6: Alternative Bias Logic ----------------------------------
+def experiment_6_alt_bias(facts, state, shadow_state, shadow_stats, now_utc):
+    """Whenever the OLD bias rule (compute_macro_bias_shadow_old_rule)
+    disagrees with the live 1H bias, logs the hypothetical CHoCH/BOS-style
+    trade IN THE OLD RULE'S DIRECTION, so the divergence gets a real R
+    outcome instead of just a print statement."""
+    shadow_bias = state.get("shadow_macro_bias_confirmed")
+    if shadow_bias not in ("BULLISH", "BEARISH") or shadow_bias == facts.macro_bias:
+        return
+
+    side = bias_to_side(shadow_bias)
+    entry = float(facts.last_candle_5m()["Close"])
+    origin = state.get("shadow_macro_leg_origin")
+    if origin is None:
+        return
+    leg_id = "{}|{:.5f}".format(side, origin)
+    setup = build_shadow_setup("EXP6_ALT_BIAS", side, entry, origin, now_utc,
+                                note=f"Old-rule bias ({shadow_bias}) diverges from live bias ({facts.macro_bias})")
+    log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+
+# ---- Experiment E: Rejected Live Trades ------------------------------------
+def experiment_e_rejected_live(facts, ctx, state, live_result, now_utc,
+                                shadow_state, shadow_stats):
+    """Every time the live bot says NO, record WHY (per-tier mandatory-
+    condition breakdown) and still track a hypothetical R outcome using
+    the current bias direction + a generic ATR-based stop, so you can see
+    which filters are genuinely protecting you vs just cutting frequency."""
+    if live_result.fired:
+        return  # bot said YES this scan — nothing to log here
+
+    checks = {}
+    for tier_label, tier_fn in TIER_REGISTRY.items():
+        peek = tier_fn(facts, ctx, state, now_utc)  # read-only peek — state_updates discarded
+        checks[tier_label] = {"activated": peek.activated, "reason": peek.reason}
+
+    side = bias_to_side(facts.macro_bias)
+    entry = float(facts.last_candle_5m()["Close"])
+    generic_sl_distance = max(SL_ATR_MULT * facts.current_atr_5m(), SL_MIN_PIPS * PIP_SIZE)
+    sl_raw = entry - generic_sl_distance if side == "BUY" else entry + generic_sl_distance
+
+    # FIX (found during audit): this used to include entry rounded to
+    # the pip, which drifts almost every scan — same dedup-defeating bug
+    # as Experiment 4, but worse in practice, since a rejection reason
+    # like "CONSOLIDATION" or "no fresh BOS" can persist for HOURS,
+    # spamming a new correlated pseudo-trade every 5 minutes until the
+    # pending cap absorbed it. Anchored to the actual leg identity
+    # (swing high/low) + reason instead — stable while the same
+    # underlying setup/rejection persists, fresh once the leg genuinely
+    # changes, matching the dedup semantics every other experiment uses.
+    leg_id = "{}|{:.5f}|{:.5f}|{}".format(side, facts.swing_high, facts.swing_low, live_result.reason)
+    setup = build_shadow_setup(
+        "EXPE_REJECTED_LIVE", side, entry, sl_raw, now_utc,
+        tags=checks,
+        note="Live bot took no action this scan — " + (live_result.reason or "no tier activated"),
+    )
+    log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+
+# ---- orchestrator -----------------------------------------------------------
+def run_shadow_pipeline(facts, ctx, state, df_15m, live_result, now_utc):
+    """
+    Single entry point called from scan(). Every experiment is wrapped so
+    ONE broken experiment can never take down the live bot or another
+    experiment — errors are logged and swallowed, never raised.
+    """
+    shadow_state = load_shadow_state()
+    shadow_stats = load_shadow_stats()
+
+    try:
+        update_pending_shadow_setups(shadow_state, shadow_stats, facts.df_5m, now_utc)
+    except Exception as e:
+        print("[SHADOW ERROR] update_pending: " + str(e))
+
+    atr_15m_series = atr(df_15m, period=14)
+
+    experiments = [
+        ("Experiment 1 (Structure)", lambda: experiment_1_structure(facts, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 2 (Fib)", lambda: experiment_2_fib(facts, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 3 (POI)", lambda: experiment_3_poi(facts, atr_15m_series, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 4 (Liquidity)", lambda: experiment_4_liquidity(facts, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 5 (Filter Ablation)", lambda: experiment_5_filter_ablation(
+            facts, ctx, state, df_15m, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 6 (Alt Bias)", lambda: experiment_6_alt_bias(facts, state, shadow_state, shadow_stats, now_utc)),
+        ("Experiment E (Rejected Live)", lambda: experiment_e_rejected_live(
+            facts, ctx, state, live_result, now_utc, shadow_state, shadow_stats)),
+    ]
+    for name, fn in experiments:
+        try:
+            fn()
+        except Exception as e:
+            print(f"[SHADOW ERROR] {name}: {e}")
+
+    save_shadow_state(shadow_state)
+    save_shadow_stats(shadow_stats)
+
+
+def format_shadow_summary(shadow_stats):
+    """Human-readable one-block summary — call periodically (e.g. every
+    STATS_SUMMARY_EVERY scans, same cadence as the live stats summary)."""
+    lines = ["🔬 *Shadow Pipeline — Research Summary*\n"]
+    for key in _SHADOW_STATS_EXPERIMENT_KEYS:
+        s = shadow_stats.get(key, _empty_experiment_stat())
+        if s["logged"] == 0:
+            continue
+        win_rate = (s["wins"] / s["resolved"] * 100) if s["resolved"] else 0.0
+        avg_r = (s["sum_r"] / s["resolved"]) if s["resolved"] else 0.0
+        lines.append(
+            f"*{key}* — logged {s['logged']}, resolved {s['resolved']}, "
+            f"win rate {win_rate:.0f}%, avg R {avg_r:+.2f}, "
+            f"1R/2R/3R hit: {s['hit_1r']}/{s['hit_2r']}/{s['hit_3r']}"
+        )
+    return "\n".join(lines) if len(lines) > 1 else None
+
+
+# =========================================================================
+# TRADE MANAGEMENT — shared regardless of which tier fired.
+# =========================================================================
+def apply_risk_gate_and_finalize(prospective_entry, prospective_sl, direction,
+                                   current_atr, stats, score, tier_label,
+                                   conviction=None):
+    """Shared final stage for every tier: dual risk ceiling (ATR-relative
+    + flat pip cap), then trade field assembly. Every tier goes through
+    identical risk discipline.
+
+    conviction: output of classify_conviction(), if provided. target_r
+    from the conviction band REPLACES the flat RR_RATIO for TP placement
+    — a CONSERVATIVE-band setup gets a nearer target than a FULL-band
+    one. Falls back to RR_RATIO if conviction wasn't supplied (keeps this
+    function callable the old way, e.g. from experiment/shadow code that
+    doesn't run through Phase 3)."""
+    target_r = conviction["target_r"] if conviction and conviction.get("target_r") else RR_RATIO
     if direction == "BUY":
         prospective_risk = prospective_entry - prospective_sl
     else:
@@ -1910,80 +2673,188 @@ def _apply_risk_gate_and_finalize(prospective_entry, prospective_sl, direction,
                 prospective_risk / PIP_SIZE, risk_ceiling_atr / PIP_SIZE, MAX_RISK_ATR_MULT))
         if prospective_risk > risk_ceiling_pips:
             breach.append("{:.1f}p > {}p flat cap".format(prospective_risk / PIP_SIZE, MAX_RISK_PIPS))
-        breach_reason = "; ".join(breach)
-        return {
-            "fired": False,
-            "pattern_check": "PASS mechanically but SUPPRESSED — risk too wide ({}) [{} {}/100]".format(
-                breach_reason, score_emoji, score),
-            "risk_gate_pass": False,
-            "risk_gate_reason": breach_reason,
-        }
+        return {"fired": False, "risk_gate_pass": False, "risk_gate_reason": "; ".join(breach)}
 
     risk_pips   = prospective_risk / PIP_SIZE
-    reward_pips = (RR_RATIO * prospective_risk) / PIP_SIZE
-    tp = (prospective_entry + RR_RATIO * prospective_risk if direction == "BUY"
-          else prospective_entry - RR_RATIO * prospective_risk)
-    stats["pattern_passed"] += 1
+    reward_pips = (target_r * prospective_risk) / PIP_SIZE
+    tp = (prospective_entry + target_r * prospective_risk if direction == "BUY"
+          else prospective_entry - target_r * prospective_risk)
     return {
         "fired": True,
         "entry": prospective_entry, "sl": prospective_sl, "tp": tp,
         "risk_pips": risk_pips, "reward_pips": reward_pips,
-        "pattern_check": "PASS — {} {}/100{}".format(score_emoji, score, tier_label),
-        "risk_gate_pass": True,
-        "risk_gate_reason": None,
+        "risk_gate_pass": True, "risk_gate_reason": None,
+        "tier_label": tier_label, "score": score,
+        "target_r": target_r,
+        "size_mult": conviction.get("size_mult") if conviction else None,
+        "partial_r": conviction.get("partial_r") if conviction else None,
+        "breakeven_r": conviction.get("breakeven_r") if conviction else None,
+        "band_label": conviction.get("band_label") if conviction else None,
     }
+
+
+def sl_multiplier_for_context(ctx):
+    return SL_ATR_MULT_COMPRESSED if ctx.regime_ratio >= SL_VOL_SPIKE_RATIO else SL_ATR_MULT
+
+
+# =========================================================================
+# TELEGRAM COMMANDS — ported from V6. Long-poll on getUpdates with an
+# offset (stats["last_update_id"]) so each message is processed exactly
+# once; safe to call every scan. Field names below are V3's own
+# (tier_label / tier_rating / score), not V6's (structure / score /
+# score_breakdown) — this is a re-mapping, not a verbatim copy.
+# =========================================================================
+def _last_signal_context(stats):
+    """Pulls the most recently sent signal's context for journal
+    enrichment. Returns "?" placeholders if nothing has fired yet."""
+    return {
+        "signal":      stats.get("last_journal_signal",      "?"),
+        "entry":       stats.get("last_journal_entry",       "?"),
+        "tier_label":  stats.get("last_journal_tier_label",  "?"),
+        "score":       stats.get("last_journal_score",       "?"),
+        "tier_rating": stats.get("last_journal_tier_rating", "?"),
+        "signal_time": stats.get("last_journal_time",        "?"),
+    }
+
+
+def format_stats_summary(stats):
+    """
+    Funnel breakdown using V3's ACTUAL stats keys (tier1/2/3_signals,
+    ownership_upgrades, no_leg_owner, risk_gate_suppressed) — V6's keys
+    (watching_alerts/fib_reached/pattern_passed) don't exist in V3's
+    tier-arbitration model, so this is a re-derivation, not a copy.
+    """
+    n = stats["total_scans"]
+    if n == 0:
+        return "No scans recorded yet."
+
+    def pct(val):
+        return f"{val/n*100:.1f}%" if n > 0 else "—"
+
+    first = stats.get("first_scan", "?")
+    last  = stats.get("last_scan",  "?")
+
+    wins, losses = stats.get("wins", 0), stats.get("losses", 0)
+    total_results = wins + losses
+    win_rate = f"{wins}/{total_results} ({wins/total_results*100:.0f}%)" if total_results > 0 else "no results yet"
+
+    if total_results > 0:
+        wr = wins / total_results
+        # KNOWN GAP: since target_r now varies by conviction band, this
+        # flat-RR_RATIO expectancy is an approximation again — it doesn't
+        # know each closed trade's ACTUAL target_r. journal entries don't
+        # carry target_r yet. Fix before trusting this number: add
+        # target_r to each journal append (both auto-close and /win|/loss)
+        # and average the real per-trade R here instead.
+        expectancy = (wr * RR_RATIO) - (1 - wr)
+        exp_str = f"{expectancy:+.2f}R per trade"
+    else:
+        exp_str = "—"
+
+    lines = [
+        "",
+        "📊 *SMC Scanner V3 — Funnel Stats*",
+        f"_Period: {first} → {last}_",
+        "─────────────────────",
+        f"🔍 Total scans:          `{n}`",
+        f"➖ Consolidation skip:   `{stats.get('consolidation_skip', 0)}` ({pct(stats.get('consolidation_skip', 0))})",
+        f"📉 ATR too low:          `{stats.get('atr_too_low', 0)}` ({pct(stats.get('atr_too_low', 0))})",
+        f"⚡ Regime shift skip:    `{stats.get('regime_shift_skip', 0)}` ({pct(stats.get('regime_shift_skip', 0))})",
+        f"🕳 No leg owner:         `{stats.get('no_leg_owner', 0)}` ({pct(stats.get('no_leg_owner', 0))})",
+        f"⬆️ Ownership upgrades:   `{stats.get('ownership_upgrades', 0)}`",
+        f"🏛 Tier 1 (POI):         `{stats.get('tier1_signals', 0)}`",
+        f"🏛 Tier 2 (Fib):         `{stats.get('tier2_signals', 0)}`",
+        f"🏛 Tier 3 (Structure):   `{stats.get('tier3_signals', 0)}`",
+        f"🛑 Risk-gate suppressed: `{stats.get('risk_gate_suppressed', 0)}`",
+        f"🚨 Signals sent:         `{stats.get('signals_sent', 0)}` ({pct(stats.get('signals_sent', 0))})",
+        "─────────────────────",
+        f"🏆 Win rate:             `{win_rate}`",
+        f"📐 Expectancy:           `{exp_str}`",
+        "─────────────────────",
+    ]
+
+    if n > 20:
+        if stats.get("atr_too_low", 0) / n > 0.3:
+            lines.append("⚠️ _>30% of scans skipped on ATR — ATR_MIN_PIPS may be too high for current regime._")
+        elif stats.get("no_leg_owner", 0) / n > 0.5:
+            lines.append("⚠️ _Legs rarely find an owner — tier gates may be too strict for current conditions._")
+        elif total_results >= 10 and wins / total_results < 0.35:
+            lines.append("⚠️ _Win rate below 35% over 10+ trades — review tier entry logic._")
+        else:
+            lines.append("✅ _Funnel behaving as expected._")
+
+    if RESULT_TRACKING_ENABLED:
+        lines.append("_Send /win or /loss to log the last trade result._")
+
+    return "\n".join(lines)
+
+
+def format_bias_ab_summary(bias_ab_log):
+    """
+    /biasab — live (gated CHoCH+BOS+EMA) vs shadow (old ungated rule) 1H
+    bias agreement, scan by scan. Ported from V6's format_shadow_summary,
+    renamed to avoid colliding with V3's own format_shadow_summary()
+    (which summarizes the 6-experiment research pipeline — a different
+    thing entirely, kept under /shadow).
+    """
+    if not bias_ab_log:
+        return "🕶️ _No bias A/B log entries yet — give it a few scans._"
+
+    n = len(bias_ab_log)
+    agree = sum(1 for e in bias_ab_log if e.get("agree"))
+    diverge = n - agree
+    agree_pct = f"{agree/n*100:.0f}%"
+
+    first_t = bias_ab_log[0].get("time", "?")
+    last_t  = bias_ab_log[-1].get("time", "?")
+
+    lines = [
+        "",
+        "🕶️ *Bias A/B — Live (gated) vs Old Rule (ungated)*",
+        f"_Period: {first_t} → {last_t}_",
+        "─────────────────────",
+        f"🔍 Scans logged: `{n}`",
+        f"🤝 Agreement:    `{agree}/{n}` ({agree_pct})",
+        f"↔️ Divergence:   `{diverge}`",
+        "─────────────────────",
+    ]
+
+    if diverge == 0:
+        lines.append("_No divergences yet._")
+    else:
+        windows = []
+        current = None
+        for e in bias_ab_log:
+            if not e.get("agree"):
+                if current is None:
+                    current = {"start": e["time"], "end": e["time"],
+                               "live": e["live_bias"], "shadow": e["shadow_bias"]}
+                else:
+                    current["end"] = e["time"]
+            else:
+                if current is not None:
+                    windows.append(current)
+                    current = None
+        if current is not None:
+            windows.append(current)
+
+        lines.append(f"*Recent divergence windows* (last {min(len(windows), 8)} of {len(windows)}):")
+        for w in windows[-8:]:
+            lines.append(f"  `{w['start']}` → `{w['end']}` — live=`{w['live']}` vs old-rule=`{w['shadow']}`")
+
+    return "\n".join(lines)
 
 
 def check_result_commands(stats):
     """
-    Polls Telegram for result commands sent by the user.
-    Supports optional notes for trade journaling.
-
-    Commands:
-      /win [optional note]    — log a win,  e.g. /win clean engulf at zone
-      /loss [optional note]   — log a loss, e.g. /loss news spike stopped me
-      /undo                    — reverse the last journal entry, no questions asked
-      /confirm                 — override the last result after a flip warning
-      /stats                   — get full funnel summary on demand
-      /trade                   — status of the live trade in session (or
-                                  "no trade in session" / which level of
-                                  the last one was hit, if none is open)
-      /shadow                  — loose-rule shadow pipeline summary: funnel
-                                  counts, win rate, broken down by BOS vs
-                                  Fractal structure and by confidence score
-      /biasab                  — old-rule vs live-gated 1H bias agreement
-                                  rate + recent divergences (was /shadow)
-      /journal                 — get the last 10 trade journal entries
-      /last                    — show the last signal that was sent
-
-    Notes are stored in stats["journal"] as a list of dicts so you can
-    cross-reference with the GitHub Actions checklist logs later:
-      {"time": "...", "logged_at": "...", "result": "WIN",
-       "note": "clean engulf at zone", "signal": "BUY",
-       "entry": 1.32400, "structure": "BOS"}
-
-    IMPORTANT: "time" is the SIGNAL's time (when the setup actually
-    fired, i.e. last_journal_time) — NOT the moment you happened to
-    send /win or /loss. That moment is stored separately as
-    "logged_at". Session analysis should key off "time"; if it used
-    "logged_at" instead, a /loss sent two hours after the trade closed
-    would misplace it in the timeline.
-
-    Three safeguards against a fat-fingered /win vs /loss:
-      1. Cooldown per signal — once a result is logged for a signal
-         (identified by last_journal_time), a second /win or /loss for
-         the SAME signal is refused until a new signal fires. This
-         also stops _last_signal_context(stats) from silently pulling
-         the same signal context into two journal entries with
-         different results.
-      2. /undo — unconditionally reverses the most recent journal
-         entry and decrements the matching win/loss counter.
-      3. Confirmation gate — sending the opposite result within 60
-         seconds of the last logged result for the SAME signal holds
-         the write and asks for /confirm before overriding it.
-
-    Uses long-poll offset (last_update_id) so each message is processed
-    exactly once. Safe to call every scan.
+    Polls Telegram for result/journal commands (ported from V6, field
+    names re-mapped to V3):
+      /win [note], /loss [note]  — log a result, with 3 safeguards:
+        1. per-signal cooldown (no double-logging the same signal)
+        2. /undo — unconditional reversal of the last journal entry
+        3. /confirm — override a flip within 60s of the last log
+      /undo, /confirm, /stats, /trade, /shadow, /biasab, /bias,
+      /journal, /last
     """
     if not RESULT_TRACKING_ENABLED:
         return stats
@@ -1992,43 +2863,33 @@ def check_result_commands(stats):
     offset = stats.get("last_update_id", 0) + 1
 
     try:
-        resp = requests.get(url, params={"offset": offset, "timeout": 2},
-                            timeout=5).json()
+        resp = requests.get(url, params={"offset": offset, "timeout": 2}, timeout=5).json()
     except Exception:
         return stats
 
     if not resp.get("ok") or not resp.get("result"):
         return stats
 
-    # Ensure journal list exists
-    if "journal" not in stats:
-        stats["journal"] = []
+    stats.setdefault("journal", [])
 
     def _log_result(stats, result, note, now_str, sig_time):
-        """Append a journal entry (keyed to the SIGNAL's time) and bump the counter."""
         entry_ctx = _last_signal_context(stats)
         journal_entry = {
-            "time":      sig_time,   # when the signal fired — used for session analysis
-            "logged_at": now_str,    # when you actually sent /win or /loss
+            "time":      sig_time,
+            "logged_at": now_str,
             "result":    result,
             "note":      note or "—",
             **entry_ctx,
         }
         stats["journal"].append(journal_entry)
-        stats["journal"] = stats["journal"][-100:]
+        stats["journal"] = stats["journal"][-JOURNAL_MAX_ENTRIES:]
         if result == "WIN":
             stats["wins"] = stats.get("wins", 0) + 1
         else:
             stats["losses"] = stats.get("losses", 0) + 1
-        # Lock this signal — no second result until a new signal fires
         stats["result_logged_for_signal"] = sig_time
-        # Manual result overrides auto-detection — clear the active trade
-        # (if any) so trade-status pings stop and normal scanning resumes.
         active = stats.get("active_trade")
         if active:
-            # Snapshot for /trade — manual /win or /loss closes it exactly
-            # like an auto-detected SL/TP hit, just with the level unknown
-            # (a person logged the result, not a candle touching a price).
             stats["last_closed_trade"] = {
                 "direction":  active.get("direction", "?"),
                 "entry":      f"{active['entry']:.5f}" if "entry" in active else "?",
@@ -2043,7 +2904,6 @@ def check_result_commands(stats):
         return stats
 
     def _undo_last(stats):
-        """Pop the last journal entry and decrement its counter. No questions asked."""
         j = stats.get("journal", [])
         if not j:
             return None
@@ -2052,7 +2912,6 @@ def check_result_commands(stats):
             stats["wins"] = max(0, stats.get("wins", 0) - 1)
         elif last.get("result") == "LOSS":
             stats["losses"] = max(0, stats.get("losses", 0) - 1)
-        # Lift the per-signal lock so the same signal can be logged again
         stats["result_logged_for_signal"] = None
         stats.pop("pending_confirm", None)
         return last
@@ -2065,13 +2924,11 @@ def check_result_commands(stats):
         chat_id = str(msg.get("chat", {}).get("id", ""))
         raw     = msg.get("text", "").strip()
 
-        # Only accept commands from your own chat
         if chat_id != TELEGRAM_CHAT_ID:
             continue
 
-        cmd   = raw.split()[0].lower() if raw else ""
-        # Everything after the command word is the optional note
-        note  = raw[len(cmd):].strip() if len(raw) > len(cmd) else ""
+        cmd  = raw.split()[0].lower() if raw else ""
+        note = raw[len(cmd):].strip() if len(raw) > len(cmd) else ""
 
         now_utc_dt = datetime.now(timezone.utc)
         now_str    = now_utc_dt.strftime("%Y-%m-%d %H:%M UTC")
@@ -2082,7 +2939,6 @@ def check_result_commands(stats):
 
             locked_sig = stats.get("result_logged_for_signal")
             if locked_sig is not None and sig_time != "?" and locked_sig == sig_time:
-                # A result is already on record for THIS signal — block by default.
                 last_entry = stats["journal"][-1] if stats.get("journal") else None
                 is_flip    = last_entry is not None and last_entry.get("result") != result
                 within_60s = False
@@ -2096,18 +2952,14 @@ def check_result_commands(stats):
                         within_60s = False
 
                 if is_flip and within_60s:
-                    stats["pending_confirm"] = {
-                        "cmd": cmd, "note": note, "sig_time": sig_time,
-                    }
+                    stats["pending_confirm"] = {"cmd": cmd, "note": note, "sig_time": sig_time}
                     send_telegram(
-                        f"⚠️ *Result already logged for this signal* "
-                        f"(`{last_entry.get('result')}` at `{last_entry.get('logged_at')}`).\n"
-                        f"You just sent `{cmd}` within 60s — looks like a fat-finger flip.\n"
-                        f"Reply /confirm to override the last result, or ignore to leave it as-is."
+                        f"⚠️ *A result was just logged for this signal* "
+                        f"(`{last_entry.get('result')}`). Send /confirm to override with `{result}`."
                     )
                 else:
-                    prior = last_entry.get('result') if last_entry else '?'
-                    prior_t = last_entry.get('logged_at') if last_entry else '?'
+                    prior   = last_entry.get("result") if last_entry else "?"
+                    prior_t = last_entry.get("logged_at") if last_entry else "?"
                     send_telegram(
                         f"🚫 *Result already logged for this signal* (`{prior}` at `{prior_t}`).\n"
                         f"Use /undo to reverse it, then log again — or wait for the next signal."
@@ -2133,7 +2985,6 @@ def check_result_commands(stats):
             if not pending:
                 send_telegram("_Nothing pending to confirm._")
                 continue
-            # Reverse the entry that triggered the flip warning, then log the override.
             _undo_last(stats)
             result = "WIN" if pending["cmd"] in ("/win", "win", "/w") else "LOSS"
             stats = _log_result(stats, result, pending["note"], now_str, pending["sig_time"])
@@ -2166,37 +3017,28 @@ def check_result_commands(stats):
             send_telegram(format_stats_summary(stats))
 
         elif cmd in ("/trade", "trade"):
-            # Needs a live price to compute P/L and distance to SL/TP, and
-            # df_5m isn't fetched yet at this point in scan() (commands are
-            # processed before the data fetch so they're never dropped by a
-            # fetch failure). Defer the actual reply to right after
-            # manage_active_trade() runs later this same scan, when fresh
-            # 5M data is on hand — see the pending-query check in scan().
+            # df_5m isn't fetched yet at this point (commands are
+            # processed before the data fetch so they're never dropped
+            # by a fetch failure) — defer to scan(), right after df_5m
+            # is available, same pattern as V6.
             stats["_pending_trade_query"] = True
 
         elif cmd in ("/shadow", "shadow"):
-            send_telegram(format_shadow_pipeline_summary(load_shadow_trades()))
+            summary = format_shadow_summary(load_shadow_stats())
+            send_telegram(summary or "🔬 _Shadow pipeline has no logged experiments yet._")
 
         elif cmd in ("/biasab", "biasab"):
-            # Old-rule-vs-live-gated 1H BIAS A/B log (unrelated to the
-            # /shadow loose-trading pipeline above) — kept under its own
-            # command name so the two don't collide.
-            send_telegram(format_shadow_summary(load_shadow_log()))
+            send_telegram(format_bias_ab_summary(load_bias_ab_log()))
 
         elif cmd in ("/bias", "bias"):
-            # NOTE: this branch previously referenced a bare `state` name
-            # that does not exist inside this function's scope (only
-            # scan() has a local `state` from load_state()) — sending
-            # /bias raised a NameError and silently dropped the command.
-            # Fixed by loading state fresh here.
             state        = load_state()
             confirmed    = state.get("macro_bias_confirmed", "?")
             stale        = state.get("macro_bias_stale", False)
-            pending      = state.get("macro_bias_pending_flip")
             swing_high   = state.get("macro_swing_high")
             swing_low    = state.get("macro_swing_low")
             confirmed_at = state.get("macro_swing_confirmed_at", "?")
             leg_dir      = state.get("macro_leg_direction", "?")
+            owner        = get_leg_owner(state)
             lines = [
                 "🧭 *1H Bias — live state*",
                 "─────────────────────",
@@ -2208,11 +3050,13 @@ def check_result_commands(stats):
                 lines.append(f"Confirmed at: `{confirmed_at}`")
             else:
                 lines.append("Swing H/L: _no anchor — nothing has confirmed this bias yet_")
-            if pending:
+            if owner:
                 lines.append(
-                    "Pending flip: `{}` — {}".format(
-                        pending.get("direction", "?"), pending.get("reason", "?"))
+                    f"Leg owner: `{owner.get('tier','?')}` — `{owner.get('status','?')}`"
+                    + (" (upgraded)" if owner.get("upgraded") else "")
                 )
+            else:
+                lines.append("Leg owner: _unclaimed_")
             if stale:
                 lines.append(
                     "\n_STALE means the leg that last confirmed this bias has "
@@ -2227,27 +3071,26 @@ def check_result_commands(stats):
             if not entries:
                 send_telegram("📓 _No journal entries yet. Log trades with /win or /loss._")
             else:
-                # Show last 10 entries, newest first
-                recent  = list(reversed(entries[-10:]))
-                lines   = ["📓 *Trade Journal — Last 10 entries*", "─────────────────────"]
+                recent = list(reversed(entries[-10:]))
+                lines  = ["📓 *Trade Journal — Last 10 entries*", "─────────────────────"]
                 for e in recent:
-                    icon    = "✅" if e["result"] == "WIN" else "❌"
+                    icon    = "✅" if e.get("result") == "WIN" else "❌"
                     sig     = e.get("signal", "?")
-                    entry_p = e.get("entry",  "?")
-                    struct  = e.get("structure", "?")
+                    entry_p = e.get("entry", "?")
+                    tier    = e.get("tier_label", "?")
                     score_v = e.get("score", "?")
                     note_t  = e.get("note", "—")
                     trade_time = e.get("time", "?")
                     lines.append(
                         f"{icon} `{trade_time}`\n"
-                        f"   {sig} @ {entry_p} | {struct} | score {score_v}\n"
+                        f"   {sig} @ {entry_p} | {tier} | score {score_v}\n"
                         f"   📝 _{note_t}_"
                     )
                 send_telegram("\n".join(lines))
 
         elif cmd in ("/last", "last"):
             ctx = _last_signal_context(stats)
-            if ctx:
+            if ctx and ctx.get("signal") != "?":
                 timeline_line = ""
                 tl = stats.get("last_journal_timeline")
                 if tl:
@@ -2259,8 +3102,8 @@ def check_result_commands(stats):
                     f"🔁 *Last signal sent:*\n"
                     f"Direction: `{ctx.get('signal','?')}`\n"
                     f"Entry: `{ctx.get('entry','?')}`\n"
-                    f"Structure: `{ctx.get('structure','?')}`\n"
-                    f"Score: `{ctx.get('score','?')}/100`\n"
+                    f"Tier: `{ctx.get('tier_label','?')}` — `{ctx.get('tier_rating','?')}`\n"
+                    f"Score: `{ctx.get('score','?')}`\n"
                     f"Time: `{ctx.get('signal_time','?')}`"
                     + timeline_line
                 )
@@ -2270,961 +3113,196 @@ def check_result_commands(stats):
     return stats
 
 
-def _last_signal_context(stats):
+def check_trade_closed(active, c_last):
+    """Assume SL if a single candle touches both levels (worse outcome,
+    not a claim about intrabar sequencing)."""
+    direction = active["direction"]
+    sl, tp = active["sl"], active["tp"]
+    high, low = c_last["High"], c_last["Low"]
+
+    if direction == "BUY":
+        hit_sl, hit_tp = low <= sl, high >= tp
+    else:
+        hit_sl, hit_tp = high >= sl, low <= tp
+
+    if hit_sl:
+        return "LOSS"
+    if hit_tp:
+        return "WIN"
+    return None
+
+
+def format_trade_status(active, current_price, now_utc):
+    direction = active["direction"]
+    entry, sl, tp = active["entry"], active["sl"], active["tp"]
+    sign = 1 if direction == "BUY" else -1
+
+    pl_pips      = (current_price - entry) * sign / PIP_SIZE
+    dist_tp_pips = (tp - current_price) * sign / PIP_SIZE
+    dist_sl_pips = (current_price - sl) * sign / PIP_SIZE
+
+    opened_at = datetime.fromisoformat(active["opened_at"])
+    elapsed   = now_utc - opened_at
+    total_min = int(elapsed.total_seconds() // 60)
+    hours, minutes = divmod(total_min, 60)
+    time_str = f"{hours}h {minutes}m" if hours else f"{minutes}m"
+
+    pl_emoji = "🟢" if pl_pips >= 0 else "🔴"
+    dir_emoji = "📈" if direction == "BUY" else "📉"
+
+    return (
+        "📊 *Trade Active — GBPUSD*\n\n"
+        f"{dir_emoji} *Direction:* `{direction}` | *Tier:* `{active.get('tier_label','?')}`\n"
+        f"📍 *Entry:* `{entry:.5f}`  →  *Now:* `{current_price:.5f}`\n"
+        f"{pl_emoji} *P/L:* `{pl_pips:+.1f} pips`\n"
+        f"🎯 *Distance to TP:* `{dist_tp_pips:.1f} pips`\n"
+        f"🛡 *Distance to SL:* `{dist_sl_pips:.1f} pips`\n"
+        f"⏱ *Time in trade:* `{time_str}`\n"
+        "─────────────────────\n"
+        f"_Signal-time score: {active.get('score', '?')} "
+        f"({active.get('tier_rating', '?')}) — frozen, not recomputed._"
+    )
+
+
+def format_trade_query_response(stats, current_price, now_utc):
     """
-    Pulls the most recently sent signal's context from stats for
-    journal entry enrichment. Returns an empty dict if not available.
+    On-demand answer for /trade (ported from V6). Three cases:
+      1. A live trade is open — same content as the periodic ping.
+      2. No trade open, but the last one closed (auto SL/TP or manual
+         /win|/loss) — say which level was hit / which result, and pips.
+      3. Never had a trade this session.
     """
-    return {
-        "signal":      stats.get("last_journal_signal",    "?"),
-        "entry":       stats.get("last_journal_entry",     "?"),
-        "structure":   stats.get("last_journal_structure", "?"),
-        "score":       stats.get("last_journal_score",      "?"),
-        "score_breakdown": stats.get("last_journal_score_breakdown", "?"),
-        "signal_time": stats.get("last_journal_time",      "?"),
-    }
+    active = stats.get("active_trade")
+    if active:
+        return format_trade_status(active, current_price, now_utc)
+
+    last_closed = stats.get("last_closed_trade")
+    if last_closed:
+        hit    = last_closed.get("hit", "?")
+        pips   = last_closed.get("pips")
+        result = last_closed.get("result", "?")
+        icon   = "✅" if result == "WIN" else "❌"
+        try:
+            pips_str = f"{pips:+.1f} pips"
+        except (TypeError, ValueError):
+            pips_str = "?"
+        return (
+            f"📭 *No trade in session* — {hit} hit {icon}\n"
+            f"{last_closed.get('direction','?')} @ `{last_closed.get('entry','?')}` → "
+            f"`{last_closed.get('exit','?')}` ({pips_str})\n"
+            f"_Closed: {last_closed.get('closed_at','?')}_"
+        )
+
+    return "📭 *No trade in session.*"
 
 
-def is_state_memory_stale(state, macro_bias):
-    """
-    Returns True if the saved leg in STATE_MEMORY is so far from current
-    price that its Fib zone would be geometrically valid but contextually
-    wrong — i.e. anchored to a leg from a completely different price level.
-
-    Check: if current price is more than STATE_MEMORY_MAX_DRIFT_PIPS from
-    the midpoint of the saved SwH/SwL, treat the memory as stale.
-    """
-    if state.get("status") != "ACTIVE_LEG":
-        return False
-    if state.get("direction") != macro_bias:
-        return False
-
-    imp_start = state.get("impulse_start")
-    imp_end   = state.get("impulse_end")
-
-    if imp_start is None or imp_end is None:
-        return False
-
-    midpoint     = (imp_start + imp_end) / 2
-    # We don't have current price here directly — use impulse_end as
-    # a proxy for "where the leg terminated" and check if it's stale
-    # relative to the structural range. If the leg's range itself is
-    # implausibly tiny (< 5 pips), it's likely corrupted data.
-    leg_range = abs(imp_end - imp_start)
-    if leg_range < 5 * PIP_SIZE:
-        return True  # Corrupted or noise leg
-
-    return False  # Staleness check by price happens in scan() where we have df_5m
-
-
-def data_looks_sane(df, label, max_spike_mult=DATA_SPIKE_ATR_MULT):
-    if df is None or df.empty:
+def manage_active_trade(stats, state, df_5m, now_utc):
+    """Runs BEFORE Macro Bias / Market Context / Rule of Law. If a trade
+    is open, this is the ONLY thing scan() does this cycle. Returns True
+    if a trade is open. Releases leg ownership on close either way."""
+    active = stats.get("active_trade")
+    if not active:
         return False
 
-    ohlc = df[["Open", "High", "Low", "Close"]]
-    if ohlc.isna().any().any():
-        print("[DATA WARNING] " + label + ": contains NaN values.")
-        return False
-    if (ohlc <= 0).any().any():
-        print("[DATA WARNING] " + label + ": contains zero/negative prices.")
+    c_last = df_5m.iloc[-1]
+    outcome = check_trade_closed(active, c_last)
+
+    if outcome is not None:
+        exit_price = active["tp"] if outcome == "WIN" else active["sl"]
+        sign = 1 if active["direction"] == "BUY" else -1
+        pl_pips = (exit_price - active["entry"]) * sign / PIP_SIZE
+
+        if outcome == "WIN":
+            stats["wins"] = stats.get("wins", 0) + 1
+        else:
+            stats["losses"] = stats.get("losses", 0) + 1
+
+        icon = "✅" if outcome == "WIN" else "❌"
+        send_telegram(
+            f"{icon} *Trade closed — {outcome}* (auto-detected, GBPUSD)\n\n"
+            f"📍 *Entry:* `{active['entry']:.5f}`  →  *Exit:* `{exit_price:.5f}`\n"
+            f"{'🟢' if pl_pips >= 0 else '🔴'} *P/L:* `{pl_pips:+.1f} pips`\n"
+            f"_Tier: {active.get('tier_label','?')} | "
+            f"Signal-time score: {active.get('score', '?')}_"
+        )
+        print(f"  [TRADE] Auto-closed as {outcome} @ {exit_price:.5f} ({pl_pips:+.1f} pips).")
+
+        # ── Journal entry (ported from V6) — auto-close logs exactly like
+        # a manual /win or /loss so /journal shows a complete history
+        # regardless of how each trade was closed.
+        journal = stats.setdefault("journal", [])
+        journal.append({
+            "time":            active.get("opened_at_display", "?"),
+            "logged_at":       now_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            "result":          outcome,
+            "note":            "auto-closed (SL/TP hit)",
+            "signal":          active.get("direction", "?"),
+            "entry":           f"{active['entry']:.5f}" if "entry" in active else "?",
+            "tier_label":      active.get("tier_label", "?"),
+            "score":           active.get("score", "?"),
+            "tier_rating":     active.get("tier_rating", "?"),
+        })
+        stats["journal"] = journal[-JOURNAL_MAX_ENTRIES:]
+        # Snapshot for /trade — same shape manual /win|/loss produces.
+        stats["last_closed_trade"] = {
+            "direction":  active.get("direction", "?"),
+            "entry":      f"{active['entry']:.5f}" if "entry" in active else "?",
+            "exit":       f"{exit_price:.5f}",
+            "result":     outcome,
+            "hit":        "TP" if outcome == "WIN" else "SL",
+            "pips":       pl_pips,
+            "closed_at":  now_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            "opened_at_display": active.get("opened_at_display", "?"),
+        }
+        stats.pop("active_trade", None)
+        release_leg(state, f"trade closed ({outcome})")
         return False
 
-    bar_range = df["High"] - df["Low"]
-    avg_range = bar_range.rolling(20, min_periods=5).mean()
-    spike = bar_range > (avg_range * max_spike_mult)
-    if spike.tail(5).any():
-        print("[DATA WARNING] " + label + ": possible bad tick in recent bars.")
-        return False
+    last_update = active.get("last_update_sent_at")
+    send_update = True
+    if last_update:
+        try:
+            gap = now_utc - datetime.fromisoformat(last_update)
+            send_update = gap.total_seconds() >= TRADE_STATUS_UPDATE_MINUTES * 60
+        except ValueError:
+            send_update = True
+
+    if send_update:
+        send_telegram(format_trade_status(active, c_last["Close"], now_utc))
+        active["last_update_sent_at"] = now_utc.isoformat()
+        stats["active_trade"] = active
+        print("  [TRADE] Status update sent — trade still open.")
+    else:
+        print("  [TRADE] Still open — skipping status ping.")
 
     return True
 
 
-def _checklist(bias, bos_check, bos_bias_check, range_check, fib_check, atr_check, pattern_check, decision,
-               bias_stale=None):
-    """Prints the full filter checklist every scan with emojis."""
-    def fmt(val):
-        s = str(val)
-        if "PASS" in s or "OK" in s or "BULLISH" in s or "BEARISH" in s:
-            return s + " ✅"
-        elif "FAIL" in s or "CONFLICT" in s or "invalid" in s or "compressed" in s:
-            return s + " ❌"
-        elif "WARN" in s or "fallback" in s.lower() or "memory" in s.lower() or "fractal" in s.lower():
-            return s + " ⚠️"
-        elif "N/A" in s or "CONSOLIDATION" in s or "no BOS" in s.lower() or "no dominant" in s.lower():
-            return s + " ➖"
-        return s
-
-    bias_line = str(bias)
-    if bias == "BULLISH" or bias == "BEARISH":
-        # bias_stale=None means "not applicable" (paths that never reach
-        # here with a directional bias anyway). Only a directional bias
-        # needs the confirmed/stale distinction called out — this is the
-        # fix for the exact confusion where a day-old carried-over bias
-        # printed identically to a fresh 1H MSS.
-        if bias_stale:
-            bias_line += " ⚠️ (STALE — no live 1H break backing this)"
-        else:
-            bias_line += " ✅ (CONFIRMED — fresh 1H structure)"
-    elif bias == "CONSOLIDATION":
-        bias_line += " ➖ (flat — no edge)"
-    else:
-        bias_line += " ❌"
-
-    lines = [
-        "",
-        "  1H Bias:       " + bias_line,
-        "  BOS:           " + fmt(bos_check),
-        "  BOS/Bias Sync: " + fmt(bos_bias_check),
-        "  Range Filter:  " + fmt(range_check),
-        "  Fib Zone:      " + str(fib_check),
-        "  ATR Filter:    " + fmt(atr_check),
-        "  Pattern Check: " + fmt(pattern_check),
-        "  ─────────────────────────────────────",
-        "  Decision:      " + str(decision),
-    ]
-    return "\n".join(lines)
-
-
-def new_diagnostic():
-    """
-    A fresh, ordered diagnostic record for one scan. Each key maps to
-    either None (not evaluated — an earlier gate already blocked the
-    trade, so this one never ran) or an (passed: bool, reason: str|None)
-    tuple. Order here IS the order gates are actually applied in scan(),
-    so build_diagnostic_report() below can just walk it top to bottom.
-    """
-    keys = [
-        "macro_bias", "structure", "liquidity", "confirmation",
-        "htf_gate", "confidence_score", "risk_gate", "volatility_filter",
-        "duplicate_check",
-    ]
-    return {k: None for k in keys}
-
-
-DIAGNOSTIC_LABELS = {
-    "macro_bias":         "Macro bias",
-    "structure":          "Structure",
-    "liquidity":          "Liquidity",
-    "confirmation":       "Confirmation",
-    "htf_gate":           "HTF bias gate",
-    "confidence_score":   "Confidence score",
-    "risk_gate":          "Risk gate",
-    "volatility_filter":  "Volatility filter",
-    "duplicate_check":    "Duplicate signal check",
-}
-
-
-def diag_set(diag, key, passed, reason=None):
-    """Record one gate's outcome. No-op if the key isn't tracked."""
-    if diag is not None and key in diag:
-        diag[key] = (bool(passed), reason)
-    return diag
-
-
-def build_diagnostic_report(diag, score=None, header="Trade rejected"):
-    """
-    Renders the diagnostic dict into the plain-language record:
-
-        Trade rejected
-
-        Score: 82
-
-        Rejected because:
-        ✓ Macro bias
-        ✓ Structure
-        ✓ Liquidity
-        ✓ Confirmation
-        ✗ Risk gate (47 pip stop > 45 max)
-
-    Only keys that were actually evaluated (not None) are printed — this
-    is what keeps the record honest about which gate did the rejecting
-    instead of implying every filter ran on every trade.
-    """
-    lines = [header, ""]
-    if score is not None:
-        lines.append(f"Score: {score}")
-        lines.append("")
-    lines.append("Rejected because:")
-    for key in diag:
-        entry = diag[key]
-        if entry is None:
-            continue
-        passed, reason = entry
-        mark  = "✓" if passed else "✗"
-        label = DIAGNOSTIC_LABELS.get(key, key)
-        suffix = f" ({reason})" if (not passed and reason) else ""
-        lines.append(f"{mark} {label}{suffix}")
-    return "\n".join(lines)
-
-
-def scaled_cooldown_bars(peak_ratio):
-    """
-    Returns the post-spike cooldown duration in 5M bars, scaled to the
-    severity of the volatility spike that triggered the suppression.
-
-    Verified against test suite (7/7 pass):
-      ratio=2.0 → 2 bars (10 min)   ← minimum, marginal spike
-      ratio=4.0 → 5 bars (25 min)   ← moderate news event
-      ratio=6.0 → 8 bars (40 min)   ← strong surprise print
-      ratio=8.0 → 10 bars (50 min)  ← cap, SNB-style event
-    """
-    excess = max(0.0, peak_ratio - REGIME_SHIFT_THRESHOLD)
-    bars   = POST_SPIKE_COOLDOWN_BASE + (excess * POST_SPIKE_COOLDOWN_SCALE)
-    return min(int(bars), POST_SPIKE_COOLDOWN_MAX)
-
-
-def _pocket_span_overshoot(df_15m, swing_high, swing_low, macro_bias,
-                            near_ratio=FIB_ZONE_NEAR, far_ratio=FIB_ZONE_FAR):
-    """
-    Geometric definition of a momentum candle: the most recent 15M candle
-    traversed the ENTIRE fib pocket (near edge to far edge) in a single
-    bar, at a range large relative to the pocket's own width. That's a
-    displacement/momentum candle doing the "entering" instead of price
-    gradually working into the pocket.
-
-    Returns (is_overshoot: bool, reason: str).
-    """
-    structural_range = swing_high - swing_low
-    if structural_range <= 0 or len(df_15m) < 1:
-        return False, ""
-
-    if macro_bias == "BULLISH":
-        near_edge = swing_high - (near_ratio * structural_range)
-        far_edge  = swing_high - (far_ratio  * structural_range)
-    else:
-        near_edge = swing_low + (near_ratio * structural_range)
-        far_edge  = swing_low + (far_ratio  * structural_range)
-
-    pocket_top    = max(near_edge, far_edge)
-    pocket_bottom = min(near_edge, far_edge)
-    pocket_width  = pocket_top - pocket_bottom
-    if pocket_width <= 0:
-        return False, ""
-
-    c = df_15m.iloc[-1]
-    candle_range = c["High"] - c["Low"]
-
-    spans_whole_pocket = c["High"] >= pocket_top and c["Low"] <= pocket_bottom
-    is_momentum_sized  = candle_range >= (MOMENTUM_OVERSHOOT_POCKET_MULT * pocket_width)
-
-    if spans_whole_pocket and is_momentum_sized:
-        return True, (
-            f"15M candle range {candle_range/PIP_SIZE:.1f}p spans the whole "
-            f"pocket ({pocket_width/PIP_SIZE:.1f}p) in one bar — displacement, "
-            f"not a gradual approach; likely to break through rather than react"
-        )
-    return False, ""
-
-
-def detect_effort_invalidation(df_15m, swing_high, swing_low, macro_bias,
-                                lookback_bars=SWING_LOOKBACK_15,
-                                min_build_bars=EFFORT_MIN_BUILD_BARS,
-                                erase_min_fraction=EFFORT_ERASE_MIN_FRACTION,
-                                time_max_fraction=EFFORT_TIME_MAX_FRACTION,
-                                reversal_window_bars=EFFORT_REVERSAL_WINDOW_BARS):
-    """
-    Effort-based definition of a momentum candle, independent of the fib
-    pocket entirely: a leg that took a long, gradual grind to build (many
-    candles) had most of that progress erased by only one or two opposing
-    candles. That's disproportionate regardless of where price ends up
-    relative to any zone — the thing being invalidated is the TIME/EFFORT
-    that built the leg, not a price level.
-
-    Locates the leg's origin and extreme within the recent 15M window by
-    nearest-price match (swing_high/swing_low are already known structural
-    levels; this just finds where in time they occurred), measures how
-    many bars separate them (the "build"), then checks how much of that
-    leg's range was given back in just the last `reversal_window_bars`
-    candles (the "erasure"). Flags only when the erasure is both large
-    (>= erase_min_fraction of the leg) and fast (<= time_max_fraction of
-    the bars it took to build) — either alone is normal market behavior.
-
-    Returns (is_invalidated: bool, reason: str).
-    """
-    leg_range = swing_high - swing_low
-    min_bars_needed = min_build_bars + reversal_window_bars
-    if leg_range <= 0 or len(df_15m) < min_bars_needed:
-        return False, ""
-
-    lookback = df_15m.tail(lookback_bars).reset_index(drop=True)
-    if len(lookback) < min_bars_needed:
-        return False, ""
-
-    if macro_bias == "BULLISH":
-        idx_origin  = (lookback["Low"]  - swing_low).abs().idxmin()
-        idx_extreme = (lookback["High"] - swing_high).abs().idxmin()
-    else:
-        idx_origin  = (lookback["High"] - swing_high).abs().idxmin()
-        idx_extreme = (lookback["Low"]  - swing_low).abs().idxmin()
-
-    bars_to_build = abs(idx_extreme - idx_origin)
-    if bars_to_build < min_build_bars:
-        # The leg itself formed quickly — a fast reversal isn't
-        # disproportionate to anything; this check only means something
-        # when the build was genuinely gradual.
-        return False, ""
-
-    reversal = lookback.tail(reversal_window_bars)
-    if macro_bias == "BULLISH":
-        reversal_distance = swing_high - reversal["Low"].min()
-    else:
-        reversal_distance = reversal["High"].max() - swing_low
-
-    erase_fraction = reversal_distance / leg_range
-    time_fraction  = len(reversal) / bars_to_build
-
-    if erase_fraction >= erase_min_fraction and time_fraction <= time_max_fraction:
-        return True, (
-            f"leg took {bars_to_build} bars (~{bars_to_build * 15} min) to build "
-            f"but {erase_fraction*100:.0f}% of its range was erased in just "
-            f"{len(reversal)} bar(s) — effort invalidated, treat with caution "
-            f"even if price reacts from here"
-        )
-    return False, ""
-
-
-def format_timeline_diagnostics(timeline, now_utc):
-    """
-    Compact per-signal diagnostic block: when each confirmation stage
-    first happened, relative to the earliest known stage, plus MFE/MAE
-    on entry_distance (in pips from fib_zone) while waiting for
-    confirmation. The point: if entry_distance was still climbing right
-    up to the signal while confidence barely moved, THAT stage is the
-    bottleneck, not a mystery — this makes it visible per-trade instead
-    of needing to reconstruct it from memory afterward.
-
-    Timestamps are quantized to the scan interval (~5 min), not exact
-    intrabar tick time — this shows which scan each stage first appeared
-    in, not the literal live second it happened.
-    """
-    def _parse(iso):
-        try:
-            return datetime.fromisoformat(iso) if iso else None
-        except Exception:
-            return None
-
-    stages = [
-        ("CHoCH/BOS",   _parse(timeline.get("choch_bos_at")),   timeline.get("choch_bos_label") or "N/A"),
-        ("Fib entered", _parse(timeline.get("fib_entered_at")), None),
-        ("Sweep",       _parse(timeline.get("sweep_at")),       None),
-        ("Engulf",      _parse(timeline.get("engulf_at")),      None),
-        ("Signal sent", now_utc,                                None),
-    ]
-    anchor = next((t for _, t, _ in stages if t is not None), None)
-
-    lines = []
-    for label, ts, tag in stages:
-        if ts is None:
-            lines.append(f"     {label}: —")
-            continue
-        lag = f" (+{int((ts - anchor).total_seconds() // 60)}m)" if anchor and ts != anchor else ""
-        tag_str = f" [{tag}]" if tag and tag != "N/A" else ""
-        lines.append(f"     {label}: {ts.strftime('%H:%M UTC')}{lag}{tag_str}")
-
-    mfe = timeline.get("mfe_pips")
-    mae = timeline.get("mae_pips")
-    dist_line = (
-        "     Entry distance: closest {:.1f}p, farthest {:.1f}p (while waiting)".format(mfe, mae)
-        if mfe is not None and mae is not None else "     Entry distance: n/a"
-    )
-
-    return "🕒 *Timeline:*\n" + "\n".join(lines) + "\n" + dist_line
-
-
-def leg_retrace_fraction(swing_high, swing_low, current_price, macro_bias):
-    """
-    Fraction (0-1+) of the structural leg's range price has given back
-    from its extreme, using CLOSE rather than wick — this is meant to
-    describe a sustained, quiet drift back into the leg, not a wick
-    spike (wick-based depth is already what the invalidation/retrace
-    checks elsewhere use). Returns None if the leg has no measurable
-    range (degenerate swing_high == swing_low).
-    """
-    leg_range = swing_high - swing_low
-    if leg_range <= 0:
-        return None
-    if macro_bias == "BULLISH":
-        return (swing_high - current_price) / leg_range
-    else:
-        return (current_price - swing_low) / leg_range
-
-
-def detect_momentum_overshoot(df_15m, swing_high, swing_low, macro_bias,
-                               near_ratio=FIB_ZONE_NEAR, far_ratio=FIB_ZONE_FAR):
-    """
-    A momentum candle can show up two different ways, and either one on
-    its own is enough to distrust the setup:
-
-      1. Pocket-span (geometry): one candle wicks straight through the
-         whole fib pocket instead of price gradually working into it.
-      2. Effort-invalidation (pace): a slow, many-candle build gets most
-         of its progress erased by one or two opposing candles — a
-         disproportionate give-back regardless of where price lands
-         relative to any zone.
-
-    Returns (is_overshoot: bool, reason: str) — whichever check fired
-    first; if both fire, the pocket-span reason is reported since it's
-    the more visually immediate one.
-    """
-    span_overshoot, span_reason = _pocket_span_overshoot(
-        df_15m, swing_high, swing_low, macro_bias, near_ratio, far_ratio)
-    if span_overshoot:
-        return True, span_reason
-
-    return detect_effort_invalidation(df_15m, swing_high, swing_low, macro_bias)
-
-
-def is_fib_zone_stale(c_spike, swing_high, swing_low, fib_zone, current_price):
-    """
-    Tests whether the Fib zone should be considered stale after a spike.
-    Three distinct failure modes, checked in order of severity:
-
-    1. Spike range exceeded structural range — the whole swing repriced.
-       ATR-scaled stop and engulf threshold calibrated on old range are wrong.
-
-    2. Spike close broke SwH or SwL — structure invalidated by definition.
-       Fib drawn from an origin that no longer acts as meaningful support.
-
-    3. Current price drifted > 50% of structural range from zone — the zone
-       is geometrically valid but contextually irrelevant. Even if price
-       returns to the zone, it's doing so from a completely different setup.
-
-    Returns (is_stale: bool, reason: str).
-    """
-    structural_range = swing_high - swing_low
-    spike_range      = c_spike["High"] - c_spike["Low"]
-
-    if spike_range > structural_range:
-        return True, (
-            f"spike range {spike_range/PIP_SIZE:.1f}p "
-            f"> structural range {structural_range/PIP_SIZE:.1f}p"
-        )
-    if c_spike["Close"] > swing_high:
-        return True, f"spike close {c_spike['Close']:.5f} broke above SwH {swing_high:.5f}"
-    if c_spike["Close"] < swing_low:
-        return True, f"spike close {c_spike['Close']:.5f} broke below SwL {swing_low:.5f}"
-
-    zone_drift = abs(current_price - fib_zone) / structural_range
-    if zone_drift > 0.5:
-        return True, (
-            f"price {abs(current_price - fib_zone)/PIP_SIZE:.1f}p from zone "
-            f"(>{structural_range * 0.5 / PIP_SIZE:.1f}p threshold)"
-        )
-
-    return False, "zone still valid"
-
-
-def detect_regime_shift(df_5m, current_atr, now_utc):
-    """
-    Detects whether the current volatility environment has shifted away
-    from the baseline the strategy parameters were calibrated on.
-
-    Method: compare short-term ATR (last 25 min) against long-term ATR
-    (last ~4 hours). When short/long ratio exceeds REGIME_SHIFT_THRESHOLD,
-    a news spike or liquidity event has created a new volatility regime.
-
-    In this new regime:
-      - Stop loss buffer (1.5×ATR) is now too tight relative to actual moves
-      - Engulf body threshold (0.4×ATR) may accept noise candles that look
-        significant only relative to the now-stale long-term ATR
-      - Entry zone (Fib) was calculated on structure formed in the old regime
-
-    Returns: (is_shifted: bool, ratio: float, short_atr_pips: float)
-
-    The open warmup guard prevents false positives at session open where
-    the long ATR is contaminated by overnight low-liquidity data, making
-    the ratio artificially elevated even without a genuine news event.
-
-    now_utc is passed in from scan() rather than re-derived here. Three
-    sequential data-fetch calls (each up to 15s) happen between scan()
-    capturing its own now_utc and this function running; a fresh
-    datetime.now() call here could drift away from that — most visibly
-    right at the 08:00 UTC session-open boundary this warmup guard cares
-    about, where the two timestamps could straddle the boundary and
-    disagree about whether warmup should apply.
-    """
-    if not REGIME_SHIFT_ENABLED:
-        return False, 0.0, 0.0
-
-    if len(df_5m) < REGIME_SHIFT_LONG_PERIOD + 2:
-        return False, 0.0, 0.0
-
-    # Open warmup: skip regime detection for the first N bars of the
-    # session to avoid false positives from normal open expansion
-    session_open = now_utc.replace(hour=8, minute=0, second=0, microsecond=0)
-    bars_since_open = int((now_utc - session_open).total_seconds() / 300)
-    if 0 <= bars_since_open < REGIME_SHIFT_OPEN_WARMUP:
-        return False, 0.0, 0.0
-
-    short_atr = df_5m["ATR"].rolling(
-        REGIME_SHIFT_SHORT_PERIOD,
-        min_periods=REGIME_SHIFT_SHORT_PERIOD
-    ).mean().iloc[-1]
-
-    long_atr = df_5m["ATR"].rolling(
-        REGIME_SHIFT_LONG_PERIOD,
-        min_periods=REGIME_SHIFT_LONG_PERIOD // 2
-    ).mean().iloc[-1]
-
-    if pd.isna(short_atr) or pd.isna(long_atr) or long_atr == 0:
-        return False, 0.0, 0.0
-
-    ratio          = short_atr / long_atr
-    short_atr_pips = short_atr / PIP_SIZE
-    is_shifted     = ratio >= REGIME_SHIFT_THRESHOLD
-
-    return is_shifted, ratio, short_atr_pips
-
-
-# -----------------------------------------------
-# SHADOW PIPELINE — loose-rule parallel paper-trading simulator
-# -----------------------------------------------
-# Runs a full, INDEPENDENT mirror of the live pipeline every scan, using
-# deliberately looser thresholds so it takes a meaningfully higher volume
-# of paper trades than the live bot for research purposes only. It never
-# sends a live trading alert and never reads or writes state.json /
-# stats.json — it has its own dedicated files (SHADOW_STATE_FILE /
-# SHADOW_TRADES_FILE), so a bug here cannot corrupt or influence the live
-# bot's trading decisions. It also computes its own 1H bias independently
-# (via the SAME compute_macro_bias() the live bot uses, just against its
-# own state), so it keeps evaluating and opening trades even while the
-# live bot itself is mid-trade and frozen at manage_active_trade().
-#
-# Kept IDENTICAL to live (real structural hard-stops, not noise filters):
-#   - 1H bias / CONSOLIDATION gate
-#   - 15M BOS vs 1H bias conflict suppression (timeframe alignment)
-#   - Structural range floor + ATR-invalid (NaN/0) guard
-#   - htf_bias_gate + compute_confidence_score (identical scoring math)
-#   - SCORE_TIER_ACCEPTABLE floor (70) — same bar to actually "trade"
-#
-# Loosened (filters that gate WHEN a real setup fires, not what counts
-# as a real setup):
-#   - ATR floor: SHADOW_ATR_MIN_PIPS (5) vs live's ATR_MIN_PIPS (6)
-#   - Volatility regime-shift / post-spike suppression: detected and
-#     tagged on the trade record, but does not block it from opening
-#   - Momentum-overshoot suppression: detected and tagged, not enforced
-#   - Live's full dealing-range duplicate-signal cooldown: replaced with
-#     a much lighter "already have an open shadow trade near this entry,
-#     in this direction" dedup — enough that a stalled price doesn't
-#     spawn a new trade every 5 minutes, without throttling as hard as
-#     live's full-leg-memory cooldown
-#   - The two-stage WATCHING confirmation ping: not applicable — shadow
-#     only records executed (or would-be) trades, not pre-alerts
-def load_shadow_pipeline_state():
-    try:
-        with open(SHADOW_STATE_FILE, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def save_shadow_pipeline_state(state):
-    try:
-        with open(SHADOW_STATE_FILE, "w") as f:
-            json.dump(state, f)
-    except Exception as e:
-        print("[SHADOW STATE SAVE ERROR] " + str(e))
-
-
-def load_shadow_trades():
-    try:
-        with open(SHADOW_TRADES_FILE, "r") as f:
-            data = json.load(f)
-    except Exception:
-        data = {}
-    data.setdefault("funnel", {})
-    data.setdefault("open_trades", [])
-    data.setdefault("resolved_trades", [])
-    funnel = data["funnel"]
-    for k in ("total_scans", "consolidation_skip", "bos_conflict", "no_structure",
-              "atr_too_low", "fib_reached", "pattern_passed", "trades_opened"):
-        funnel.setdefault(k, 0)
-    return data
-
-
-def save_shadow_trades(data):
-    data["resolved_trades"] = data["resolved_trades"][-SHADOW_RESOLVED_MAX:]
-    try:
-        with open(SHADOW_TRADES_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-    except Exception as e:
-        print("[SHADOW TRADES SAVE ERROR] " + str(e))
-
-
-def _shadow_structure_group(structure_source):
-    """
-    Collapses the fine-grained structure_source label into the two
-    buckets requested for the /shadow breakdown: BOS vs everything
-    fractal-derived (FALLBACK_FRACTAL, STATE_MEMORY, and the
-    memory-stale-fallback variant all ultimately trade off the same
-    underlying fractal swing read, not a fresh confirmed break).
-    """
-    return "BOS" if structure_source == "BOS" else "FRACTAL"
-
-
-def resolve_shadow_trades(df_5m, now_utc):
-    """
-    Checks every currently-open shadow trade against the latest closed
-    5M candle and closes any that hit SL or TP, using the same
-    conservative "assume SL if a single bar touches both levels" rule
-    check_trade_closed() already applies to the live trade. Runs every
-    scan regardless of anything else, so shadow trades keep resolving
-    even on scans where a new one can't open (or where the live bot is
-    itself mid-trade and frozen).
-    """
-    data = load_shadow_trades()
-    if not data["open_trades"]:
-        return
-    c_last = df_5m.iloc[-1]
-    still_open = []
-    for t in data["open_trades"]:
-        outcome = check_trade_closed(t, c_last)
-        if outcome is None:
-            still_open.append(t)
-            continue
-        exit_price = t["tp"] if outcome == "WIN" else t["sl"]
-        sign = 1 if t["direction"] == "BUY" else -1
-        pl_pips = (exit_price - t["entry"]) * sign / PIP_SIZE
-        t["result"]    = outcome
-        t["exit"]      = exit_price
-        t["pl_pips"]   = pl_pips
-        t["closed_at"] = now_utc.strftime("%Y-%m-%d %H:%M UTC")
-        data["resolved_trades"].append(t)
-    data["open_trades"] = still_open
-    save_shadow_trades(data)
-
-
-def maybe_open_shadow_trade(df_5m, df_15m, df_1h, now_utc):
-    """
-    Independent, loose-rule evaluation of whether a shadow (paper) trade
-    should open this scan. Purely additive — only touches
-    SHADOW_STATE_FILE / SHADOW_TRADES_FILE, never state.json/stats.json.
-    """
-    shadow_state = load_shadow_pipeline_state()
-    data = load_shadow_trades()
-    data["funnel"]["total_scans"] += 1
-
-    if len(df_1h) < HTF_BIAS_MIN_BARS:
-        save_shadow_trades(data)
-        return
-
-    macro_bias = compute_macro_bias(df_1h, shadow_state)
-    bias_stale = shadow_state.get("macro_bias_stale", False)
-    save_shadow_pipeline_state(shadow_state)
-
-    if macro_bias == "CONSOLIDATION":
-        data["funnel"]["consolidation_skip"] += 1
-        save_shadow_trades(data)
-        return
-
-    df_5m = df_5m.copy()
-    df_5m["ATR"] = atr(df_5m, period=14)
-    current_atr = df_5m["ATR"].iloc[-1]
-    if pd.isna(current_atr) or current_atr == 0:
-        save_shadow_trades(data)
-        return
-    current_atr_pips = current_atr / PIP_SIZE
-
-    if current_atr_pips < SHADOW_ATR_MIN_PIPS:
-        data["funnel"]["atr_too_low"] += 1
-        save_shadow_trades(data)
-        return
-
-    regime_shifted, regime_ratio, short_atr_pips = detect_regime_shift(df_5m, current_atr, now_utc)
-
-    lookback = df_15m.tail(SWING_LOOKBACK_15)
-    bos = detect_bos_impulse(lookback, wing=FRACTAL_WING)
-    if bos is None:
-        if _refresh_leg_anchor(shadow_state, "leg15", lookback):
-            bos = {
-                "direction":     shadow_state["leg15_direction"],
-                "impulse_start": shadow_state["leg15_origin"],
-                "impulse_end":   shadow_state["leg15_extreme"],
-            }
-    else:
-        shadow_state["leg15_direction"] = bos["direction"]
-        shadow_state["leg15_origin"]    = bos["impulse_start"]
-        shadow_state["leg15_extreme"]   = bos["impulse_end"]
-
-    if bos is not None:
-        if bos["direction"] == macro_bias:
-            structure_source = "BOS"
-            if bos["direction"] == "BULLISH":
-                swing_low, swing_high = bos["impulse_start"], bos["impulse_end"]
-            else:
-                swing_high, swing_low = bos["impulse_start"], bos["impulse_end"]
-            shadow_state.update({
-                "status":        "ACTIVE_LEG",
-                "direction":     bos["direction"],
-                "impulse_start": bos["impulse_start"],
-                "impulse_end":   bos["impulse_end"],
-            })
-        else:
-            # Real 15M-vs-1H timeframe conflict — kept as a hard stop for
-            # shadow too (this is core SMC strategy alignment, not noise).
-            data["funnel"]["bos_conflict"] += 1
-            save_shadow_pipeline_state(shadow_state)
-            save_shadow_trades(data)
-            return
-    else:
-        swing_high, swing_low, structure_source = fallback_structure(
-            lookback, macro_bias, shadow_state, wing=FRACTAL_WING)
-
-    save_shadow_pipeline_state(shadow_state)
-
-    structural_range = swing_high - swing_low
-    if structural_range < (5 * PIP_SIZE):
-        data["funnel"]["no_structure"] += 1
-        save_shadow_trades(data)
-        return
-
-    fib_ratio = adaptive_fib_ratio(df_5m, current_atr)
-    fib_zone = (swing_high - (fib_ratio * structural_range) if macro_bias == "BULLISH"
-                else swing_low + (fib_ratio * structural_range))
-
-    zone_tol   = ZONE_TOLERANCE_PIPS * PIP_SIZE
-    engulf_tol = ENGULF_TOLERANCE_PIPS * PIP_SIZE
-    sweep_valid, _sweep_label = detect_liquidity_sweep(df_5m, df_15m, fib_zone, macro_bias)
-    # NOTE: momentum-overshoot / effort-invalidation is intentionally NOT
-    # computed here. detect_momentum_overshoot() is really two overlapping
-    # checks bolted together (pocket-span geometry + effort/erasure pace),
-    # and live already gates on it, on top of the risk gate, on top of the
-    # regime-shift check — three filters doing variations of "was this move
-    # too aggressive/too wide." Shadow exists to test the loosest reasonable
-    # rule set as a comparison baseline, so it deliberately keeps regime
-    # shift (used below only to size the stop, never to block a trade) and
-    # drops momentum-overshoot/effort-invalidation and the risk gate
-    # entirely rather than stacking all three on the same paper trades live
-    # already stacks.
-
-    c_last = df_5m.iloc[-1]
-    c_prev = df_5m.iloc[-2]
-    body_last     = abs(c_last["Close"] - c_last["Open"])
-    atr_threshold = ATR_ENGULF_MIN * current_atr
-
-    trade_signal = "HOLD"
-    entry = sl = tp = None
-    score = score_tier = None
-
-    if macro_bias == "BULLISH":
-        lowest_wick        = min(c_prev["Low"], c_last["Low"])
-        in_zone_direct     = lowest_wick <= fib_zone + zone_tol
-        sweep_distance_ok  = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
-        sweep_usable       = sweep_valid and sweep_distance_ok
-        in_zone            = in_zone_direct or sweep_usable
-        bear_prev          = c_prev["Close"] < c_prev["Open"]
-        bull_last          = c_last["Close"] > c_last["Open"]
-        engulfs            = (c_last["Close"] >= c_prev["Open"] - engulf_tol and
-                               c_last["Open"]  <= c_prev["Close"] + engulf_tol)
-        real_body          = body_last > atr_threshold
-        close_loc_ok       = close_location(c_last) >= ENGULF_CLOSE_LOCATION_MIN
-        confirmation_passed = bear_prev and bull_last and engulfs and real_body and close_loc_ok
-
-        if in_zone:
-            data["funnel"]["fib_reached"] += 1
-
-        if in_zone and confirmation_passed:
-            gate_ok, _ = htf_bias_gate(macro_bias, "BULLISH")
-            if gate_ok:
-                fib_fraction = compute_fib_fraction(swing_high, swing_low, lowest_wick, macro_bias)
-                score, _bd, score_tier, _emoji, _warn = compute_confidence_score(
-                    sweep_usable, in_zone_direct, structure_source, in_zone, True,
-                    regime_shifted, is_active_session(now_utc), confirmation_passed,
-                    bias_stale=bias_stale, fib_fraction=fib_fraction,
-                )
-                if score >= SCORE_TIER_ACCEPTABLE:
-                    trade_signal = "BUY"
-                    entry        = c_last["Close"]
-                    sl_mult      = (SL_ATR_MULT_COMPRESSED if regime_ratio >= SL_VOL_SPIKE_RATIO
-                                     else SL_ATR_MULT)
-                    sl_buffer    = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                    sl           = lowest_wick - sl_buffer
-                    risk         = entry - sl
-                    tp           = entry + (RR_RATIO * risk)
-                    data["funnel"]["pattern_passed"] += 1
-
-    elif macro_bias == "BEARISH":
-        highest_wick       = max(c_prev["High"], c_last["High"])
-        in_zone_direct     = highest_wick >= fib_zone - zone_tol
-        sweep_distance_ok  = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
-        sweep_usable       = sweep_valid and sweep_distance_ok
-        in_zone            = in_zone_direct or sweep_usable
-        bull_prev          = c_prev["Close"] > c_prev["Open"]
-        bear_last          = c_last["Close"] < c_last["Open"]
-        engulfs            = (c_last["Open"]  >= c_prev["Close"] - engulf_tol and
-                               c_last["Close"] <= c_prev["Open"]  + engulf_tol)
-        real_body          = body_last > atr_threshold
-        close_loc_ok       = close_location(c_last) <= (1 - ENGULF_CLOSE_LOCATION_MIN)
-        confirmation_passed = bull_prev and bear_last and engulfs and real_body and close_loc_ok
-
-        if in_zone:
-            data["funnel"]["fib_reached"] += 1
-
-        if in_zone and confirmation_passed:
-            gate_ok, _ = htf_bias_gate(macro_bias, "BEARISH")
-            if gate_ok:
-                fib_fraction = compute_fib_fraction(swing_high, swing_low, highest_wick, macro_bias)
-                score, _bd, score_tier, _emoji, _warn = compute_confidence_score(
-                    sweep_usable, in_zone_direct, structure_source, in_zone, True,
-                    regime_shifted, is_active_session(now_utc), confirmation_passed,
-                    bias_stale=bias_stale, fib_fraction=fib_fraction,
-                )
-                if score >= SCORE_TIER_ACCEPTABLE:
-                    trade_signal = "SELL"
-                    entry        = c_last["Close"]
-                    sl_mult      = (SL_ATR_MULT_COMPRESSED if regime_ratio >= SL_VOL_SPIKE_RATIO
-                                     else SL_ATR_MULT)
-                    sl_buffer    = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                    sl           = highest_wick + sl_buffer
-                    risk         = sl - entry
-                    tp           = entry - (RR_RATIO * risk)
-                    data["funnel"]["pattern_passed"] += 1
-
-    if trade_signal == "HOLD" or entry is None:
-        save_shadow_trades(data)
-        return
-
-    # Lightweight dedup — NOT live's full dealing-range memory, just
-    # enough that a stalled price sitting in one zone for hours doesn't
-    # spawn a near-identical "trade" every 5 minutes.
-    same_dir_open = [t for t in data["open_trades"] if t["direction"] == trade_signal]
-    if (len(same_dir_open) >= SHADOW_MAX_OPEN_PER_DIRECTION or
-            len(data["open_trades"]) >= SHADOW_MAX_OPEN_TOTAL):
-        save_shadow_trades(data)
-        return
-    if any(abs(t["entry"] - entry) / PIP_SIZE < 3 for t in same_dir_open):
-        save_shadow_trades(data)
-        return
-
-    data["open_trades"].append({
-        "direction":          trade_signal,
-        "entry":              entry,
-        "sl":                 sl,
-        "tp":                 tp,
-        "score":              score,
-        "score_tier":         score_tier,
-        "structure_source":   structure_source,
-        "structure_group":    _shadow_structure_group(structure_source),
-        "regime_shifted":     bool(regime_shifted),
-        "opened_at":          now_utc.isoformat(),
-        "opened_at_display":  now_utc.strftime("%Y-%m-%d %H:%M UTC"),
-    })
-    data["funnel"]["trades_opened"] += 1
-    save_shadow_trades(data)
-
-
-def run_shadow_pipeline(df_5m, df_15m, df_1h, now_utc):
-    """
-    Single entry point called from scan(). Wrapped in a try/except that
-    swallows and logs any error — the shadow pipeline must NEVER be able
-    to raise into, break, or otherwise interrupt the live bot's own scan.
-    """
-    try:
-        resolve_shadow_trades(df_5m, now_utc)
-        maybe_open_shadow_trade(df_5m, df_15m, df_1h, now_utc)
-    except Exception as e:
-        print("[SHADOW PIPELINE ERROR] " + str(e))
-
-
-def format_shadow_pipeline_summary(data):
-    """
-    /shadow response: funnel breakdown (mirrors format_stats_summary's
-    style so it reads the same way), overall resolved win rate, then two
-    fine-grained breakdowns — by structure source (BOS vs Fractal) and by
-    confidence-score bucket (e.g. "80-84: 5 trades — 45% win rate") — so
-    it's possible to see at a glance which kind of setup the looser rules
-    are actually paying off on.
-    """
-    funnel = data.get("funnel", {})
-    resolved = data.get("resolved_trades", [])
-    open_trades = data.get("open_trades", [])
-    n = funnel.get("total_scans", 0)
-    if n == 0:
-        return "🕶️ _Shadow pipeline — no scans recorded yet._"
-
-    def pct(v):
-        return f"{v/n*100:.1f}%" if n else "—"
-
-    total_resolved = len(resolved)
-    wins = sum(1 for t in resolved if t.get("result") == "WIN")
-    wr = (f"{wins}/{total_resolved} ({wins/total_resolved*100:.0f}%)"
-          if total_resolved else "no trades resolved yet")
-
-    lines = [
-        "",
-        "🕶️ *Shadow Pipeline — Loose-Rule Simulator*",
-        f"_ATR floor {SHADOW_ATR_MIN_PIPS}p (live {ATR_MIN_PIPS}p) · regime/momentum "
-        "suppression OFF · duplicate cooldown light · 1H bias & BOS-conflict "
-        "still hard stops_",
-        "─────────────────────",
-        f"🔍 Scans:                `{n}`",
-        f"➖ Consolidation skip:    `{funnel.get('consolidation_skip',0)}` ({pct(funnel.get('consolidation_skip',0))})",
-        f"⚠️ BOS conflict:          `{funnel.get('bos_conflict',0)}` ({pct(funnel.get('bos_conflict',0))})",
-        f"❌ No structure:          `{funnel.get('no_structure',0)}` ({pct(funnel.get('no_structure',0))})",
-        f"📉 ATR too low (<{SHADOW_ATR_MIN_PIPS}p):  `{funnel.get('atr_too_low',0)}` ({pct(funnel.get('atr_too_low',0))})",
-        f"🎯 Fib zone reached:      `{funnel.get('fib_reached',0)}` ({pct(funnel.get('fib_reached',0))})",
-        f"✅ Pattern passed:        `{funnel.get('pattern_passed',0)}` ({pct(funnel.get('pattern_passed',0))})",
-        f"🚨 Trades opened:         `{funnel.get('trades_opened',0)}`",
-        f"📬 Currently open:        `{len(open_trades)}`",
-        "─────────────────────",
-        f"🏆 Resolved win rate:     `{wr}`",
-    ]
-
-    if total_resolved:
-        lines.append("─────────────────────")
-        lines.append("*By structure source:*")
-        for grp in ("BOS", "FRACTAL"):
-            grp_trades = [t for t in resolved if t.get("structure_group") == grp]
-            if not grp_trades:
-                continue
-            g_wins  = sum(1 for t in grp_trades if t.get("result") == "WIN")
-            g_total = len(grp_trades)
-            lines.append(f"  {grp}: `{g_total} trades` — `{g_wins/g_total*100:.0f}% win rate`")
-
-        lines.append("─────────────────────")
-        lines.append("*By confidence score:*")
-        buckets = [(70, 74), (75, 79), (80, 84), (85, 89), (90, 94), (95, 100)]
-        for lo, hi in buckets:
-            b_trades = [t for t in resolved if t.get("score") is not None and lo <= t["score"] <= hi]
-            if not b_trades:
-                continue
-            b_wins  = sum(1 for t in b_trades if t.get("result") == "WIN")
-            b_total = len(b_trades)
-            lines.append(f"  {lo}-{hi}: `{b_total} trades` — `{b_wins/b_total*100:.0f}% win rate`")
-
-    lines.append("─────────────────────")
-    lines.append(
-        "_Research only — never a live trading alert. Send /trade for the "
-        "live bot's actual open position, or /biasab for the older bias-only A/B log._"
-    )
-    return "\n".join(lines)
-
-
-# -----------------------------------------------
+# =========================================================================
 # MAIN SCAN
-# -----------------------------------------------
+# =========================================================================
 def scan():
     now_utc = datetime.now(timezone.utc)
     now_str = now_utc.strftime("%H:%M UTC")
-    print("\n[" + now_str + "] Scan starting...")
+    print("\n[" + now_str + "] Scan starting (V3 Rule-of-Law, Stage 3)...")
 
-    # ── Load persistent stats ────────────────────────────────────────────
     stats = load_stats()
+
+    # ── Telegram commands — processed BEFORE the data fetch so a fetch
+    # failure never silently drops a /win, /undo, /trade, etc. ───────────
+    try:
+        stats = check_result_commands(stats)
+    except Exception as e:
+        print("[COMMANDS ERROR] " + str(e))
+
     stats["total_scans"] += 1
     if stats["first_scan"] is None:
         stats["first_scan"] = now_utc.strftime("%Y-%m-%d")
     stats["last_scan"] = now_utc.strftime("%Y-%m-%d %H:%M")
 
-    # ── Result command check (non-blocking) ──────────────────────────────
-    # Moved to the top of scan() — must run on EVERY invocation regardless
-    # of data fetch failures, sanity checks, or consolidation state.
-    # Previously this ran after four early-return gates further down, so
-    # /stats, /win, /loss, /journal, and /last would silently queue in
-    # Telegram and only get processed on a scan where all four gates
-    # happened to pass (e.g. not consolidating, enough bars, data sane).
-    stats = check_result_commands(stats)
+    diag = new_diagnostic() if DIAGNOSTIC_MODE else None
 
-    # ── Fetch data ───────────────────────────────────────────────────────
+    # ── Fetch data ──────────────────────────────────────────────────────
     df_5m  = fetch_ohlc("5min",  outputsize=100)
     df_15m = fetch_ohlc("15min", outputsize=SWING_LOOKBACK_15 + 10)
     df_1h  = fetch_ohlc("1h",    outputsize=HTF_BIAS_MIN_BARS + 20)
@@ -3234,10 +3312,7 @@ def scan():
         save_stats(stats)
         return
 
-    # ── Data freshness ───────────────────────────────────────────────────
-    # Must run before ANYTHING structural — a stale feed masquerading as
-    # live data is worse than a fetch failure, since a fetch failure is at
-    # least loud. This is silent by default, which is exactly the danger.
+    # ── Data quality gates ───────────────────────────────────────────────
     fresh_5m  = check_data_freshness(df_5m,  5,  "5min",  now_utc)
     fresh_15m = check_data_freshness(df_15m, 15, "15min", now_utc)
     fresh_1h  = check_data_freshness(df_1h,  60, "1h",    now_utc)
@@ -3253,1223 +3328,228 @@ def scan():
         save_stats(stats)
         return
 
-    # ── Shadow pipeline (independent loose-rule paper-trade simulator) ────
-    # Runs every scan with good data, regardless of whether the live bot
-    # itself is about to freeze at manage_active_trade() below — it keeps
-    # its own bias/state/trades entirely separate from the live bot's, so
-    # it never stalls just because a live trade happens to be open.
-    run_shadow_pipeline(df_5m, df_15m, df_1h, now_utc)
+    # ── /trade on-demand query — deferred from check_result_commands()
+    # above until fresh 5M data (and therefore a current price) is on
+    # hand. Answered regardless of whether a trade is open right now;
+    # format_trade_query_response() branches on that itself. ─────────────
+    if stats.get("_pending_trade_query"):
+        current_price = df_5m["Close"].iloc[-1]
+        send_telegram(format_trade_query_response(stats, current_price, now_utc))
+        stats["_pending_trade_query"] = False
 
-    # ── Active-trade check — runs BEFORE bias/zone/scoring ────────────────
-    # If a trade is already open, this is the ONLY thing scan() does this
-    # cycle: check for SL/TP hit, or send a status ping. No new bias read,
-    # no zone/structure evaluation, no confidence score gets computed —
-    # the signal-time score stays frozen in stats["active_trade"] and is
-    # never touched again until the trade closes.
-    trade_is_open = manage_active_trade(stats, df_5m, now_utc)
-
-    # ── /trade on-demand query ────────────────────────────────────────────
-    # Deferred here from check_result_commands() (which runs before the
-    # data fetch, and so has no live price to report with) — now that
-    # fresh 5M data exists and manage_active_trade() has had a chance to
-    # auto-close a just-hit SL/TP this same cycle, answer with the
-    # freshest possible picture.
-    if stats.pop("_pending_trade_query", False):
-        send_telegram(format_trade_query_response(stats, df_5m.iloc[-1]["Close"], now_utc))
-
+    # ── Active-trade freeze — runs BEFORE Macro Bias ─────────────────────
+    state = load_state()
+    trade_is_open = manage_active_trade(stats, state, df_5m, now_utc)
+    save_state(state)
     if trade_is_open:
         save_stats(stats)
         return
 
     if len(df_1h) < HTF_BIAS_MIN_BARS:
-        print("Only " + str(len(df_1h)) + " 1H bars. Need " +
-              str(HTF_BIAS_MIN_BARS) + ". Skipping.")
+        print(f"Only {len(df_1h)} 1H bars. Need {HTF_BIAS_MIN_BARS}. Skipping.")
         save_stats(stats)
         return
 
-    # ── 1H Bias ──────────────────────────────────────────────────────────
-    state      = load_state()
-    macro_bias = compute_macro_bias(df_1h, state)
-    # compute_macro_bias mutates state's bias-confirmation fields on every
-    # call (including the CONSOLIDATION/no-trade path below, which returns
-    # early before any other save_state() call would run) — save here so
-    # the confirmation counter survives across runs regardless of outcome.
+    # ── MACRO BIAS (pure) ─────────────────────────────────────────────────
+    macro_bias, bias_updates = compute_macro_bias(df_1h, df_15m, state)
+    apply_state_updates(state, bias_updates)
     bias_stale = state.get("macro_bias_stale", False)
 
-    # ── Shadow log (old ungated rule vs live CHoCH+BOS+EMA gated rule) ───
-    # Never used for trading decisions — purely an A/B record. Runs on the
-    # same state dict (writing only shadow_-prefixed keys) so it's saved
-    # in the same save_state(state) call right below, then a separate
-    # comparison entry gets appended to its own rolling log file.
-    shadow_bias = compute_macro_bias_shadow_old_rule(df_1h, state)
-    shadow_agrees = (shadow_bias == macro_bias)
-    pending_flip = state.get("macro_bias_pending_flip")
-    if not shadow_agrees or pending_flip:
-        print(
-            "  [SHADOW] live={} (gated){} | old-rule={} | {}".format(
-                macro_bias,
-                " STALE" if bias_stale else "",
-                shadow_bias,
-                "MATCH" if shadow_agrees else "DIVERGE — gate is currently holding back a flip the old rule would have taken"
-            )
-        )
-    shadow_log = load_shadow_log()
-    shadow_log.append({
-        "time":            now_utc.isoformat(),
-        "price":           float(df_1h["Close"].iloc[-1]),
-        "live_bias":       macro_bias,
-        "live_bias_stale": bias_stale,
-        "shadow_bias":     shadow_bias,
-        "agree":           shadow_agrees,
-        "pending_flip":    pending_flip,
-    })
-    save_shadow_log(shadow_log)
+    # Shadow A/B (bias-only, never trades) — same pure pattern.
+    shadow_bias, shadow_updates = compute_macro_bias_shadow_old_rule(df_1h, state)
+    apply_state_updates(state, shadow_updates)
+    bias_agree = (shadow_bias == macro_bias)
+    if not bias_agree:
+        print(f"  [SHADOW] live={macro_bias}{' STALE' if bias_stale else ''} | "
+              f"old-rule={shadow_bias} | DIVERGE")
+
+    # Persist every scan's agreement (not just divergences) — /biasab
+    # needs the full denominator to report an honest agreement rate.
+    try:
+        bias_ab_log = load_bias_ab_log()
+        bias_ab_log.append({
+            "time":        now_utc.strftime("%Y-%m-%d %H:%M UTC"),
+            "live_bias":   macro_bias,
+            "shadow_bias": shadow_bias,
+            "agree":       bias_agree,
+            "price":       float(df_5m["Close"].iloc[-1]),
+        })
+        save_bias_ab_log(bias_ab_log)
+    except Exception as e:
+        print("[BIAS AB LOG ERROR] " + str(e))
 
     save_state(state)
-
-    # WATCHING bias-mismatch guard — runs BEFORE the CONSOLIDATION early
-    # return below, and before anything else, specifically so a bias flip
-    # can't be missed. This is the third event-based WATCHING invalidator
-    # (alongside the 15M close-through and price-runaway guards further
-    # down): the bias recompute itself, done fresh from real 1H data every
-    # run, is the market event here — not a timer, not a bar count. A
-    # WATCHING state anchored to a bias that no longer holds (flipped
-    # direction, or gone flat) is stale regardless of price action.
-    #
-    # Also clears on bias_stale even when the VALUE hasn't changed — a
-    # stale-held bias means the leg that anchored this WATCHING zone has
-    # already invalidated (origin break / 78.6% retrace); the zone was
-    # built on structure that no longer exists, even though macro_bias
-    # still reads the same direction it did when WATCHING was set.
-    if state.get("watching") and state.get("watching_bias") and (
-        state.get("watching_bias") != macro_bias or bias_stale
-    ):
-        reason = (
-            "1H bias moved from {} to {}".format(state.get("watching_bias"), macro_bias)
-            if state.get("watching_bias") != macro_bias
-            else "1H structure backing '{}' has invalidated with nothing to replace it yet".format(macro_bias)
-        )
-        print("  [WATCHING] Cleared — " + reason + " (zone no longer valid).")
-        state["watching"] = False
-        state.pop("watching_zone",   None)
-        state.pop("watching_bias",   None)
-        state.pop("watching_set_at", None)
-        save_state(state)
 
     if macro_bias == "CONSOLIDATION":
         stats["consolidation_skip"] += 1
         save_stats(stats)
-        print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", "N/A", "N/A",
-                          "NO TRADE — 1H is consolidating (no directional edge)"))
-        if DIAGNOSTIC_MODE:
-            diag = new_diagnostic()
-            diag_set(diag, "macro_bias", False, "1H is consolidating — no directional edge")
+        diag_set(diag, "macro_bias", False, "CONSOLIDATION — no directional edge")
+        print("  1H Bias: CONSOLIDATION — no directional edge. No tier is evaluated.")
+        if diag is not None:
             print(build_diagnostic_report(diag))
         return
+    diag_set(diag, "macro_bias", True,
+             "STALE — hold-over direction, no live 1H break backing it" if bias_stale else None)
 
-    # ── Early stale-bias resolution via 15M structure ────────────────────
-    # This is the SAME promotion logic that lives further down in the 15M
-    # BOS/Structure section (a 15M break against a stale 1H hold gets
-    # promoted rather than suppressed as a "conflict") — duplicated here,
-    # ahead of the ATR gate below, specifically because the ATR gate
-    # RETURNS before that later block ever runs. Bias bookkeeping has
-    # nothing to do with whether this instant's 5M ATR clears the entry
-    # floor, so a quiet-ATR scan must not be able to leave a stale bias
-    # stuck reporting its OLD direction indefinitely just because it never
-    # got a turn to check. The later block still runs its own copy of this
-    # check when reached; it naturally no-ops here since bias_stale is
-    # already False by then, so nothing fires twice.
-    if bias_stale:
-        early_lookback = df_15m.tail(SWING_LOOKBACK_15)
-        early_bos = detect_bos_impulse(early_lookback, wing=FRACTAL_WING,
-                                        break_buffer_atr_mult=BOS_15M_BREAK_BUFFER_ATR_MULT)
-        if early_bos is not None:
-            state["leg15_break_count"] = early_bos["break_count"]
-        else:
-            if _refresh_leg_anchor(state, "leg15", early_lookback):
-                early_bos = {
-                    "direction":     state["leg15_direction"],
-                    "impulse_start": state["leg15_origin"],
-                    "impulse_end":   state["leg15_extreme"],
-                    "break_count":   state.get("leg15_break_count", 1),
-                }
-        if early_bos is not None and early_bos["direction"] != macro_bias:
-            promo_ok, promo_reason = _promotion_confirmed(
-                early_bos.get("break_count", 1), df_1h, early_bos["direction"])
-            if promo_ok:
-                print(
-                    "  [BIAS] 15M BOS ({}) reconfirms over stale 1H hold ({}) — "
-                    "promoting early, ahead of the ATR gate ({}).".format(
-                        early_bos["direction"], macro_bias, promo_reason)
-                )
-                macro_bias = early_bos["direction"]
-                state["macro_bias_confirmed"] = macro_bias
-                state["macro_bias_stale"]     = False
-                state["macro_leg_direction"]  = macro_bias
-                state["macro_leg_origin"]     = early_bos["impulse_start"]
-                state["macro_leg_extreme"]    = early_bos["impulse_end"]
-                bias_stale = False
-                save_state(state)
-            else:
-                print(
-                    "  [BIAS] 15M BOS ({}) vs stale 1H hold ({}) — NOT promoting yet: {}"
-                    .format(early_bos["direction"], macro_bias, promo_reason)
-                )
-
-    # ── ATR ───────────────────────────────────────────────────────────────
-    df_5m["ATR"] = atr(df_5m, period=14)
-    current_atr      = df_5m["ATR"].iloc[-1]
-    current_atr_pips = current_atr / PIP_SIZE if not pd.isna(current_atr) else 0
-
-    atr_valid_check = "PASS" if (not pd.isna(current_atr) and current_atr != 0) else "FAIL"
-    if pd.isna(current_atr) or current_atr == 0:
+    swing_high = state.get("macro_swing_high")
+    swing_low  = state.get("macro_swing_low")
+    if swing_high is None or swing_low is None:
+        print("  No confirmed 1H swing points yet. Skipping.")
         save_stats(stats)
-        print(_checklist(macro_bias, "N/A", "N/A", "N/A", "N/A", atr_valid_check, "N/A",
-                          "NO TRADE — ATR invalid", bias_stale=bias_stale))
         return
 
-    # Hard minimum ATR gate
-    if ATR_MIN_PIPS > 0 and current_atr_pips < ATR_MIN_PIPS:
-        stats["atr_too_low"] += 1
-        save_stats(stats)
-        print(_checklist(
-            macro_bias, "N/A", "N/A", "N/A", "N/A",
-            f"FAIL — ATR {current_atr_pips:.1f}p < min {ATR_MIN_PIPS}p",
-            "N/A", "NO TRADE — ATR below minimum threshold",
-            bias_stale=bias_stale
-        ))
-        return
-
-    # ── Volatility regime shift detection ────────────────────────────────
-    # Runs AFTER the ATR minimum gate so the regime check only applies
-    # to sessions where baseline volatility is already tradeable.
-    # A regime shift doesn't skip the scan entirely — it runs the full
-    # checklist and logs everything, but suppresses the actual signal.
-    # This preserves journal data while preventing trades on miscalibrated
-    # parameters.
-    regime_shifted, regime_ratio, short_atr_pips = detect_regime_shift(
-        df_5m, current_atr, now_utc)
-    regime_note = ""
-
-    if regime_shifted:
-        # Spike just detected — record severity in state so cooldown
-        # persists across the next N scan cycles even after ratio recovers
-        stats["regime_shift_skip"] = stats.get("regime_shift_skip", 0) + 1
-        cooldown_bars = scaled_cooldown_bars(regime_ratio)
-        state["post_spike_cooldown_remaining"] = cooldown_bars
-        state["post_spike_peak_ratio"]         = regime_ratio
-        save_state(state)
-        regime_note = (
-            f"\n  ⚡ [REGIME SHIFT] Short ATR {short_atr_pips:.1f}p is "
-            f"{regime_ratio:.1f}× session baseline — "
-            f"suppressing for {cooldown_bars} bars (~{cooldown_bars*5} min). "
-            f"Checklist logged for research."
-        )
-    else:
-        # No active spike — but check if we're still in post-spike cooldown
-        remaining = state.get("post_spike_cooldown_remaining", 0)
-        if remaining > 0:
-            regime_shifted = True   # still suppressed
-            state["post_spike_cooldown_remaining"] = remaining - 1
-            save_state(state)
-            peak = state.get("post_spike_peak_ratio", regime_ratio)
-            regime_note = (
-                f"\n  ⏳ [POST-SPIKE COOLDOWN] {remaining} bar(s) remaining "
-                f"(peak ratio was {peak:.1f}×). Signal suppressed."
-            )
-
-    # ── BOS / Structure ───────────────────────────────────────────────────
-    lookback      = df_15m.tail(SWING_LOOKBACK_15)
-    bos           = detect_bos_impulse(lookback, wing=FRACTAL_WING,
-                                        break_buffer_atr_mult=BOS_15M_BREAK_BUFFER_ATR_MULT)
-    bos_check     = "N/A"
-    bos_bias_check = "N/A"
-    bias_reconfirmed_15m = False
-    bos_from_anchor = False
-
-    if bos is not None:
-        # Fresh 15M leg found — anchor it. SWING_LOOKBACK_15 is only 48
-        # bars (12 hours), far shorter than the 1H side's ~120-bar window,
-        # so the same window-aging bug (a still-alive leg's origin
-        # fractal scrolling out of view and getting silently replaced or
-        # lost) bites here more often, not less.
-        #
-        # Before overwriting, capture whether this is actually a NEW leg
-        # (different origin or direction from what was anchored before)
-        # and label it BOS (continuation — same direction) or CHoCH
-        # (reversal — direction flipped) vs the prior one. This label +
-        # timestamp becomes the first stage of the setup timeline used
-        # for signal-latency diagnostics further down.
-        prev_leg15_dir    = state.get("leg15_direction")
-        prev_leg15_origin = state.get("leg15_origin")
-        is_new_leg15 = (
-            bos["impulse_start"] != prev_leg15_origin or bos["direction"] != prev_leg15_dir
-        )
-        if is_new_leg15:
-            state["leg15_change_label"] = (
-                "BOS (first leg)" if prev_leg15_dir is None
-                else ("CHoCH" if bos["direction"] != prev_leg15_dir else "BOS")
-            )
-            state["leg15_confirmed_at"] = now_utc.isoformat()
-
-        state["leg15_direction"]   = bos["direction"]
-        state["leg15_origin"]      = bos["impulse_start"]
-        state["leg15_extreme"]     = bos["impulse_end"]
-        state["leg15_break_count"] = bos["break_count"]
-    else:
-        # Nothing in the current 48-bar window. Before falling all the
-        # way back to STATE_MEMORY/fractals, check whether a standing 15M
-        # anchor is still alive against the price data actually on hand.
-        if _refresh_leg_anchor(state, "leg15", lookback):
-            bos = {
-                "direction":     state["leg15_direction"],
-                "impulse_start": state["leg15_origin"],
-                "impulse_end":   state["leg15_extreme"],
-                "break_count":   state.get("leg15_break_count", 1),
-            }
-            bos_from_anchor = True
-            print(
-                "  [15M] Window lost the origin fractal but the anchored {} "
-                "leg is still intact — using it instead of falling back."
-                .format(bos["direction"])
-            )
-
-    if bos is not None:
-        # Stale-hold reconfirmation: the 1H side has no live structure of
-        # its own right now (compute_macro_bias is coasting on a bias whose
-        # supporting leg already invalidated — see bias_stale above). A
-        # 15M break AGAINST that stale hold is a candidate to resolve the
-        # gap, not a timeframe conflict — but it still has to clear the
-        # same bar the 1H flip gate demands of itself (break_count >= 2 +
-        # EMA agreement, see _promotion_confirmed) before it's trusted
-        # enough to promote. This branch is unreachable when bias_stale is
-        # False, so a 15M break against a freshly-confirmed 1H bias still
-        # hits the conflict-suppress path below, unchanged from before —
-        # a 1H timeframe making clean higher-highs/higher-lows is never
-        # overridden by a lower timeframe read.
-        if bias_stale and bos["direction"] != macro_bias:
-            promo_ok, promo_reason = _promotion_confirmed(
-                bos.get("break_count", 1), df_1h, bos["direction"])
-            if promo_ok:
-                print(
-                    "  [BIAS] 15M BOS ({}) reconfirms over stale 1H hold ({}) — "
-                    "promoting ({}).".format(bos["direction"], macro_bias, promo_reason)
-                )
-                macro_bias = bos["direction"]
-                state["macro_bias_confirmed"] = macro_bias
-                state["macro_bias_stale"] = False
-                # Anchor this promotion too — otherwise next scan's
-                # compute_macro_bias finds no macro_leg_* anchor for the new
-                # direction, marks it stale again for lack of one, and we're
-                # right back to depending on 15M reconfirming every single
-                # scan just to stand still. The 15M leg's own range is a
-                # weaker anchor than a real 1H break, but it's the best
-                # evidence on hand and strictly better than none.
-                state["macro_leg_direction"] = macro_bias
-                state["macro_leg_origin"]    = bos["impulse_start"]
-                state["macro_leg_extreme"]   = bos["impulse_end"]
-                bias_stale = False
-                bias_reconfirmed_15m = True
-                save_state(state)
-            else:
-                print(
-                    "  [BIAS] 15M BOS ({}) vs stale 1H hold ({}) — NOT promoting yet: {}"
-                    .format(bos["direction"], macro_bias, promo_reason)
-                )
-
-        bos_check = bos["direction"] + (" OK" if bos["direction"] == macro_bias else " WARN")
-
-        if bos["direction"] == macro_bias:
-            if bias_reconfirmed_15m:
-                bos_bias_check = "PASS (15M reconfirmed stale 1H)"
-            elif bos_from_anchor:
-                bos_bias_check = "PASS (anchor-held leg)"
-            else:
-                bos_bias_check = "PASS"
-            structure_source = "BOS"
-            if bos["direction"] == "BULLISH":
-                swing_low  = bos["impulse_start"]
-                swing_high = bos["impulse_end"]
-            else:
-                swing_high = bos["impulse_start"]
-                swing_low  = bos["impulse_end"]
-            state.update({
-                "status":        "ACTIVE_LEG",
-                "direction":     bos["direction"],
-                "impulse_start": bos["impulse_start"],
-                "impulse_end":   bos["impulse_end"],
-            })
-            save_state(state)
-        else:
-            # 15M structure has broken OPPOSITE to macro bias. Macro bias
-            # is now itself gated on a confirmed 1H MSS (compute_macro_bias
-            # no longer flips on a bare EMA cross), so this is a genuine
-            # timeframe conflict, not noise — the two timeframes are
-            # actively disagreeing about direction. This used to fall
-            # back to weak fractal/state-memory structure and fire anyway;
-            # that was the exact hole that produced the FALLBACK_FRACTAL
-            # sell signal. Suppress instead of downgrading.
-            stats["bos_conflict"] += 1
-            save_stats(stats)
-            print(_checklist(macro_bias, bos_check, "CONFLICT (suppressed)", "N/A",
-                              "N/A", atr_valid_check, "N/A",
-                              "NO TRADE — 15M structure conflicts with confirmed macro bias",
-                              bias_stale=bias_stale))
-            if DIAGNOSTIC_MODE:
-                diag = new_diagnostic()
-                diag_set(diag, "macro_bias", True)
-                diag_set(diag, "structure", False,
-                          "15M structure ({}) conflicts with confirmed macro bias ({})".format(
-                              bos["direction"], macro_bias))
-                print(build_diagnostic_report(diag))
-            return
-    else:
-        bos_bias_check = "N/A (no dominant leg found)"
-        swing_high, swing_low, structure_source = fallback_structure(
-            lookback, macro_bias, state, wing=FRACTAL_WING)
-
-    # ── STATE_MEMORY drift guard ──────────────────────────────────────────
-    # If we're using a remembered leg, verify it isn't stale before
-    # trusting it. Two independent conditions, either one triggers
-    # fallback to a fresh fractal read:
-    #   1. Corrupted/degenerate leg — the remembered range is implausibly
-    #      tiny (< 5 pips), more likely bad data than real structure.
-    #      (is_state_memory_stale existed for exactly this and was never
-    #      actually called anywhere — wiring it in here instead of leaving
-    #      it as dead code. Without this, a corrupted STATE_MEMORY leg
-    #      would fall through unchecked to the Range Filter below and get
-    #      an outright "NO TRADE — range too compressed" instead of a
-    #      chance at a fresh, possibly perfectly tradeable, fractal read.)
-    #   2. Price drift — current price has moved so far from the leg's
-    #      midpoint that its Fib zone is no longer contextually
-    #      meaningful. A leg from 5 hours ago at a completely different
-    #      price level should not be anchoring today's entries.
-    if structure_source == "STATE_MEMORY":
-        memory_corrupted = is_state_memory_stale(state, macro_bias)
-        current_price     = df_5m["Close"].iloc[-1]
-        leg_mid           = (swing_high + swing_low) / 2
-        drift_pips        = abs(current_price - leg_mid) / PIP_SIZE
-        drifted           = STATE_MEMORY_MAX_DRIFT_PIPS > 0 and drift_pips > STATE_MEMORY_MAX_DRIFT_PIPS
-
-        if memory_corrupted or drifted:
-            reason = (
-                "corrupted (remembered leg range < 5 pips)" if memory_corrupted
-                else f"price drifted {drift_pips:.0f}p from leg midpoint"
-            )
-            print(f"  [STATE_MEMORY] Stale — {reason}. Falling back to fractal detection.")
-            swing_high, swing_low = fractal_swings(lookback, wing=FRACTAL_WING)
-            structure_source = "FALLBACK_FRACTAL (memory stale)"
-
-    # ── Range Filter ──────────────────────────────────────────────────────
-    structural_range = swing_high - swing_low
-    range_check = "PASS" if structural_range >= (5 * PIP_SIZE) else "FAIL (range < 5 pips)"
-
-    if structural_range < (5 * PIP_SIZE):
-        stats["no_structure"] += 1
-        save_stats(stats)
-        print(_checklist(macro_bias, bos_check, bos_bias_check, range_check,
-                          "N/A", atr_valid_check, "N/A",
-                          "NO TRADE — range too compressed", bias_stale=bias_stale))
-        if DIAGNOSTIC_MODE:
-            diag = new_diagnostic()
-            diag_set(diag, "macro_bias", True)
-            diag_set(diag, "structure", False,
-                      "range {:.1f}p < 5p minimum".format(structural_range / PIP_SIZE))
-            print(build_diagnostic_report(diag))
-        return
-
-    # ── Adaptive Fib Zone ─────────────────────────────────────────────────
-    fib_ratio = adaptive_fib_ratio(df_5m, current_atr)
-    fib_zone  = (
-        swing_high - (fib_ratio * structural_range) if macro_bias == "BULLISH"
-        else swing_low + (fib_ratio * structural_range)
-    )
-
-    # ── Sweep detection + zone tolerance ──────────────────────────────────
-    # Run sweep check once here so both BULLISH and BEARISH branches can use it.
-    zone_tol   = ZONE_TOLERANCE_PIPS * PIP_SIZE
-    engulf_tol = ENGULF_TOLERANCE_PIPS * PIP_SIZE
-    sweep_valid, sweep_label = detect_liquidity_sweep(df_5m, df_15m, fib_zone, macro_bias)
-
-    fib_check = "{:.5f} (ratio {:.1f}%) | Zone: {}".format(
-        fib_zone, fib_ratio * 100,
-        sweep_label if sweep_valid else "—"
-    )
-
-    # ── Momentum-overshoot check ────────────────────────────────────────
-    # Independent of the ATR-ratio regime-shift heuristic below: this asks
-    # a narrower, always-on question — did the most recent 15M candle alone
-    # carry price through the whole pocket, rather than price gradually
-    # working into it? A regime shift can be absent (ATR ratio under
-    # threshold) while a single 15M bar still blows clean through the zone,
-    # so this runs on every scan, not just during a detected volatility spike.
-    momentum_overshoot, momentum_reason = detect_momentum_overshoot(
-        df_15m, swing_high, swing_low, macro_bias)
-    momentum_note = (
-        f"\n  💥 [MOMENTUM OVERSHOOT] {momentum_reason} — signal will be suppressed."
-        if momentum_overshoot else ""
-    )
-
-    # c_last/c_prev are needed by the fib-staleness check right below, so
-    # they're pulled here rather than further down where they used to live -
-    # that ordering caused an UnboundLocalError any time regime_shifted or
-    # a post-spike cooldown was active, since this block ran before the
-    # variables existed yet.
-    c_last = df_5m.iloc[-1]
-    c_prev = df_5m.iloc[-2]
-
-    # ── Setup timeline (diagnostics) ──────────────────────────────────────
-    # Tracks, per structural setup, when each confirmation stage first
-    # happened: CHoCH/BOS -> price reaches the fib zone -> liquidity sweep
-    # -> engulfing candle -> signal actually sent. Plus MFE/MAE: how close
-    # price ever got to the ideal fib_zone price (best case) vs how far it
-    # ever drifted away (worst case) while waiting for confirmation. The
-    # point: if entry_distance is trending UP over these stages while the
-    # score barely moves, the wait bought nothing but a worse fill — this
-    # is what actually diagnoses which confirmation stage is the
-    # bottleneck, instead of guessing.
-    #
-    # Caveat: timestamps are quantized to the ~5-min scan interval, not
-    # exact intrabar tick time — this tells you which SCAN each stage
-    # first appeared in, not the literal second it happened live.
-    setup_key = "{}|{:.5f}|{:.5f}".format(macro_bias, swing_high, swing_low)
-    timeline = state.get("setup_timeline")
-    if not timeline or timeline.get("key") != setup_key:
-        timeline = {
-            "key":                  setup_key,
-            "direction":            macro_bias,
-            "swing_high":           swing_high,
-            "swing_low":            swing_low,
-            "structure_source":     structure_source,
-            "choch_bos_at":         state.get("leg15_confirmed_at") if structure_source == "BOS" else None,
-            "choch_bos_label":      state.get("leg15_change_label") if structure_source == "BOS" else "N/A",
-            "fib_entered_at":       None,
-            "sweep_at":             None,
-            "engulf_at":            None,
-            "signal_sent_at":       None,
-            "mfe_pips":             None,   # closest entry_distance ever got (best case)
-            "mae_pips":             None,   # farthest entry_distance ever drifted (worst case)
-            "entry_distance_samples": [],   # capped list of [iso, distance_pips]
-        }
-
-    zone_touched_now = (
-        c_last["Low"] <= fib_zone + zone_tol if macro_bias == "BULLISH"
-        else c_last["High"] >= fib_zone - zone_tol
-    )
-    if zone_touched_now and timeline["fib_entered_at"] is None:
-        timeline["fib_entered_at"] = now_utc.isoformat()
-    if sweep_valid and timeline["sweep_at"] is None:
-        timeline["sweep_at"] = now_utc.isoformat()
-
-    entry_distance_pips = abs(c_last["Close"] - fib_zone) / PIP_SIZE
-    timeline["mfe_pips"] = entry_distance_pips if timeline["mfe_pips"] is None else min(timeline["mfe_pips"], entry_distance_pips)
-    timeline["mae_pips"] = entry_distance_pips if timeline["mae_pips"] is None else max(timeline["mae_pips"], entry_distance_pips)
-    timeline["entry_distance_samples"].append([now_utc.isoformat(), round(entry_distance_pips, 1)])
-    timeline["entry_distance_samples"] = timeline["entry_distance_samples"][-30:]  # bounded
-
-    state["setup_timeline"] = timeline
+    # ── MARKET CONTEXT (pure) ─────────────────────────────────────────────
+    ctx, ctx_reason, ctx_updates = evaluate_market_context(df_5m, state, now_utc)
+    apply_state_updates(state, ctx_updates)
     save_state(state)
 
-    # Deep-retracement read for NEUTRAL_WATCH — computed here (not deep in
-    # the BULLISH/BEARISH block below) since it's independent of whether
-    # a trade signal fires this scan.
-    retrace_frac = leg_retrace_fraction(swing_high, swing_low, c_last["Close"], macro_bias)
-    deep_retrace = (
-        retrace_frac is not None
-        and NEUTRAL_WATCH_MIN_RETRACE <= retrace_frac < INVALIDATION_RETRACE
-    )
-
-    # ── Fib zone staleness check (post-spike) ────────────────────────────
-    # If a regime shift was active in any of the last few scans, verify
-    # the spike candle (c_last or c_prev, whichever was more extreme)
-    # didn't structurally invalidate the zone we're about to use.
-    # A valid Fib zone from before a spike can be geometrically correct
-    # but contextually meaningless — this check catches that.
-    fib_stale      = False
-    fib_stale_reason = ""
-    if regime_shifted or state.get("post_spike_cooldown_remaining", 0) > 0:
-        # Use the more extreme of the two recent candles as the spike proxy
-        spike_proxy = {
-            "High":  max(c_last["High"],  c_prev["High"]),
-            "Low":   min(c_last["Low"],   c_prev["Low"]),
-            "Close": c_last["Close"],
-        }
-        fib_stale, fib_stale_reason = is_fib_zone_stale(
-            spike_proxy, swing_high, swing_low, fib_zone, c_last["Close"]
-        )
-        if fib_stale:
-            regime_note += (
-                f"\n  🗑 [FIB STALE] {fib_stale_reason} — "
-                f"forcing fresh structure detection on next scan."
-            )
-            # Clear state memory so next scan redetects structure fresh
-            # rather than continuing to use the now-invalid cached leg
-            state.pop("impulse_start", None)
-            state.pop("impulse_end",   None)
-            if state.get("status") == "ACTIVE_LEG":
-                state["status"] = "STALE_POST_SPIKE"
-            save_state(state)
-
-    body_last     = abs(c_last["Close"] - c_last["Open"])
-    atr_threshold = ATR_ENGULF_MIN * current_atr
-
-    trade_signal  = "HOLD"
-    entry = sl = tp = risk_pips = reward_pips = None
-    pattern_check = "N/A"
-    score = score_breakdown = score_tier = score_emoji = None
-    score_warnings = []
-    in_zone       = False
-    in_zone_direct = False
-    confirmation_passed = False
-
-    # ── Diagnostic-mode capture ───────────────────────────────────────────
-    # Reaching this point already means macro bias resolved to a direction
-    # and a valid structural range was found, so both are recorded as
-    # passed up front. Everything below (htf_gate_ok / risk_result /
-    # alert_sent / duplicate/volatility reasons) is filled in as the real
-    # decision logic below actually reaches each stage — anything left
-    # None means that gate was never reached this scan.
-    diag = new_diagnostic()
-    diag_set(diag, "macro_bias", True)
-    diag_set(diag, "structure", True)
-    htf_gate_ok       = None
-    htf_gate_reason   = None
-    risk_result       = None
-    alert_sent        = False
-    duplicate_reason  = None
-    volatility_reason = None
-    tier2_ran         = False
-
-    if macro_bias == "BULLISH":
-        lowest_wick    = min(c_prev["Low"], c_last["Low"])
-        close_loc_ok   = close_location(c_last) >= ENGULF_CLOSE_LOCATION_MIN
-        sl_mult        = SL_ATR_MULT_COMPRESSED if regime_ratio >= SL_VOL_SPIKE_RATIO else SL_ATR_MULT
-
-        # ── Tier 1: Break-Retest (anticipatory) ──────────────────────────
-        # Fires on a sweep+rejection of swing_low itself — the ORIGIN
-        # point whose break confirmed this BOS/CHoCH — instead of waiting
-        # for price to travel deeper into the Tier 2 fib pocket below.
-        # Only live within TIER1_RETEST_MAX_AGE_MINUTES of the break.
-        tier1_note = ""
-        if TIER1_RETEST_ENABLED:
-            t1_ok, t1_reason, t1_entry, t1_extreme = detect_break_retest(
-                df_5m, swing_low, "BULLISH", current_atr, state, now_utc)
-            if t1_ok:
-                gate_ok, gate_reason = htf_bias_gate(macro_bias, "BULLISH")
-                htf_gate_ok, htf_gate_reason = gate_ok, gate_reason
-                if not gate_ok:
-                    pattern_check = "FAIL (" + gate_reason + ")"
-                else:
-                    score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
-                        True, False, structure_source, True, True, regime_shifted,
-                        is_active_session(now_utc), True, bias_stale=bias_stale, fib_fraction=0.0,
-                    )
-                    if score >= SCORE_TIER_ACCEPTABLE:
-                        sl_buffer = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                        result = _apply_risk_gate_and_finalize(
-                            t1_entry, t1_extreme - sl_buffer, "BUY", current_atr, stats,
-                            score, score_emoji, tier_label=" (Tier 1 break-retest)")
-                        pattern_check = result["pattern_check"]
-                        risk_result = result
-                        if result["fired"]:
-                            trade_signal = "BUY"
-                            entry, sl, tp = result["entry"], result["sl"], result["tp"]
-                            risk_pips, reward_pips = result["risk_pips"], result["reward_pips"]
-                    else:
-                        pattern_check = "Tier 1 PASS mechanically but IGNORED — {} {}/100 < {} floor".format(
-                            score_emoji, score, SCORE_TIER_ACCEPTABLE)
-            else:
-                tier1_note = "  [TIER 1] " + t1_reason
-
-        # ── Tier 2: Fib pocket (deep discount, unchanged trigger logic) ──
-        if trade_signal == "HOLD":
-            tier2_ran = True
-            # Direct touch: wick at or below zone (+ tolerance buffer)
-            # Sweep touch: confirmed liquidity sweep in the last 3 candles, but
-            # only if the entry candle hasn't since drifted too far from the
-            # zone - a sweep proves the level, it doesn't excuse chasing price
-            # far away from it afterward.
-            in_zone_direct = lowest_wick <= fib_zone + zone_tol
-            sweep_distance_ok = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
-            sweep_usable   = sweep_valid and sweep_distance_ok
-            in_zone        = in_zone_direct or sweep_usable
-            bear_prev      = c_prev["Close"] < c_prev["Open"]
-            bull_last      = c_last["Close"] > c_last["Open"]
-            # 1 pip of leniency on body containment — near-perfect engulfs pass
-            engulfs        = (c_last["Close"] >= c_prev["Open"] - engulf_tol and
-                              c_last["Open"]  <= c_prev["Close"] + engulf_tol)
-            real_body      = body_last > atr_threshold
-
-            confirmation_passed = bear_prev and bull_last and engulfs and real_body and close_loc_ok
-
-            if in_zone:
-                stats["fib_reached"] += 1
-
-            if in_zone and confirmation_passed:
-                gate_ok, gate_reason = htf_bias_gate(macro_bias, "BULLISH")
-                htf_gate_ok, htf_gate_reason = gate_ok, gate_reason
-                if not gate_ok:
-                    pattern_check = "FAIL (" + gate_reason + ")"
-                else:
-                    fib_fraction = compute_fib_fraction(swing_high, swing_low, lowest_wick, macro_bias)
-                    score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
-                        sweep_usable, in_zone_direct, structure_source,
-                        in_zone, True, regime_shifted, is_active_session(now_utc),
-                        confirmation_passed, bias_stale=bias_stale, fib_fraction=fib_fraction,
-                    )
-                    if score >= SCORE_TIER_ACCEPTABLE:
-                        sl_buffer = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                        result = _apply_risk_gate_and_finalize(
-                            c_last["Close"], lowest_wick - sl_buffer, "BUY", current_atr, stats,
-                            score, score_emoji,
-                            tier_label=" (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
-                        pattern_check = result["pattern_check"]
-                        risk_result = result
-                        if result["fired"]:
-                            trade_signal = "BUY"
-                            entry, sl, tp = result["entry"], result["sl"], result["tp"]
-                            risk_pips, reward_pips = result["risk_pips"], result["reward_pips"]
-                    else:
-                        pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
-                            score_emoji, score, SCORE_TIER_ACCEPTABLE,
-                            ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
-            else:
-                score = score_breakdown = score_tier = score_emoji = None
-                score_warnings = []
-                fails = []
-                if not in_zone:
-                    if sweep_valid and not sweep_distance_ok:
-                        fails.append("sweep confirmed but price drifted too far from zone")
-                    else:
-                        fails.append("price not in discount zone (no direct touch or sweep)")
-                if not bear_prev:      fails.append("prev candle not bearish")
-                if not bull_last:      fails.append("last candle not bullish")
-                if not engulfs:        fails.append("doesn't engulf prev body")
-                if not real_body:      fails.append("body too small vs ATR")
-                if not close_loc_ok:   fails.append("closed in wrong half of candle range")
-                pattern_check = "FAIL (" + ", ".join(fails) + ")"
-        if tier1_note:
-            print(tier1_note)
-
-    elif macro_bias == "BEARISH":
-        highest_wick   = max(c_prev["High"], c_last["High"])
-        close_loc_ok   = close_location(c_last) <= (1 - ENGULF_CLOSE_LOCATION_MIN)
-        sl_mult        = SL_ATR_MULT_COMPRESSED if regime_ratio >= SL_VOL_SPIKE_RATIO else SL_ATR_MULT
-
-        # ── Tier 1: Break-Retest (anticipatory) ──────────────────────────
-        # Fires on a sweep+rejection of swing_high itself — the ORIGIN
-        # point whose break confirmed this BOS/CHoCH — instead of waiting
-        # for price to travel deeper into the Tier 2 fib pocket below.
-        tier1_note = ""
-        if TIER1_RETEST_ENABLED:
-            t1_ok, t1_reason, t1_entry, t1_extreme = detect_break_retest(
-                df_5m, swing_high, "BEARISH", current_atr, state, now_utc)
-            if t1_ok:
-                gate_ok, gate_reason = htf_bias_gate(macro_bias, "BEARISH")
-                htf_gate_ok, htf_gate_reason = gate_ok, gate_reason
-                if not gate_ok:
-                    pattern_check = "FAIL (" + gate_reason + ")"
-                else:
-                    score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
-                        True, False, structure_source, True, True, regime_shifted,
-                        is_active_session(now_utc), True, bias_stale=bias_stale, fib_fraction=0.0,
-                    )
-                    if score >= SCORE_TIER_ACCEPTABLE:
-                        sl_buffer = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                        result = _apply_risk_gate_and_finalize(
-                            t1_entry, t1_extreme + sl_buffer, "SELL", current_atr, stats,
-                            score, score_emoji, tier_label=" (Tier 1 break-retest)")
-                        pattern_check = result["pattern_check"]
-                        risk_result = result
-                        if result["fired"]:
-                            trade_signal = "SELL"
-                            entry, sl, tp = result["entry"], result["sl"], result["tp"]
-                            risk_pips, reward_pips = result["risk_pips"], result["reward_pips"]
-                    else:
-                        pattern_check = "Tier 1 PASS mechanically but IGNORED — {} {}/100 < {} floor".format(
-                            score_emoji, score, SCORE_TIER_ACCEPTABLE)
-            else:
-                tier1_note = "  [TIER 1] " + t1_reason
-
-        # ── Tier 2: Fib pocket (deep premium, unchanged trigger logic) ───
-        if trade_signal == "HOLD":
-            tier2_ran = True
-            # Direct touch: wick at or above zone (- tolerance buffer)
-            # Sweep touch: confirmed liquidity sweep in the last 3 candles, but
-            # only if the entry candle hasn't since drifted too far from the zone.
-            in_zone_direct = highest_wick >= fib_zone - zone_tol
-            sweep_distance_ok = abs(c_last["Close"] - fib_zone) / PIP_SIZE <= SWEEP_MAX_DISTANCE_PIPS
-            sweep_usable   = sweep_valid and sweep_distance_ok
-            in_zone        = in_zone_direct or sweep_usable
-            bull_prev      = c_prev["Close"] > c_prev["Open"]
-            bear_last      = c_last["Close"] < c_last["Open"]
-            # 1 pip of leniency on body containment
-            engulfs        = (c_last["Open"]  >= c_prev["Close"] - engulf_tol and
-                              c_last["Close"] <= c_prev["Open"]  + engulf_tol)
-            real_body      = body_last > atr_threshold
-
-            confirmation_passed = bull_prev and bear_last and engulfs and real_body and close_loc_ok
-
-            if in_zone:
-                stats["fib_reached"] += 1
-
-            if in_zone and confirmation_passed:
-                gate_ok, gate_reason = htf_bias_gate(macro_bias, "BEARISH")
-                htf_gate_ok, htf_gate_reason = gate_ok, gate_reason
-                if not gate_ok:
-                    pattern_check = "FAIL (" + gate_reason + ")"
-                else:
-                    fib_fraction = compute_fib_fraction(swing_high, swing_low, highest_wick, macro_bias)
-                    score, score_breakdown, score_tier, score_emoji, score_warnings = compute_confidence_score(
-                        sweep_usable, in_zone_direct, structure_source,
-                        in_zone, True, regime_shifted, is_active_session(now_utc),
-                        confirmation_passed, bias_stale=bias_stale, fib_fraction=fib_fraction,
-                    )
-                    if score >= SCORE_TIER_ACCEPTABLE:
-                        sl_buffer = max(sl_mult * current_atr, SL_MIN_PIPS * PIP_SIZE)
-                        result = _apply_risk_gate_and_finalize(
-                            c_last["Close"], highest_wick + sl_buffer, "SELL", current_atr, stats,
-                            score, score_emoji,
-                            tier_label=" (post-sweep entry)" if sweep_usable and not in_zone_direct else "")
-                        pattern_check = result["pattern_check"]
-                        risk_result = result
-                        if result["fired"]:
-                            trade_signal = "SELL"
-                            entry, sl, tp = result["entry"], result["sl"], result["tp"]
-                            risk_pips, reward_pips = result["risk_pips"], result["reward_pips"]
-                    else:
-                        pattern_check = "PASS mechanically but IGNORED — {} {}/100 < {} floor ({})".format(
-                            score_emoji, score, SCORE_TIER_ACCEPTABLE,
-                            ", ".join(f"{k}:{v}" for k, v in score_breakdown.items()))
-            else:
-                score = score_breakdown = score_tier = score_emoji = None
-                score_warnings = []
-                fails = []
-                if not in_zone:
-                    if sweep_valid and not sweep_distance_ok:
-                        fails.append("sweep confirmed but price drifted too far from zone")
-                    else:
-                        fails.append("price not in premium zone (no direct touch or sweep)")
-                if not bull_prev:      fails.append("prev candle not bullish")
-                if not bear_last:      fails.append("last candle not bearish")
-                if not engulfs:        fails.append("doesn't engulf prev body")
-                if not real_body:      fails.append("body too small vs ATR")
-                if not close_loc_ok:   fails.append("closed in wrong half of candle range")
-                pattern_check = "FAIL (" + ", ".join(fails) + ")"
-        if tier1_note:
-            print(tier1_note)
-
-    # ── Print checklist ───────────────────────────────────────────────────
-    decision = ("🚨 SIGNAL — " + trade_signal) if trade_signal != "HOLD" \
-               else "NO TRADE — pattern conditions not met"
-    if regime_shifted and trade_signal != "HOLD":
-        decision = "⚡ SIGNAL SUPPRESSED — volatility regime shift / post-spike cooldown"
-    elif fib_stale and trade_signal != "HOLD":
-        decision = "🗑 SIGNAL SUPPRESSED — Fib zone stale after spike"
-    elif momentum_overshoot and trade_signal != "HOLD":
-        decision = "💥 SIGNAL SUPPRESSED — momentum candle overshot the pocket"
-    print(_checklist(macro_bias, bos_check, bos_bias_check, range_check,
-                     fib_check, atr_valid_check, pattern_check, decision,
-                     bias_stale=bias_stale))
-    if state.get("macro_swing_high") is not None and state.get("macro_swing_low") is not None:
-        print(
-            "  [Detail] 1H macro swing: H {:.5f} / L {:.5f} (confirmed {})".format(
-                state["macro_swing_high"], state["macro_swing_low"],
-                state.get("macro_swing_confirmed_at", "unknown")
-            )
-        )
     print(
-        "  [Detail] Structure: " + structure_source +
-        " | Price: {:.5f}".format(c_last["Close"]) +
-        " | Fib: {:.5f}".format(fib_zone) +
-        " | ATR short: {:.1f}p / long: {:.1f}p (ratio {:.2f}x)".format(
-            short_atr_pips if regime_shifted else current_atr_pips,
-            current_atr_pips,
-            regime_ratio if regime_shifted else 1.0
-        ) +
-        " | SwH: {:.5f}".format(swing_high) +
-        " SwL: {:.5f}".format(swing_low)
-    )
-    if regime_note:
-        print(regime_note)
-    if momentum_note:
-        print(momentum_note)
-
-    # ── WATCHING state — invalidation check ───────────────────────────────
-    # Run this before the alert logic so we know the current watching status
-    # is still valid before deciding whether to set, keep, or clear it.
-    is_watching      = state.get("watching", False)
-    watching_zone_p  = state.get("watching_zone")
-    watching_bias_s  = state.get("watching_bias")
-
-    if is_watching:
-        invalidate    = False
-        inv_reason    = ""
-
-        # V2: no clock-based TTL. A WATCHING setup lives until a market
-        # event kills it — either of the two guards below — never because
-        # a timer ran out. (V1's "Guard 1" TTL lived here; removed.)
-
-        # Guard 1 (was Guard 2): 15M close through the zone — the zone structurally failed,
-        # not just a wick. Same logic as the sweep confirmation check, inverted:
-        # if the 15M candle CLOSED on the wrong side, the zone is gone.
-        if not invalidate and watching_zone_p and watching_bias_s:
-            wz             = float(watching_zone_p)
-            last_15m_close = df_15m.iloc[-1]["Close"]
-            if watching_bias_s == "BULLISH" and last_15m_close < wz:
-                invalidate = True
-                inv_reason = "15M closed below zone ({:.5f})".format(last_15m_close)
-            elif watching_bias_s == "BEARISH" and last_15m_close > wz:
-                invalidate = True
-                inv_reason = "15M closed above zone ({:.5f})".format(last_15m_close)
-
-        # Guard 2: Zone exit — price has run away from the zone, in the
-        # direction of the original leg, by more than WATCHING_EXIT_PIPS
-        # without the pattern ever confirming. The pullback window has
-        # passed - this is a dead setup, not a live one, even though
-        # nothing structurally "broke" (Guard 1 wouldn't catch this since
-        # price never closed through the zone the wrong way).
-        if not invalidate and watching_zone_p and watching_bias_s:
-            wz            = float(watching_zone_p)
-            current_close = df_5m.iloc[-1]["Close"]
-            if watching_bias_s == "BULLISH":
-                drift_pips = (current_close - wz) / PIP_SIZE
-                if drift_pips > WATCHING_EXIT_PIPS:
-                    invalidate = True
-                    inv_reason = "price ran {:.1f} pips above zone — pullback missed".format(drift_pips)
-            else:  # BEARISH
-                drift_pips = (wz - current_close) / PIP_SIZE
-                if drift_pips > WATCHING_EXIT_PIPS:
-                    invalidate = True
-                    inv_reason = "price ran {:.1f} pips below zone — pullback missed".format(drift_pips)
-
-        # Guard 3: Momentum overshoot — the candle that just printed blew
-        # clean through the whole pocket instead of price gradually working
-        # into it. Same signal as the suppression at signal time, applied
-        # here too: an already-WATCHING setup doesn't survive its own zone
-        # getting run over by a displacement candle.
-        if not invalidate and momentum_overshoot:
-            invalidate = True
-            inv_reason = momentum_reason
-
-        if invalidate:
-            print("  [WATCHING] Cleared — " + inv_reason)
-            state["watching"] = False
-            state.pop("watching_zone",   None)
-            state.pop("watching_bias",   None)
-            state.pop("watching_set_at", None)
-            is_watching = False
-            save_state(state)
-
-    # Engulf stage timestamp — confirmation_passed is set by whichever of
-    # the BULLISH/BEARISH blocks above ran; capture the first scan it
-    # went True for this setup, regardless of whether score/zone also
-    # passed this same scan.
-    timeline = state.get("setup_timeline")
-    if timeline and timeline.get("key") == setup_key and confirmation_passed and timeline.get("engulf_at") is None:
-        timeline["engulf_at"] = now_utc.isoformat()
-        state["setup_timeline"] = timeline
-        save_state(state)
-
-    # ── Signal / WATCHING alert logic ─────────────────────────────────────
-    if trade_signal != "HOLD" and entry is not None:
-        if regime_shifted or fib_stale or momentum_overshoot:
-            # Pattern fired but something structurally undermines this
-            # entry — volatility regime shift, a stale post-spike Fib zone,
-            # or (new) a single 15M candle that overshot the whole pocket
-            # instead of price gradually working into it. Any of these on
-            # their own is reason enough to log the setup for research but
-            # withhold the Telegram alert rather than act on it.
-            if momentum_overshoot and not (regime_shifted or fib_stale):
-                volatility_reason = "momentum overshoot — " + momentum_reason
-                print(
-                    f"  [MOMENTUM OVERSHOOT] Signal {trade_signal} @ {entry:.5f} "
-                    f"suppressed — {momentum_reason}. Logged to journal context only."
-                )
-            else:
-                volatility_reason = "regime shift — ATR ratio {:.2f}x > {}x threshold".format(
-                    regime_ratio, REGIME_SHIFT_THRESHOLD)
-                print(
-                    f"  [REGIME SHIFT] Signal {trade_signal} @ {entry:.5f} "
-                    f"suppressed — short/long ATR ratio {regime_ratio:.2f}× "
-                    f"(threshold {REGIME_SHIFT_THRESHOLD}×). "
-                    f"Logged to journal context only."
-                )
-            # Still save signal context so /last works for research review
-            stats["last_journal_signal"]    = trade_signal + " (suppressed)"
-            stats["last_journal_entry"]     = f"{entry:.5f}"
-            stats["last_journal_structure"] = structure_source
-            stats["last_journal_score"]     = score
-            stats["last_journal_score_breakdown"] = score_breakdown
-            stats["last_journal_score_warnings"]  = score_warnings
-            stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-            # New signal identity — any pending flip-confirmation from a
-            # previous signal is now stale and must not carry over.
-            stats.pop("pending_confirm", None)
-
-        elif is_duplicate_signal(state, trade_signal, swing_high, swing_low):
-            duplicate_reason = "same direction/dealing range as last signal — needs a new swing/leg"
-            print(
-                "  [COOLDOWN] Signal suppressed — same direction, same dealing "
-                "range (SwH {:.5f} / SwL {:.5f}) as the last signal. Needs a new "
-                "swing/leg, not just time passing, to fire again.".format(swing_high, swing_low)
-            )
-        else:
-            was_watching = is_watching
-            # Clear watching state — setup resolved either way
-            state["watching"] = False
-            state.pop("watching_zone",   None)
-            state.pop("watching_bias",   None)
-            state.pop("watching_set_at", None)
-
-            stats["signals_sent"] += 1
-            if was_watching:
-                stats["watching_confirmed"] = stats.get("watching_confirmed", 0) + 1
-
-            # Save signal context for journal enrichment on /win or /loss
-            stats["last_journal_signal"]    = trade_signal
-            stats["last_journal_entry"]     = f"{entry:.5f}"
-            stats["last_journal_structure"] = structure_source
-            stats["last_journal_score"]     = score
-            stats["last_journal_score_breakdown"] = score_breakdown
-            stats["last_journal_score_warnings"]  = score_warnings
-            stats["last_journal_time"]      = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-            # Freeze this signal as the active trade. From here until it
-            # closes (SL/TP hit, or manual /win /loss), scan() short-circuits
-            # at manage_active_trade() before any bias/zone/scoring logic —
-            # this score is never recomputed, and no WATCHING/new-signal
-            # message can fire for this pair while it's open.
-            stats["active_trade"] = {
-                "direction":            trade_signal,
-                "entry":                entry,
-                "sl":                   sl,
-                "tp":                   tp,
-                "score":                score,
-                "score_tier":           score_tier,
-                "score_breakdown":      score_breakdown,
-                "structure_source":     structure_source,
-                "opened_at":            datetime.now(timezone.utc).isoformat(),
-                "opened_at_display":    stats["last_journal_time"],
-                "last_update_sent_at":  None,
-            }
-
-            # New signal identity — any pending flip-confirmation from a
-            # previous signal is now stale and must not carry over.
-            stats.pop("pending_confirm", None)
-            direction_emoji = "📈" if trade_signal == "BUY" else "📉"
-            zone_tag        = " _(liquidity sweep)_" if sweep_usable and not in_zone_direct else ""
-            confirm_tag     = "\n✅ _Zone was pre-flagged — entry confirmed._" if was_watching else ""
-            reconfirm_tag   = (
-                "\n🔁 _Bias reconfirmed via 15M BOS — 1H structure was pending._"
-                if bias_reconfirmed_15m else ""
-            )
-            score_lines     = "\n".join(
-                f"     {k.replace('_', ' ').title()}: {v}" for k, v in score_breakdown.items()
-            )
-            warning_block = (
-                "\n⚠️ " + " / ".join(score_warnings) + "\n" if score_warnings else ""
-            )
-
-            timeline = state.get("setup_timeline")
-            timeline_block = ""
-            if timeline and timeline.get("key") == setup_key:
-                timeline["signal_sent_at"] = now_utc.isoformat()
-                timeline_block = "\n─────────────────────\n" + format_timeline_diagnostics(timeline, now_utc)
-                # Stash a copy for /journal-style review, then clear the
-                # active slot — this setup has concluded (fired). A new
-                # timeline starts fresh whenever the swing pair next changes.
-                stats["last_journal_timeline"] = timeline
-                state.pop("setup_timeline", None)
-
-            msg = (
-                "🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
-                + direction_emoji + " *Action:* `" + trade_signal + "`\n"
-                f"{score_emoji} *Confidence:* `{score}/100 — {score_tier}`\n"
-                "📊 *Bias:* `" + macro_bias + "` (1H structure)\n"
-                "🏗 *Structure:* `" + structure_source + "`\n"
-                "🎯 *Fib Zone* _(adaptive {:.1f}%):_ `{:.5f}`{}\n".format(fib_ratio * 100, fib_zone, zone_tag) +
-                "📐 *SwH:* `{:.5f}` | *SwL:* `{:.5f}`\n".format(swing_high, swing_low) +
-                "⚡ *5M ATR:* `{:.1f} pips`\n".format(current_atr / PIP_SIZE) +
-                "─────────────────────\n"
-                "📍 *Entry:*  `{:.5f}`\n".format(entry) +
-                "🛡 *Stop:*   `{:.5f}` _({:.1f} pips)_\n".format(sl, risk_pips) +
-                "🏆 *Target:* `{:.5f}` _({:.1f} pips)_\n".format(tp, reward_pips) +
-                "⚖️ *RR:*     `1:" + str(RR_RATIO) + "`\n"
-                "─────────────────────\n"
-                "*Score breakdown:*\n" + score_lines + "\n"
-                + warning_block +
-                "─────────────────────\n"
-                "⚠️ _Confirm higher-TF context before executing._"
-                + confirm_tag
-                + reconfirm_tag
-                + timeline_block
-            )
-            send_telegram(msg)
-            alert_sent = True
-            # Save signal to state for the structural cooldown check on next scan
-            state["last_signal_direction"] = trade_signal
-            state["last_signal_swing_high"] = swing_high
-            state["last_signal_swing_low"]  = swing_low
-            state["last_signal_price"]     = entry
-            state["last_signal_time"]      = datetime.now(timezone.utc).isoformat()
-            save_state(state)
-
-    elif in_zone and trade_signal == "HOLD":
-        # CASE B: Price is in the zone but pattern hasn't confirmed yet.
-        if momentum_overshoot:
-            # Don't set WATCHING off a displacement candle — this "zone
-            # entry" was a blow-through, not a gradual approach, so there's
-            # nothing here worth watching for a confirmation candle on.
-            print("  [WATCHING] Suppressed — " + momentum_reason)
-        elif not is_watching:
-            # First time price entered this zone — set WATCHING and alert.
-            state["watching"]      = True
-            state["watching_zone"] = fib_zone
-            state["watching_bias"] = macro_bias
-            state["watching_set_at"] = datetime.now(timezone.utc).isoformat()
-            save_state(state)
-            stats["watching_alerts"] += 1
-
-            direction_word = "discount" if macro_bias == "BULLISH" else "premium"
-            # Live partial score — everything except the confirmation candle,
-            # which by definition hasn't happened yet. Gives a read on how
-            # strong the setup already is while still waiting.
-            live_score, live_breakdown, live_tier, live_emoji, _live_warnings = compute_confidence_score(
-                sweep_usable, in_zone_direct, structure_source,
-                in_zone, True, regime_shifted, is_active_session(now_utc),
-                confirmation_passed=False, bias_stale=bias_stale,
-            )
-            watch_msg = (
-                "👀 *SMC WATCHING — GBPUSD*\n\n"
-                "📊 *Bias:* `" + macro_bias + "` | *Structure:* `" + structure_source + "`\n"
-                "🎯 *Price entered " + direction_word + " zone:* `{:.5f}`\n".format(fib_zone) +
-                "📐 *SwH:* `{:.5f}` | *SwL:* `{:.5f}`\n".format(swing_high, swing_low) +
-                "⚡ *ATR:* `{:.1f} pips`\n".format(current_atr / PIP_SIZE) +
-                f"{live_emoji} *Current score:* `{live_score}/100 ex-confirmation ({live_tier})`\n"
-                "─────────────────────\n"
-                "⏳ _Waiting for engulf confirmation..._\n"
-                "_(Clears only on 15M close-through the zone, or price running "
-                + str(WATCHING_EXIT_PIPS) + "p away without confirming — no timer.)_"
-                + ("\n🔁 _Bias reconfirmed via 15M BOS — 1H structure was pending._" if bias_reconfirmed_15m else "")
-            )
-            send_telegram(watch_msg)
-            print("  [WATCHING] Set — price entered zone at {:.5f}".format(fib_zone))
-        else:
-            print("  [WATCHING] Active — price still in zone, no confirmation yet.")
-
-    elif (not in_zone and not bias_stale and deep_retrace
-          and not is_watching and trade_signal == "HOLD"):
-        # Confirmed leg (bias_stale is False — nothing has invalidated),
-        # never reached the entry zone, but has quietly retraced deep
-        # into its own range (>= NEUTRAL_WATCH_MIN_RETRACE, short of the
-        # 78.6% invalidation line). Not a trade, not a WATCHING zone —
-        # purely descriptive: structure is technically fine but weakening.
-        last_alert_iso = state.get("neutral_watch_sent_at")
-        leg_changed = (
-            state.get("neutral_watch_swing_high") != swing_high or
-            state.get("neutral_watch_swing_low")  != swing_low
+        "  1H Bias: {}{} | ATR: {:.1f}p | Regime shift: {} (ratio {:.2f}) | "
+        "Post-spike cooldown: {} | Session active: {}".format(
+            macro_bias, " (STALE)" if bias_stale else "",
+            ctx.current_atr_pips, ctx.regime_shifted, ctx.regime_ratio,
+            ctx.post_spike_active, ctx.session_active,
         )
-        cooldown_elapsed = True
-        if last_alert_iso and not leg_changed:
-            try:
-                last_alert_time = datetime.fromisoformat(last_alert_iso)
-                cooldown_elapsed = (now_utc - last_alert_time).total_seconds() >= NEUTRAL_WATCH_COOLDOWN_MINUTES * 60
-            except Exception:
-                cooldown_elapsed = True
+    )
 
-        if leg_changed or cooldown_elapsed:
-            state["neutral_watch_sent_at"]    = now_utc.isoformat()
-            state["neutral_watch_swing_high"] = swing_high
-            state["neutral_watch_swing_low"]  = swing_low
-            save_state(state)
-            stats["neutral_watch_alerts"] = stats.get("neutral_watch_alerts", 0) + 1
-            neutral_msg = (
-                "⚪ *SMC NEUTRAL — GBPUSD*\n\n"
-                "📊 *Bias:* `" + macro_bias + "` _(still confirmed, not stale)_ | "
-                "*Structure:* `" + structure_source + "`\n"
-                "📐 *SwH:* `{:.5f}` | *SwL:* `{:.5f}`\n".format(swing_high, swing_low) +
-                "📉 *Retracement:* `{:.0f}%` of the leg's range — deep, but short of "
-                "the 78.6% invalidation line\n".format(retrace_frac * 100) +
-                "─────────────────────\n"
-                "ℹ️ _No trade criteria met — this is an FYI, not a signal. Structure "
-                "hasn't invalidated but is weakening; treat any entry here with extra "
-                "caution._"
-            )
-            send_telegram(neutral_msg)
-            print("  [NEUTRAL] Sent — leg {:.0f}% retraced, still confirmed but weakening.".format(retrace_frac * 100))
-        else:
-            print("  [NEUTRAL] Suppressed — already alerted this leg within cooldown window.")
+    if not ctx.tradeable:
+        stats["atr_too_low"] += 1
+        save_stats(stats)
+        diag_set(diag, "market_context", False, ctx_reason)
+        print(f"  NO TRADE — {ctx_reason}. No tier is evaluated.")
+        if diag is not None:
+            print(build_diagnostic_report(diag))
+        return
+    diag_set(diag, "market_context", True)
 
-    # ── Diagnostic-mode rejection record ──────────────────────────────────
-    # Fires whenever this scan reached a real trade candidate (directional
-    # bias + valid structure, both already recorded as passed above) but
-    # did NOT end in an actual Telegram alert. Walks the gates in the same
-    # order scan() itself applies them and stops recording at the first
-    # one that failed — everything after a failed gate genuinely never
-    # ran this scan, so it's left blank rather than guessed at.
-    if DIAGNOSTIC_MODE and not alert_sent:
-        if tier2_ran:
-            liquidity_reason = None if in_zone else (
-                "sweep confirmed but price drifted too far from zone"
-                if sweep_valid and not in_zone
-                else "price never reached the discount/premium zone (no direct touch or usable sweep)"
-            )
-            diag_set(diag, "liquidity", in_zone, liquidity_reason)
-            if in_zone:
-                diag_set(diag, "confirmation", confirmation_passed,
-                          None if confirmation_passed else "engulf/rejection candle conditions not met")
-        # else: trade_signal was already decided by Tier 1 (break-retest)
-        # before Tier 2's zone/confirmation logic ever ran this scan —
-        # liquidity/confirmation are left unevaluated (None) rather than
-        # marked failed, since Tier 1 uses its own sweep+rejection check
-        # in place of them.
+    # ── MARKET FACTS (pure observation, built once, shared by every tier) ─
+    facts = MarketFacts(df_5m, df_15m, df_1h, macro_bias, swing_high, swing_low, now_utc)
 
-        if htf_gate_ok is not None:
-            diag_set(diag, "htf_gate", htf_gate_ok, None if htf_gate_ok else htf_gate_reason)
+    # ── RULE OF LAW (arbitration, including ownership upgrades) ──────────
+    result = evaluate_rule_of_law(facts, ctx, state, stats, now_utc)
+    save_state(state)
 
-        if htf_gate_ok:
-            if score is not None:
-                score_ok = score >= SCORE_TIER_ACCEPTABLE
-                diag_set(diag, "confidence_score", score_ok,
-                          None if score_ok else f"{score}/100 < {SCORE_TIER_ACCEPTABLE} floor")
+    print(f"  [RULE OF LAW] {result.reason}")
+    if result.conviction is not None:
+        print(f"  [CONVICTION] {result.tier_label} score={result.score} "
+              f"minimum={result.conviction['minimum']} decision={result.conviction['decision']} "
+              f"band={result.conviction['band_label']}")
+        if result.breakdown:
+            print(f"  [CONVICTION BREAKDOWN] {result.breakdown}")
+    diag_set(diag, "tier_evaluation", result.activated, None if result.activated else result.reason)
 
-        if risk_result is not None:
-            diag_set(diag, "risk_gate", risk_result.get("risk_gate_pass"),
-                      risk_result.get("risk_gate_reason"))
+    # ── SHADOW PIPELINE (research only — never blocks or alters live flow) ─
+    try:
+        run_shadow_pipeline(facts, ctx, state, df_15m, result, now_utc)
+        if stats["total_scans"] % STATS_SUMMARY_EVERY == 0:
+            summary = format_shadow_summary(load_shadow_stats())
+            if summary:
+                send_telegram(summary)
+    except Exception as e:
+        print("[SHADOW ERROR] pipeline crashed, live bot unaffected: " + str(e))
 
-        if risk_result is not None and risk_result.get("fired"):
-            # Mechanically fired — only the post-fire volatility veto and
-            # the structural-cooldown dedup could still hold the alert.
-            diag_set(diag, "volatility_filter", volatility_reason is None, volatility_reason)
-            if volatility_reason is None:
-                diag_set(diag, "duplicate_check", duplicate_reason is None, duplicate_reason)
+    if not result.fired:
+        save_stats(stats)
+        diag_set(diag, "leg_ownership", False,
+                  result.reason if result.activated else "no tier activated")
+        if diag is not None:
+            print(build_diagnostic_report(diag))
+        return
+    diag_set(diag, "leg_ownership", True)
 
-        print(build_diagnostic_report(diag, score=score))
+    # ── TRADE MANAGEMENT (shared regardless of which tier fired) ────────
+    sl_mult = sl_multiplier_for_context(ctx)
+    sl_buffer = max(sl_mult * ctx.current_atr, SL_MIN_PIPS * PIP_SIZE)
+    sl_final = (result.sl_raw - sl_buffer if result.direction == "BUY"
+                else result.sl_raw + sl_buffer)
 
-    # ── Save stats and send periodic summary ─────────────────────────────
+    risk_result = apply_risk_gate_and_finalize(
+        result.entry, sl_final, result.direction, ctx.current_atr,
+        stats, result.score, result.tier_label,
+        conviction=result.conviction,
+    )
+
+    if not risk_result["fired"]:
+        print(f"  [RISK GATE] Suppressed — {risk_result['risk_gate_reason']}")
+        save_stats(stats)
+        diag_set(diag, "risk_gate", False, risk_result["risk_gate_reason"])
+        if diag is not None:
+            print(build_diagnostic_report(diag, header="Signal suppressed at risk gate"))
+        return
+    diag_set(diag, "risk_gate", True)
+
+    stats["signals_sent"] += 1
+    tier_counter_key = {
+        "TIER_1_POI": "tier1_signals",
+        "TIER_2_FIB": "tier2_signals",
+        "TIER_3_STRUCTURE": "tier3_signals",
+    }.get(result.tier_label)
+    if tier_counter_key:
+        stats[tier_counter_key] = stats.get(tier_counter_key, 0) + 1
+
+    stats["active_trade"] = {
+        "direction":   result.direction,
+        "entry":       risk_result["entry"],
+        "sl":          risk_result["sl"],
+        "tp":          risk_result["tp"],
+        "score":       result.score,
+        "tier_rating": result.tier_rating,
+        "tier_label":  result.tier_label,
+        "opened_at":   now_utc.isoformat(),
+        "opened_at_display": now_utc.strftime("%Y-%m-%d %H:%M UTC"),
+        "last_update_sent_at": None,
+        # Phase 3 — conviction-derived management plan, informational
+        # (this bot signals, it doesn't place sized live orders).
+        "band_label":   risk_result["band_label"],
+        "target_r":     risk_result["target_r"],
+        "size_mult":    risk_result["size_mult"],
+        "partial_r":    risk_result["partial_r"],
+        "breakeven_r":  risk_result["breakeven_r"],
+    }
+
+    # ── Journal/result-tracking bookkeeping (ported from V6) — snapshot
+    # this signal's context so /last, /win, /loss, and the timeline can
+    # all reference it, and unlock result-logging for the NEW signal. ───
+    signal_time = now_utc.strftime("%Y-%m-%d %H:%M UTC")
+    stats["last_journal_signal"]      = result.direction
+    stats["last_journal_entry"]       = f"{risk_result['entry']:.5f}"
+    stats["last_journal_tier_label"]  = result.tier_label
+    stats["last_journal_score"]       = result.score
+    stats["last_journal_tier_rating"] = result.tier_rating
+    stats["last_journal_time"]        = signal_time
+    stats["last_journal_timeline"]    = dict(state.get("signal_timeline", {}))
+    stats["result_logged_for_signal"] = None   # new signal — lift any prior lock
+
+    timeline_line = ""
+    tl = stats.get("last_journal_timeline")
+    if tl:
+        try:
+            timeline_line = "\n\n" + format_timeline_diagnostics(tl, now_utc)
+        except Exception:
+            timeline_line = ""
+
+    direction_emoji = "📈" if result.direction == "BUY" else "📉"
+    partial_line = (f"🎯 *Partial:* `{risk_result['partial_r']}R`\n"
+                     if risk_result["partial_r"] else "")
+    be_line = (f"🔒 *Breakeven at:* `{risk_result['breakeven_r']}R`\n"
+               if risk_result["breakeven_r"] else "")
+    send_telegram(
+        "🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
+        f"{direction_emoji} *Action:* `{result.direction}`\n"
+        f"🏛 *Tier:* `{result.tier_label}` — `{result.tier_rating}`\n"
+        f"🧠 *Conviction:* `{result.score}` — `{risk_result['band_label']}`\n"
+        f"📊 *Bias:* `{macro_bias}` (1H structure)\n"
+        "─────────────────────\n"
+        f"📍 *Entry:* `{risk_result['entry']:.5f}`\n"
+        f"🛡 *Stop:*  `{risk_result['sl']:.5f}` _({risk_result['risk_pips']:.1f} pips)_\n"
+        f"🏆 *Target:* `{risk_result['tp']:.5f}` _({risk_result['reward_pips']:.1f} pips)_\n"
+        f"⚖️ *RR:* `1:{risk_result['target_r']}`\n"
+        f"📏 *Suggested size:* `{risk_result['size_mult']}x base risk`\n"
+        + partial_line + be_line
+        + timeline_line
+    )
     save_stats(stats)
-
-    if (STATS_SUMMARY_EVERY > 0 and
-            stats["total_scans"] % STATS_SUMMARY_EVERY == 0):
-        send_telegram(format_stats_summary(stats))
-        print("  [STATS] Periodic summary sent to Telegram.")
-
-    # Always print current funnel totals to the Actions log
-    wins   = stats.get("wins",   0)
-    losses = stats.get("losses", 0)
-    total_results = wins + losses
-    wr_str = f"{wins/total_results*100:.0f}%" if total_results > 0 else "—"
-    print(
-        "  [STATS] Scans: {total_scans} | ATR skip: {atr_too_low} | "
-        "Regime shift: {regime_shift_skip} | "
-        "Consolidation: {consolidation_skip} | BOS conflict: {bos_conflict} | "
-        "No structure: {no_structure} | Fib reached: {fib_reached} | "
-        "Watching: {watching_alerts} | Confirmed: {watching_confirmed} | "
-        "Neutral: {neutral_watch_alerts} | Risk-gated: {risk_gate_suppressed} | "
-        "Pattern passed: {pattern_passed} | Signals: {signals_sent} | "
-        "W/L: {wins}W/{losses}L ({wr})".format(**stats, wr=wr_str)
-    )
+    save_state(state)
 
 
 if __name__ == "__main__":

@@ -50,7 +50,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          for f in stats.json state.json shadow_log.json shadow_pipeline_state.json shadow_pipeline_trades.json; do
+          for f in stats.json state.json shadow_state.json shadow_stats.json shadow_trade_log.jsonl bias_ab_log.json; do
             [ -f "$f" ] && git add -f "$f"
           done
           git diff --cached --quiet || git commit -m "chore: update scan stats and state [skip ci]"

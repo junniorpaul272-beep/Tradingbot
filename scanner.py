@@ -146,6 +146,11 @@ STATS_FILE            = "stats.json"
 # ---- DATA QUALITY -----------------------------------------------------
 DATA_SPIKE_ATR_MULT           = 8
 FRESHNESS_MAX_CANDLE_AGE_MULT = 3
+# Tied to atr() period (14) — the actual number of bars a corrupted bar
+# stays inside the rolling ATR window and keeps skewing fib zones,
+# break buffers, and adaptive thresholds downstream. Not an arbitrary
+# lookback like the old tail(5).
+DATA_SPIKE_BLOCK_BARS         = 14
 
 # ---- MACRO BIAS (1H — the ONE authority for direction) --------------------
 HTF_BIAS_MIN_BARS          = 100
@@ -288,8 +293,21 @@ def classify_conviction(tier_label, score):
 # or state["leg_owner"] — it is strictly read-only against live state.
 SHADOW_STATE_FILE = "shadow_state.json"
 SHADOW_STATS_FILE = "shadow_stats.json"
+# Permanent, append-only, NEVER overwritten wholesale (unlike the two
+# files above, which are full-state snapshots rewritten every scan).
+# Every resolved shadow trade — win, loss, or timeout — gets one line
+# appended here forever. This is the actual raw dataset the ATR
+# suitability analysis (compute_atr_suitability) reads from, and it
+# survives even if shadow_state.json/shadow_stats.json were ever lost,
+# reset, or corrupted.
+SHADOW_TRADE_LOG_FILE = "shadow_trade_log.jsonl"
 BIAS_AB_LOG_FILE  = "bias_ab_log.json"    # live (gated) vs shadow (old-rule) 1H bias, for /biasab
 BIAS_AB_LOG_MAX_ENTRIES = 500
+
+# Maps a live tier label to the plain tier number used in ATR-band
+# analysis and Telegram output (Tier: 1 / Tier: 2 / Tier: 3).
+TIER_NUMBER = {"TIER_1_POI": 1, "TIER_2_FIB": 2, "TIER_3_STRUCTURE": 3}
+ATR_SUITABILITY_BAND_WIDTH_PIPS = 1.0   # bucket width for the ATR band table
 
 JOURNAL_MAX_ENTRIES = 100
 
@@ -554,8 +572,21 @@ def data_looks_sane(df, label, max_spike_mult=DATA_SPIKE_ATR_MULT):
     bar_range = df["High"] - df["Low"]
     avg_range = bar_range.rolling(20, min_periods=5).mean()
     spike = bar_range > (avg_range * max_spike_mult)
-    if spike.tail(5).any():
-        print("[DATA WARNING] " + label + ": possible bad tick in recent bars.")
+
+    recent_spike = spike.tail(DATA_SPIKE_BLOCK_BARS)
+    if recent_spike.any():
+        bad_idx = recent_spike[recent_spike].index
+        bars_since_last_spike = len(df) - 1 - df.index.get_loc(bad_idx[-1])
+        bars_remaining = DATA_SPIKE_BLOCK_BARS - bars_since_last_spike
+        print(
+            "[DATA WARNING] " + label + ": possible bad tick in recent bars. "
+            "spike_at={} range={} avg_range={} clears_in={} more bar(s)".format(
+                list(bad_idx),
+                bar_range.loc[bad_idx].round(5).tolist(),
+                avg_range.loc[bad_idx].round(5).tolist(),
+                bars_remaining,
+            )
+        )
         return False
 
     return True
@@ -2206,7 +2237,7 @@ def save_shadow_state(shadow_state):
 
 _SHADOW_STATS_EXPERIMENT_KEYS = [
     "EXP1_STRUCTURE", "EXP2_FIB", "EXP3_POI", "EXP4_LIQUIDITY",
-    "EXP5_ABLATION", "EXP6_ALT_BIAS", "EXPE_REJECTED_LIVE",
+    "EXP5_ABLATION", "EXP6_ALT_BIAS", "EXP7_TIER_ATR", "EXPE_REJECTED_LIVE",
 ]
 
 
@@ -2236,9 +2267,17 @@ def save_shadow_stats(shadow_stats):
 
 # ---- building + tracking setups --------------------------------------------
 def build_shadow_setup(experiment, direction, entry, sl_raw, now_utc,
-                        variant=None, tags=None, note=""):
+                        variant=None, tags=None, note="", atr_pips=None, tier_number=None):
     """A hypothetical trade for research purposes only. Returns None if the
-    risk is degenerate (entry == sl_raw)."""
+    risk is degenerate (entry == sl_raw).
+
+    atr_pips: the 5M ATR (in pips) at the moment this setup was logged —
+    the SAME metric ATR_MIN_PIPS gates live trading on. Carried through
+    to resolution and permanently appended to SHADOW_TRADE_LOG_FILE so
+    ATR-vs-outcome can be analyzed later (see compute_atr_suitability()).
+    tier_number: 1/2/3 when this setup mirrors one of the live tiers
+    (Experiment 7 — Tier ATR Mirror); None for every other experiment.
+    """
     risk = (entry - sl_raw) if direction == "BUY" else (sl_raw - entry)
     if risk is None or risk <= 0:
         return None
@@ -2258,6 +2297,8 @@ def build_shadow_setup(experiment, direction, entry, sl_raw, now_utc,
         "max_r_reached": 0,
         "tags": tags or {},
         "note": note,
+        "atr_pips": round(atr_pips, 2) if atr_pips is not None else None,
+        "tier_number": tier_number,
     }
 
 
@@ -2282,6 +2323,31 @@ def log_shadow_setup(shadow_state, shadow_stats, setup, leg_id):
     last_leg[key] = leg_id
     shadow_state["pending"].append(setup)
     shadow_stats[setup["experiment"]]["logged"] += 1
+
+
+def _append_shadow_trade_log(setup, outcome, r_achieved, now_utc):
+    """Permanently appends ONE resolved shadow trade to
+    SHADOW_TRADE_LOG_FILE (append mode — this file is never truncated or
+    rewritten, unlike shadow_state.json/shadow_stats.json). This is the
+    raw per-trade record (tier, ATR, result) the ATR-suitability analysis
+    is built on."""
+    record = {
+        "resolved_at":  now_utc.isoformat(),
+        "experiment":   setup["experiment"],
+        "variant":      setup["variant"],
+        "tier_number":  setup["tier_number"],
+        "atr_pips":     setup["atr_pips"],
+        "direction":    setup["direction"],
+        "opened_at":    setup["opened_at"],
+        "bars_open":    setup["bars_open"],
+        "outcome":      outcome,          # "WIN" / "LOSS" / "TIMEOUT_WIN" / "TIMEOUT_LOSS"
+        "r_achieved":   round(r_achieved, 2),
+    }
+    try:
+        with open(SHADOW_TRADE_LOG_FILE, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception as e:
+        print("[SHADOW TRADE LOG ERROR] " + str(e))
 
 
 def update_pending_shadow_setups(shadow_state, shadow_stats, df_5m, now_utc):
@@ -2318,6 +2384,7 @@ def update_pending_shadow_setups(shadow_state, shadow_stats, df_5m, now_utc):
             exp_stats["resolved"] += 1
             exp_stats["losses"] += 1
             exp_stats["sum_r"] += -1.0
+            _append_shadow_trade_log(setup, "LOSS", -1.0, now_utc)
             continue  # resolved — drop from pending
 
         if reached_3r:
@@ -2327,6 +2394,7 @@ def update_pending_shadow_setups(shadow_state, shadow_stats, df_5m, now_utc):
             exp_stats["hit_2r"] += 1
             exp_stats["hit_3r"] += 1
             exp_stats["sum_r"] += 3.0
+            _append_shadow_trade_log(setup, "WIN", 3.0, now_utc)
             continue
 
         if hit_sl or timed_out:
@@ -2345,6 +2413,10 @@ def update_pending_shadow_setups(shadow_state, shadow_stats, df_5m, now_utc):
                 exp_stats["hit_1r"] += 1
             if r >= 2:
                 exp_stats["hit_2r"] += 1
+            outcome_label = ("TIMEOUT_WIN" if (timed_out and not hit_sl and r > 0) else
+                              "TIMEOUT_LOSS" if (timed_out and not hit_sl) else
+                              "WIN" if r > 0 else "LOSS")
+            _append_shadow_trade_log(setup, outcome_label, float(r) if r > 0 else -1.0, now_utc)
             continue
 
         still_pending.append(setup)
@@ -2353,7 +2425,7 @@ def update_pending_shadow_setups(shadow_state, shadow_stats, df_5m, now_utc):
 
 
 # ---- Experiment 1: Structure Only ------------------------------------------
-def experiment_1_structure(facts, shadow_state, shadow_stats, now_utc):
+def experiment_1_structure(facts, current_atr_pips, shadow_state, shadow_stats, now_utc):
     """Logs every clean CHoCH/BOS continuation aligned with 1H bias —
     answers: does structure alone have an edge, and how often does it
     reach 1R/2R/3R?"""
@@ -2366,12 +2438,13 @@ def experiment_1_structure(facts, shadow_state, shadow_stats, now_utc):
         "EXP1_STRUCTURE", side, float(facts.last_candle_5m()["Close"]), bos["impulse_start"], now_utc,
         tags={"choch": facts.has_choch_15m()},
         note="clean CHoCH/BOS continuation aligned with 1H bias",
+        atr_pips=current_atr_pips,
     )
     log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
 
 
 # ---- Experiment 2: Fib Only -------------------------------------------------
-def experiment_2_fib(facts, shadow_state, shadow_stats, now_utc):
+def experiment_2_fib(facts, current_atr_pips, shadow_state, shadow_stats, now_utc):
     """Logs every quality HTF pullback — rejection candle is IGNORED on
     purpose (per spec: 'ignore rejection candles if necessary'). Logs 3
     variants of the SAME leg (adaptive / fixed 38.2 / fixed 50) so their
@@ -2392,12 +2465,13 @@ def experiment_2_fib(facts, shadow_state, shadow_stats, now_utc):
             variant=variant_name,
             tags={"rejection_candle_present": facts.rejection_candle()},
             note=f"HTF fib pullback ({variant_name}), rejection candle not required",
+            atr_pips=current_atr_pips,
         )
         log_shadow_setup(shadow_state, shadow_stats, setup, leg_id + "|" + variant_name)
 
 
 # ---- Experiment 3: POI Only (Order Block AND quality-filtered FVG) --------
-def experiment_3_poi(facts, atr_15m_series, shadow_state, shadow_stats, now_utc):
+def experiment_3_poi(facts, atr_15m_series, current_atr_pips, shadow_state, shadow_stats, now_utc):
     """Logs every Order Block reaction AND every quality FVG reaction,
     tagged separately (variant="order_block" / variant="fvg") — answers:
     are order blocks carrying the strategy, and which POI type performs
@@ -2415,6 +2489,7 @@ def experiment_3_poi(facts, atr_15m_series, shadow_state, shadow_stats, now_utc)
             tags={"rejection_candle_present": facts.rejection_candle(),
                   "choch": facts.has_choch_15m()},
             note="Order block reaction",
+            atr_pips=current_atr_pips,
         )
         log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
 
@@ -2431,12 +2506,13 @@ def experiment_3_poi(facts, atr_15m_series, shadow_state, shadow_stats, now_utc)
                   "rejection_candle_present": facts.rejection_candle()},
             note="Quality-filtered FVG reaction (size>={}x ATR, age<={} candles)".format(
                 FVG_MIN_SIZE_ATR_MULT, FVG_MAX_AGE_CANDLES),
+            atr_pips=current_atr_pips,
         )
         log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
 
 
 # ---- Experiment 4: Liquidity Sweep -----------------------------------------
-def experiment_4_liquidity(facts, shadow_state, shadow_stats, now_utc):
+def experiment_4_liquidity(facts, current_atr_pips, shadow_state, shadow_stats, now_utc):
     """Logs every liquidity sweep of the macro swing level that would
     matter for the CURRENT bias, confirmed or not — answers: does every
     sweep need confirmation, and which sweep distance works best?"""
@@ -2465,6 +2541,7 @@ def experiment_4_liquidity(facts, shadow_state, shadow_stats, now_utc):
         "EXP4_LIQUIDITY", side, float(c_last["Close"]), level, now_utc,
         tags={"confirmed": confirmed, "distance_pips": round(distance_pips, 1)},
         note=f"Liquidity sweep of macro swing level ({label})",
+        atr_pips=current_atr_pips,
     )
     log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
 
@@ -2489,7 +2566,8 @@ def experiment_5_filter_ablation(facts, ctx, state, df_15m, shadow_state, shadow
         leg_id = "nls|{}|{:.5f}".format(side, bos["impulse_start"])
         setup = build_shadow_setup("EXP5_ABLATION", side, entry, bos["impulse_start"], now_utc,
                                     variant="no_liquidity_sweep",
-                                    note="CHoCH+BOS setup that would be REJECTED by a sweep-required gate")
+                                    note="CHoCH+BOS setup that would be REJECTED by a sweep-required gate",
+                                    atr_pips=ctx.current_atr_pips)
         log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
 
     # variant: no_ema_agreement — proxy: log even while the 1H bias is
@@ -2498,7 +2576,8 @@ def experiment_5_filter_ablation(facts, ctx, state, df_15m, shadow_state, shadow
         leg_id = "nea|{}|{:.5f}".format(side, bos["impulse_start"])
         setup = build_shadow_setup("EXP5_ABLATION", side, entry, bos["impulse_start"], now_utc,
                                     variant="no_ema_agreement",
-                                    note="CHoCH+BOS setup taken despite a STALE 1H bias")
+                                    note="CHoCH+BOS setup taken despite a STALE 1H bias",
+                                    atr_pips=ctx.current_atr_pips)
         log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
 
     # variant: choch_only — isolated CHoCH-only bucket (excludes plain
@@ -2507,7 +2586,8 @@ def experiment_5_filter_ablation(facts, ctx, state, df_15m, shadow_state, shadow
         leg_id = "co|{}|{:.5f}".format(side, bos["impulse_start"])
         setup = build_shadow_setup("EXP5_ABLATION", side, entry, bos["impulse_start"], now_utc,
                                     variant="choch_only",
-                                    note="Pure CHoCH-only bucket, continuation BOS excluded")
+                                    note="Pure CHoCH-only bucket, continuation BOS excluded",
+                                    atr_pips=ctx.current_atr_pips)
         log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
 
     # variant: bias_15m — use the 15M structure's OWN direction as the
@@ -2520,12 +2600,13 @@ def experiment_5_filter_ablation(facts, ctx, state, df_15m, shadow_state, shadow
         setup = build_shadow_setup("EXP5_ABLATION", alt_side, entry, bos_15m_only["impulse_start"], now_utc,
                                     variant="bias_15m",
                                     tags={"agrees_with_1h_bias": alt_side == side},
-                                    note="15M structure used AS the bias authority (may diverge from 1H)")
+                                    note="15M structure used AS the bias authority (may diverge from 1H)",
+                                    atr_pips=ctx.current_atr_pips)
         log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
 
 
 # ---- Experiment 6: Alternative Bias Logic ----------------------------------
-def experiment_6_alt_bias(facts, state, shadow_state, shadow_stats, now_utc):
+def experiment_6_alt_bias(facts, state, current_atr_pips, shadow_state, shadow_stats, now_utc):
     """Whenever the OLD bias rule (compute_macro_bias_shadow_old_rule)
     disagrees with the live 1H bias, logs the hypothetical CHoCH/BOS-style
     trade IN THE OLD RULE'S DIRECTION, so the divergence gets a real R
@@ -2541,7 +2622,8 @@ def experiment_6_alt_bias(facts, state, shadow_state, shadow_stats, now_utc):
         return
     leg_id = "{}|{:.5f}".format(side, origin)
     setup = build_shadow_setup("EXP6_ALT_BIAS", side, entry, origin, now_utc,
-                                note=f"Old-rule bias ({shadow_bias}) diverges from live bias ({facts.macro_bias})")
+                                note=f"Old-rule bias ({shadow_bias}) diverges from live bias ({facts.macro_bias})",
+                                atr_pips=current_atr_pips)
     log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
 
 
@@ -2579,8 +2661,139 @@ def experiment_e_rejected_live(facts, ctx, state, live_result, now_utc,
         "EXPE_REJECTED_LIVE", side, entry, sl_raw, now_utc,
         tags=checks,
         note="Live bot took no action this scan — " + (live_result.reason or "no tier activated"),
+        atr_pips=ctx.current_atr_pips,
     )
     log_shadow_setup(shadow_state, shadow_stats, setup, leg_id)
+
+
+# ---- Experiment 7: Tier ATR Mirror -----------------------------------------
+def experiment_7_tier_atr_mirror(facts, ctx, state, now_utc, shadow_state, shadow_stats):
+    """
+    Answers the friend's question directly: for EACH live tier, log the
+    setup + current ATR(5m, pips) + eventual R result — WITHOUT the
+    ATR_MIN_PIPS floor gating anything. Runs every scan regardless of
+    ctx.tradeable, including scans the live bot skips entirely for being
+    below the ATR floor, so the resulting dataset spans the FULL ATR
+    range, not just the range that already clears the current threshold
+    (which would make the analysis circular).
+
+    Each tier is peeked read-only (state_updates discarded, exactly like
+    Experiment E) — this can never claim a leg or touch live state. A
+    tier is logged if its OWN mandatory conditions are met (`activated`),
+    regardless of conviction score or the live ATR gate — conviction and
+    ATR floor are both things we're trying to CALIBRATE, so neither
+    should filter the data used to calibrate them.
+
+    After 200-500 of these accumulate, run compute_atr_suitability() (or
+    /atrbands) to see each tier's real ATR sweet spot, then eventually
+    let CONVICTION_MIN_BY_TIER / an ATR-suitability score replace
+    ATR_MIN_PIPS as a hard gate entirely.
+    """
+    leg_key = compute_leg_id(facts.macro_bias, facts.swing_high, facts.swing_low)
+    entry = float(facts.last_candle_5m()["Close"])
+
+    for tier_label, tier_fn in TIER_REGISTRY.items():
+        peek = tier_fn(facts, ctx, state, now_utc)  # read-only — state_updates discarded
+        if not peek.activated:
+            continue
+
+        tier_number = TIER_NUMBER.get(tier_label)
+        # Use the tier's own proposed entry/sl when it fired one; fall
+        # back to current price + that tier's structural sl_raw is
+        # unavailable pre-fire, so a non-fired-but-activated peek (e.g.
+        # blocked only by conviction) still needs SOME sl. Re-derive it
+        # the same way the tier would if it fires, by using peek.sl_raw
+        # when present (tiers always set it alongside activated=True in
+        # this codebase), otherwise skip — no structural sl means no
+        # honest R multiple.
+        if peek.sl_raw is None:
+            continue
+
+        setup = build_shadow_setup(
+            "EXP7_TIER_ATR", peek.direction or bias_to_side(facts.macro_bias),
+            entry, peek.sl_raw, now_utc,
+            variant=tier_label,
+            tags={"conviction_score": peek.score, "would_have_fired_live": peek.fired,
+                  "atr_floor_pips": ATR_MIN_PIPS},
+            note=f"Tier {tier_number} ({tier_label}) mirror — ATR {ctx.current_atr_pips:.1f}p, "
+                 f"ATR floor {'MET' if ctx.tradeable else 'NOT MET (this scan would be skipped live)'}",
+            atr_pips=ctx.current_atr_pips,
+            tier_number=tier_number,
+        )
+        log_shadow_setup(shadow_state, shadow_stats, setup, f"{leg_key}|{tier_label}")
+
+
+def compute_atr_suitability(band_width=ATR_SUITABILITY_BAND_WIDTH_PIPS):
+    """
+    Reads the PERMANENT shadow_trade_log.jsonl and buckets EXP7_TIER_ATR
+    records by (tier_number, ATR band) -> {n, win_rate, avg_r}. This is
+    the exact table the friend described: rows = ATR band, columns =
+    Tier 1/2/3 win rate. Pure function — safe to call from a Telegram
+    command or an offline analysis script.
+    """
+    table = {}  # {tier_number: {band_label: {"n":, "wins":, "sum_r":}}}
+    try:
+        with open(SHADOW_TRADE_LOG_FILE, "r") as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        return table
+
+    for line in lines:
+        try:
+            rec = json.loads(line)
+        except Exception:
+            continue
+        if rec.get("experiment") != "EXP7_TIER_ATR":
+            continue
+        tier_number = rec.get("tier_number")
+        atr_pips = rec.get("atr_pips")
+        if tier_number is None or atr_pips is None:
+            continue
+
+        band_floor = int(atr_pips // band_width) * band_width
+        band_label = f"{band_floor:.0f}-{band_floor + band_width:.0f}"
+
+        tier_table = table.setdefault(tier_number, {})
+        bucket = tier_table.setdefault(band_label, {"n": 0, "wins": 0, "sum_r": 0.0})
+        bucket["n"] += 1
+        r = rec.get("r_achieved", 0.0)
+        if r > 0:
+            bucket["wins"] += 1
+        bucket["sum_r"] += r
+
+    return table
+
+
+def format_atr_suitability_table(band_width=ATR_SUITABILITY_BAND_WIDTH_PIPS, min_n=1):
+    """Human-readable ATR-band x Tier win-rate table — see /atrbands."""
+    table = compute_atr_suitability(band_width)
+    if not table:
+        return None
+
+    all_bands = sorted(
+        {band for tier_table in table.values() for band in tier_table},
+        key=lambda b: float(b.split("-")[0]),
+    )
+    lines = ["📊 *ATR Suitability — Tier x ATR band*\n"]
+    header = "Band(p)  | " + " | ".join(f"Tier {t}" for t in sorted(table.keys()))
+    lines.append(f"`{header}`")
+    for band in all_bands:
+        row = [f"{band:>7}"]
+        for t in sorted(table.keys()):
+            bucket = table[t].get(band)
+            if bucket is None or bucket["n"] < min_n:
+                row.append("   —  ")
+            else:
+                wr = bucket["wins"] / bucket["n"] * 100
+                row.append(f"{wr:5.0f}%")
+        lines.append("`" + " | ".join(row) + "`")
+
+    lines.append("")
+    for t in sorted(table.keys()):
+        total_n = sum(b["n"] for b in table[t].values())
+        total_r = sum(b["sum_r"] for b in table[t].values())
+        lines.append(f"Tier {t}: {total_n} logged, avg R {total_r/total_n:+.2f}" if total_n else f"Tier {t}: 0 logged")
+    return "\n".join(lines)
 
 
 # ---- orchestrator -----------------------------------------------------------
@@ -2589,6 +2802,12 @@ def run_shadow_pipeline(facts, ctx, state, df_15m, live_result, now_utc):
     Single entry point called from scan(). Every experiment is wrapped so
     ONE broken experiment can never take down the live bot or another
     experiment — errors are logged and swallowed, never raised.
+
+    IMPORTANT: this is called from scan() in BOTH the normal path AND the
+    ATR-too-low path — see scan()'s "SHADOW PIPELINE" comments. That's
+    intentional: it's what "remove the ATR rejection" from the shadow
+    pipeline means in practice. Only the LIVE trade path stays gated by
+    ATR_MIN_PIPS; nothing in this function is.
     """
     shadow_state = load_shadow_state()
     shadow_stats = load_shadow_stats()
@@ -2599,15 +2818,18 @@ def run_shadow_pipeline(facts, ctx, state, df_15m, live_result, now_utc):
         print("[SHADOW ERROR] update_pending: " + str(e))
 
     atr_15m_series = atr(df_15m, period=14)
+    current_atr_pips = ctx.current_atr_pips
 
     experiments = [
-        ("Experiment 1 (Structure)", lambda: experiment_1_structure(facts, shadow_state, shadow_stats, now_utc)),
-        ("Experiment 2 (Fib)", lambda: experiment_2_fib(facts, shadow_state, shadow_stats, now_utc)),
-        ("Experiment 3 (POI)", lambda: experiment_3_poi(facts, atr_15m_series, shadow_state, shadow_stats, now_utc)),
-        ("Experiment 4 (Liquidity)", lambda: experiment_4_liquidity(facts, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 1 (Structure)", lambda: experiment_1_structure(facts, current_atr_pips, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 2 (Fib)", lambda: experiment_2_fib(facts, current_atr_pips, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 3 (POI)", lambda: experiment_3_poi(facts, atr_15m_series, current_atr_pips, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 4 (Liquidity)", lambda: experiment_4_liquidity(facts, current_atr_pips, shadow_state, shadow_stats, now_utc)),
         ("Experiment 5 (Filter Ablation)", lambda: experiment_5_filter_ablation(
             facts, ctx, state, df_15m, shadow_state, shadow_stats, now_utc)),
-        ("Experiment 6 (Alt Bias)", lambda: experiment_6_alt_bias(facts, state, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 6 (Alt Bias)", lambda: experiment_6_alt_bias(facts, state, current_atr_pips, shadow_state, shadow_stats, now_utc)),
+        ("Experiment 7 (Tier ATR Mirror)", lambda: experiment_7_tier_atr_mirror(
+            facts, ctx, state, now_utc, shadow_state, shadow_stats)),
         ("Experiment E (Rejected Live)", lambda: experiment_e_rejected_live(
             facts, ctx, state, live_result, now_utc, shadow_state, shadow_stats)),
     ]
@@ -2853,7 +3075,7 @@ def check_result_commands(stats):
         1. per-signal cooldown (no double-logging the same signal)
         2. /undo — unconditional reversal of the last journal entry
         3. /confirm — override a flip within 60s of the last log
-      /undo, /confirm, /stats, /trade, /shadow, /biasab, /bias,
+      /undo, /confirm, /stats, /trade, /shadow, /atrbands, /biasab, /bias,
       /journal, /last
     """
     if not RESULT_TRACKING_ENABLED:
@@ -3026,6 +3248,10 @@ def check_result_commands(stats):
         elif cmd in ("/shadow", "shadow"):
             summary = format_shadow_summary(load_shadow_stats())
             send_telegram(summary or "🔬 _Shadow pipeline has no logged experiments yet._")
+
+        elif cmd in ("/atrbands", "atrbands", "/atr", "atr"):
+            table = format_atr_suitability_table()
+            send_telegram(table or "📊 _No EXP7_TIER_ATR trades resolved yet — check back after a few hundred scans._")
 
         elif cmd in ("/biasab", "biasab"):
             send_telegram(format_bias_ab_summary(load_bias_ab_log()))
@@ -3412,18 +3638,32 @@ def scan():
         )
     )
 
+    # ── MARKET FACTS (pure observation, built once, shared by every tier) ─
+    # NOTE: built BEFORE the ATR gate below on purpose. The Shadow
+    # Pipeline (specifically Experiment 7 — Tier ATR Mirror) needs facts
+    # on every scan, including scans the live bot skips for being below
+    # ATR_MIN_PIPS — otherwise the ATR-suitability dataset would only
+    # ever contain ATR values that already clear the current threshold,
+    # which makes the whole "find the real sweet spot" exercise circular.
+    facts = MarketFacts(df_5m, df_15m, df_1h, macro_bias, swing_high, swing_low, now_utc)
+
     if not ctx.tradeable:
         stats["atr_too_low"] += 1
-        save_stats(stats)
         diag_set(diag, "market_context", False, ctx_reason)
-        print(f"  NO TRADE — {ctx_reason}. No tier is evaluated.")
+        print(f"  NO TRADE — {ctx_reason}. No tier is evaluated live.")
+
+        # ── SHADOW PIPELINE still runs — ATR floor never gates research ──
+        try:
+            run_shadow_pipeline(facts, ctx, state, df_15m,
+                                 TierResult(reason="ATR too low: " + ctx_reason), now_utc)
+        except Exception as e:
+            print("[SHADOW ERROR] pipeline crashed, live bot unaffected: " + str(e))
+
+        save_stats(stats)
         if diag is not None:
             print(build_diagnostic_report(diag))
         return
     diag_set(diag, "market_context", True)
-
-    # ── MARKET FACTS (pure observation, built once, shared by every tier) ─
-    facts = MarketFacts(df_5m, df_15m, df_1h, macro_bias, swing_high, swing_low, now_utc)
 
     # ── RULE OF LAW (arbitration, including ownership upgrades) ──────────
     result = evaluate_rule_of_law(facts, ctx, state, stats, now_utc)
@@ -3554,3 +3794,5 @@ def scan():
 
 if __name__ == "__main__":
     scan()
+  
+            

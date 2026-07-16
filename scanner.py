@@ -2342,6 +2342,15 @@ def _append_shadow_trade_log(setup, outcome, r_achieved, now_utc):
         "bars_open":    setup["bars_open"],
         "outcome":      outcome,          # "WIN" / "LOSS" / "TIMEOUT_WIN" / "TIMEOUT_LOSS"
         "r_achieved":   round(r_achieved, 2),
+        # AUDIT NOTE (drill-down rework): tags used to be dropped at
+        # resolution time, which meant the /shadow drill-down commands
+        # (session split, rejection-reason breakdown, tier-activation
+        # breakdown for EXPE_REJECTED_LIVE) had nothing to read — the
+        # only place `tags` ever lived was the transient pending setup.
+        # Persisting them here is what makes those commands possible.
+        # Trades resolved BEFORE this change will simply have tags=None;
+        # every drill-down below handles that gracefully.
+        "tags":         setup.get("tags") or {},
     }
     try:
         with open(SHADOW_TRADE_LOG_FILE, "a") as f:
@@ -2843,22 +2852,328 @@ def run_shadow_pipeline(facts, ctx, state, df_15m, live_result, now_utc):
     save_shadow_stats(shadow_stats)
 
 
+# ---- Shadow reporting: dashboard + drill-downs ------------------------
+# REWORK NOTE: /shadow used to print one full paragraph per experiment,
+# which stopped being readable once EXPE_REJECTED_LIVE alone hit 90+
+# logged setups. Now /shadow is a compact aligned table (a health check,
+# not a report), and everything else lives behind drill-down commands:
+#   /shadow            -> this table
+#   /shadow <name>     -> per-experiment detail (aliases below)
+#   /shadow rejected   -> EXPE_REJECTED_LIVE-specific breakdown
+#   /shadow recent     -> last 10 resolved shadow trades, any experiment
+#   /leaderboard       -> every experiment ranked by avg R
+
+_SHADOW_DISPLAY_NAME = {
+    "EXP1_STRUCTURE":     "EXP1 Structure",
+    "EXP2_FIB":           "EXP2 Fib",
+    "EXP3_POI":           "EXP3 POI",
+    "EXP4_LIQUIDITY":     "EXP4 Liquidity",
+    "EXP5_ABLATION":      "EXP5 Ablation",
+    "EXP6_ALT_BIAS":      "EXP6 Alt Bias",
+    "EXP7_TIER_ATR":      "EXP7 Tier ATR",
+    "EXPE_REJECTED_LIVE": "Rejected Live",
+}
+
+# What a person is likely to type for /shadow <name> -> canonical stats key.
+_SHADOW_ALIASES = {
+    "exp1": "EXP1_STRUCTURE", "structure": "EXP1_STRUCTURE", "exp1_structure": "EXP1_STRUCTURE",
+    "exp2": "EXP2_FIB", "fib": "EXP2_FIB", "exp2_fib": "EXP2_FIB",
+    "exp3": "EXP3_POI", "poi": "EXP3_POI", "exp3_poi": "EXP3_POI",
+    "exp4": "EXP4_LIQUIDITY", "liquidity": "EXP4_LIQUIDITY", "exp4_liquidity": "EXP4_LIQUIDITY",
+    "exp5": "EXP5_ABLATION", "ablation": "EXP5_ABLATION", "exp5_ablation": "EXP5_ABLATION",
+    "exp6": "EXP6_ALT_BIAS", "altbias": "EXP6_ALT_BIAS", "exp6_alt_bias": "EXP6_ALT_BIAS",
+    "exp7": "EXP7_TIER_ATR", "atr": "EXP7_TIER_ATR", "exp7_tier_atr": "EXP7_TIER_ATR",
+    "rejected": "EXPE_REJECTED_LIVE", "reject": "EXPE_REJECTED_LIVE", "live": "EXPE_REJECTED_LIVE",
+}
+
+# Rejection-reason bucketing. These substrings are copied verbatim from
+# the actual TierResult.reason strings each tier returns (see the
+# `reason=` grep in the module docstring area / tier evaluate() functions)
+# — NOT a guessed category list. If a tier's wording changes, update the
+# matching substring here too, or the bucket will silently fall through
+# to "Other / Unclassified."
+_REJECTION_REASON_BUCKETS = [
+    ("ATR too low",                         "Market Context (ATR/session/regime)"),
+    ("no order block",                      "POI — no order block"),
+    ("price not currently inside the order block", "POI — price not in zone"),
+    ("price not in the HTF fib pocket",     "Fib — price not in pocket"),
+    ("not a CHoCH",                         "Structure — continuation, not CHoCH"),
+    ("no 15M structure aligned",            "Structure — no aligned structure"),
+    ("no fresh 15M BOS",                    "Structure — no fresh BOS"),
+    ("conviction",                          "Conviction score below minimum"),
+    ("no tier activated",                   "No tier activated at all"),
+]
+
+
+def _classify_rejection_reason(reason):
+    if not reason:
+        return "Other / Unclassified"
+    for needle, bucket in _REJECTION_REASON_BUCKETS:
+        if needle.lower() in reason.lower():
+            return bucket
+    return "Other / Unclassified"
+
+
+def _classify_session(iso_ts):
+    """Buckets an ISO timestamp into London / New York / Overlap /
+    Off-session using the SAME SESSION_WINDOWS_UTC the live bot's
+    is_active_session() already gates on — not a separately invented
+    schedule."""
+    try:
+        dt = datetime.fromisoformat(iso_ts)
+    except Exception:
+        return "Unknown"
+    hour = dt.hour
+    london = SESSION_WINDOWS_UTC[0][0] <= hour < SESSION_WINDOWS_UTC[0][1]
+    ny     = SESSION_WINDOWS_UTC[1][0] <= hour < SESSION_WINDOWS_UTC[1][1]
+    if london and ny:
+        return "London/NY overlap"
+    if london:
+        return "London"
+    if ny:
+        return "New York"
+    return "Off-session"
+
+
+def _read_shadow_trade_log(experiment=None, limit=None):
+    """Reads the PERMANENT shadow_trade_log.jsonl, optionally filtered to
+    one experiment. Returns a list of dicts, oldest-first. Pure, safe to
+    call from a Telegram command."""
+    records = []
+    try:
+        with open(SHADOW_TRADE_LOG_FILE, "r") as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        return records
+    for line in lines:
+        try:
+            rec = json.loads(line)
+        except Exception:
+            continue
+        if experiment is not None and rec.get("experiment") != experiment:
+            continue
+        records.append(rec)
+    if limit:
+        records = records[-limit:]
+    return records
+
+
 def format_shadow_summary(shadow_stats):
-    """Human-readable one-block summary — call periodically (e.g. every
-    STATS_SUMMARY_EVERY scans, same cadence as the live stats summary)."""
-    lines = ["🔬 *Shadow Pipeline — Research Summary*\n"]
+    """Compact aligned dashboard — a health check, not a report. Call
+    periodically (e.g. every STATS_SUMMARY_EVERY scans) and on /shadow.
+    Drill down with /shadow <name>, /shadow rejected, /shadow recent, or
+    /leaderboard for anything this table doesn't show."""
+    rows = []
     for key in _SHADOW_STATS_EXPERIMENT_KEYS:
         s = shadow_stats.get(key, _empty_experiment_stat())
         if s["logged"] == 0:
             continue
-        win_rate = (s["wins"] / s["resolved"] * 100) if s["resolved"] else 0.0
-        avg_r = (s["sum_r"] / s["resolved"]) if s["resolved"] else 0.0
-        lines.append(
-            f"*{key}* — logged {s['logged']}, resolved {s['resolved']}, "
-            f"win rate {win_rate:.0f}%, avg R {avg_r:+.2f}, "
-            f"1R/2R/3R hit: {s['hit_1r']}/{s['hit_2r']}/{s['hit_3r']}"
-        )
-    return "\n".join(lines) if len(lines) > 1 else None
+        win_rate = (s["wins"] / s["resolved"] * 100) if s["resolved"] else None
+        avg_r = (s["sum_r"] / s["resolved"]) if s["resolved"] else None
+        rows.append((key, s, win_rate, avg_r))
+
+    if not rows:
+        return None
+
+    name_w = max(len(_SHADOW_DISPLAY_NAME.get(k, k)) for k, _, _, _ in rows)
+    lines = ["🔬 *Shadow Pipeline*", "`" + "─" * (name_w + 28) + "`"]
+    for key, s, win_rate, avg_r in rows:
+        name = _SHADOW_DISPLAY_NAME.get(key, key).ljust(name_w)
+        wr_str = f"WR {win_rate:3.0f}%" if win_rate is not None else "WR  — "
+        avgr_str = f"AvgR {avg_r:+.2f}" if avg_r is not None else "AvgR  —  "
+        lines.append(f"`{name}  {s['logged']:>3} | {s['resolved']:>3} | {wr_str} | {avgr_str}`")
+    lines.append("")
+    lines.append("_logged | resolved | win rate | avg R — drill down with /shadow <name>, "
+                  "/shadow rejected, /shadow recent, or /leaderboard_")
+    return "\n".join(lines)
+
+
+def format_shadow_detail(shadow_stats, key):
+    """Per-experiment drill-down. Aggregate counts come from shadow_stats
+    (fast, always available); duration/session/direction/variant splits
+    are derived from the permanent trade log, so they only reflect
+    RESOLVED trades and only what's accumulated so far."""
+    if key not in _SHADOW_STATS_EXPERIMENT_KEYS:
+        return None
+    s = shadow_stats.get(key, _empty_experiment_stat())
+    if s["logged"] == 0:
+        return f"🔬 *{_SHADOW_DISPLAY_NAME.get(key, key)}*\n_Nothing logged yet._"
+
+    win_rate = (s["wins"] / s["resolved"] * 100) if s["resolved"] else None
+    avg_r = (s["sum_r"] / s["resolved"]) if s["resolved"] else None
+
+    lines = [f"🔬 *{_SHADOW_DISPLAY_NAME.get(key, key)}*", "─────────────────────"]
+    lines.append(f"Logged: `{s['logged']}`   Resolved: `{s['resolved']}`")
+    lines.append(f"Wins: `{s['wins']}`   Losses: `{s['losses']}`   Timed out: `{s['timed_out']}`")
+    lines.append(f"Win Rate: `{win_rate:.0f}%`" if win_rate is not None else "Win Rate: `—`")
+    lines.append(f"Average R: `{avg_r:+.2f}`" if avg_r is not None else "Average R: `—`")
+    lines.append(f"Reached — 1R: `{s['hit_1r']}`  2R: `{s['hit_2r']}`  3R: `{s['hit_3r']}`")
+
+    records = _read_shadow_trade_log(experiment=key)
+    if records:
+        durations = [r["bars_open"] for r in records if r.get("bars_open") is not None]
+        if durations:
+            lines.append(f"\nAverage duration: `{sum(durations)/len(durations):.1f} candles` (5m)")
+
+        buys  = sum(1 for r in records if r.get("direction") == "BUY")
+        sells = sum(1 for r in records if r.get("direction") == "SELL")
+        lines.append(f"Buy/Sell: `{buys}` / `{sells}`")
+
+        sessions = {}
+        for r in records:
+            sess = _classify_session(r.get("opened_at", ""))
+            sessions[sess] = sessions.get(sess, 0) + 1
+        if sessions:
+            lines.append("\nBy Session:")
+            for sess, n in sorted(sessions.items(), key=lambda kv: -kv[1]):
+                lines.append(f"  {sess}: `{n}`")
+
+        variants = {}
+        for r in records:
+            v = r.get("variant")
+            if v:
+                variants.setdefault(v, {"n": 0, "wins": 0, "sum_r": 0.0})
+                variants[v]["n"] += 1
+                variants[v]["sum_r"] += r.get("r_achieved", 0.0)
+                if r.get("r_achieved", 0.0) > 0:
+                    variants[v]["wins"] += 1
+        if variants:
+            lines.append("\nBy Variant:")
+            for v, d in sorted(variants.items(), key=lambda kv: -kv[1]["n"]):
+                wr = d["wins"] / d["n"] * 100
+                lines.append(f"  {v}: `{d['n']}` logged, WR `{wr:.0f}%`, avg R `{d['sum_r']/d['n']:+.2f}`")
+    else:
+        lines.append("\n_No resolved trades in the permanent log yet — "
+                      "duration/session/variant splits need at least one resolution._")
+
+    return "\n".join(lines)
+
+
+def format_rejected_live_detail(shadow_stats):
+    """Drill-down for EXPE_REJECTED_LIVE specifically — the one the
+    friend said he'd use most. Two breakdowns:
+      1. Rejection reason buckets, from EVERY logged rejection (tags are
+         captured at build time, so this covers all resolved+pending).
+      2. Of the ones that resolved as WINNERS, which tier(s) were
+         actually "activated" (watching/close) at the moment of
+         rejection — i.e. which filter cost you a real winning trade.
+    Both need `tags` to have been persisted at resolution time (see the
+    audit note in _append_shadow_trade_log) — records resolved before
+    that fix won't have tags and are silently excluded from these two
+    breakdowns (they still count in the top-line win/loss numbers).
+    """
+    key = "EXPE_REJECTED_LIVE"
+    s = shadow_stats.get(key, _empty_experiment_stat())
+    if s["logged"] == 0:
+        return "🔬 *Rejected Live Analysis*\n_Nothing logged yet._"
+
+    win_rate = (s["wins"] / s["resolved"] * 100) if s["resolved"] else None
+    avg_r = (s["sum_r"] / s["resolved"]) if s["resolved"] else None
+
+    lines = ["🔬 *Rejected Live Analysis*", "─────────────────────"]
+    lines.append(f"Rejected: `{s['logged']}`   Resolved: `{s['resolved']}`")
+    lines.append(f"Won: `{s['wins']}`   Lost: `{s['losses']}`")
+    lines.append(f"Win Rate: `{win_rate:.0f}%`" if win_rate is not None else "Win Rate: `—`")
+    lines.append(f"Average R: `{avg_r:+.2f}`" if avg_r is not None else "Average R: `—`")
+
+    records = _read_shadow_trade_log(experiment=key)
+    tagged = [r for r in records if r.get("tags")]
+    if not tagged:
+        lines.append("\n_No tag data yet for reason/tier breakdowns — this needs at least one "
+                      "resolution AFTER the tag-persistence fix. Check back after the next few "
+                      "resolved rejections._")
+        return "\n".join(lines)
+
+    reason_buckets = {}
+    for r in tagged:
+        # tags here is the `checks` dict: {tier_label: {"activated","reason"}}
+        # Use TIER_3_STRUCTURE's reason as the representative "why nothing
+        # fired" signal when nothing activated at all; if something
+        # activated but the trade still didn't fire live, that's a
+        # conviction/risk-gate story, not a tier-gate story.
+        checks = r["tags"]
+        any_activated = any(v.get("activated") for v in checks.values())
+        if any_activated:
+            bucket = "Activated but didn't fire (conviction/risk gate)"
+        else:
+            # Pick the most specific (non-generic) reason among the tiers.
+            reasons = [v.get("reason", "") for v in checks.values()]
+            bucket = _classify_rejection_reason(next((x for x in reasons if x), ""))
+        reason_buckets[bucket] = reason_buckets.get(bucket, 0) + 1
+
+    lines.append("\nReasons rejected:")
+    for bucket, n in sorted(reason_buckets.items(), key=lambda kv: -kv[1]):
+        lines.append(f"  {bucket}: `{n}`")
+
+    winners_tagged = [r for r in tagged if r.get("r_achieved", 0.0) > 0]
+    if winners_tagged:
+        tier_wins = {}
+        for r in winners_tagged:
+            for tier_label, v in r["tags"].items():
+                if v.get("activated"):
+                    tier_wins[tier_label] = tier_wins.get(tier_label, 0) + 1
+        lines.append(f"\nRejected winners: `{len(winners_tagged)}`")
+        if tier_wins:
+            lines.append("Of those, tier was activated but blocked elsewhere:")
+            for tier_label, n in sorted(tier_wins.items(), key=lambda kv: -kv[1]):
+                lines.append(f"  {tier_label}: `{n}`")
+        else:
+            lines.append("_None of the tagged winners had any tier activated — "
+                          "these were rejected before any tier saw a setup at all._")
+
+    return "\n".join(lines)
+
+
+def format_shadow_leaderboard(shadow_stats, min_resolved=5):
+    """Ranks every experiment by average R. Experiments below
+    min_resolved resolved trades are marked Insufficient Data rather
+    than ranked — an avg R from 2 trades is noise, not a result."""
+    ranked, insufficient = [], []
+    for key in _SHADOW_STATS_EXPERIMENT_KEYS:
+        s = shadow_stats.get(key, _empty_experiment_stat())
+        if s["logged"] == 0:
+            continue
+        if s["resolved"] < min_resolved:
+            insufficient.append(key)
+            continue
+        avg_r = s["sum_r"] / s["resolved"]
+        ranked.append((key, avg_r, s["resolved"]))
+
+    if not ranked and not insufficient:
+        return None
+
+    ranked.sort(key=lambda t: -t[1])
+    lines = ["🏆 *Experiment Leaderboard*", "─────────────────────"]
+    pos = 1
+    for key, avg_r, n in ranked:
+        lines.append(f"{pos}. *{_SHADOW_DISPLAY_NAME.get(key, key)}*\n   AvgR `{avg_r:+.2f}` ({n} resolved)")
+        pos += 1
+    for key in insufficient:
+        s = shadow_stats.get(key, _empty_experiment_stat())
+        lines.append(f"{pos}. *{_SHADOW_DISPLAY_NAME.get(key, key)}*\n   Insufficient Data ({s['resolved']}/{min_resolved} resolved)")
+        pos += 1
+    return "\n".join(lines)
+
+
+def format_shadow_recent(limit=10):
+    """Last N resolved shadow trades across every experiment, most
+    recent first — a fast way to spot patterns without scrolling
+    through Telegram history."""
+    records = _read_shadow_trade_log(limit=200)  # read a bit extra, then trim
+    if not records:
+        return None
+    records = records[-limit:][::-1]
+    lines = [f"🕒 *Shadow — Last {len(records)} Resolved*", "─────────────────────"]
+    for r in records:
+        try:
+            t = datetime.fromisoformat(r["resolved_at"]).strftime("%H:%M")
+        except Exception:
+            t = "??:??"
+        name = _SHADOW_DISPLAY_NAME.get(r.get("experiment"), r.get("experiment", "?"))
+        outcome = r.get("outcome", "?")
+        icon = "✅" if r.get("r_achieved", 0.0) > 0 else "❌"
+        lines.append(f"`{t}`  {name}  {r.get('direction','?')}  {icon} {outcome}  `{r.get('r_achieved', 0):+.1f}R`")
+    return "\n".join(lines)
 
 
 # =========================================================================
@@ -3075,8 +3390,8 @@ def check_result_commands(stats):
         1. per-signal cooldown (no double-logging the same signal)
         2. /undo — unconditional reversal of the last journal entry
         3. /confirm — override a flip within 60s of the last log
-      /undo, /confirm, /stats, /trade, /shadow, /atrbands, /biasab, /bias,
-      /journal, /last
+      /undo, /confirm, /stats, /trade, /shadow (+ exp1..exp7/rejected/recent),
+      /leaderboard, /atrbands, /biasab, /bias, /journal, /last
     """
     if not RESULT_TRACKING_ENABLED:
         return stats
@@ -3246,8 +3561,36 @@ def check_result_commands(stats):
             stats["_pending_trade_query"] = True
 
         elif cmd in ("/shadow", "shadow"):
-            summary = format_shadow_summary(load_shadow_stats())
-            send_telegram(summary or "🔬 _Shadow pipeline has no logged experiments yet._")
+            shadow_stats = load_shadow_stats()
+            arg = note.strip().lower()  # text after the command, e.g. "/shadow exp3" -> "exp3"
+
+            if not arg:
+                summary = format_shadow_summary(shadow_stats)
+                send_telegram(summary or "🔬 _Shadow pipeline has no logged experiments yet._")
+
+            elif arg in ("rejected", "reject", "live"):
+                send_telegram(format_rejected_live_detail(shadow_stats))
+
+            elif arg in ("recent", "last10"):
+                send_telegram(format_shadow_recent() or "🕒 _No resolved shadow trades yet._")
+
+            elif arg in _SHADOW_ALIASES:
+                key = _SHADOW_ALIASES[arg]
+                if key == "EXPE_REJECTED_LIVE":
+                    send_telegram(format_rejected_live_detail(shadow_stats))
+                else:
+                    send_telegram(format_shadow_detail(shadow_stats, key))
+
+            else:
+                send_telegram(
+                    f"🔬 _Don't recognize '{arg}'._\n"
+                    "Try: `/shadow`, `/shadow exp1`..`/shadow exp7`, "
+                    "`/shadow rejected`, `/shadow recent`, or `/leaderboard`."
+                )
+
+        elif cmd in ("/leaderboard", "leaderboard"):
+            board = format_shadow_leaderboard(load_shadow_stats())
+            send_telegram(board or "🏆 _Nothing logged yet to rank._")
 
         elif cmd in ("/atrbands", "atrbands", "/atr", "atr"):
             table = format_atr_suitability_table()
@@ -3796,3 +4139,5 @@ if __name__ == "__main__":
     scan()
   
             
+
+        

@@ -1055,5 +1055,12 @@
     "shadow_bias": "BULLISH",
     "agree": true,
     "price": 1.34705
+  },
+  {
+    "time": "2026-07-16 18:04 UTC",
+    "live_bias": "BULLISH",
+    "shadow_bias": "BULLISH",
+    "agree": true,
+    "price": 1.34699
   }
 ]

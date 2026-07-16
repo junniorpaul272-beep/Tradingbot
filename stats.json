@@ -1,7 +1,7 @@
 {
-  "total_scans": 1050,
+  "total_scans": 1051,
   "consolidation_skip": 140,
-  "atr_too_low": 621,
+  "atr_too_low": 622,
   "regime_shift_skip": 0,
   "no_leg_owner": 1,
   "tier1_signals": 0,
@@ -13,7 +13,7 @@
   "wins": 1,
   "losses": 3,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-07-16 15:35",
+  "last_scan": "2026-07-16 15:40",
   "last_update_id": 628997474,
   "result_logged_for_signal": "2026-07-10 14:40 UTC",
   "last_closed_trade": {

@@ -1762,5 +1762,12 @@
     "shadow_bias": "CONSOLIDATION",
     "agree": true,
     "price": 1.34537
+  },
+  {
+    "time": "2026-07-17 15:00 UTC",
+    "live_bias": "CONSOLIDATION",
+    "shadow_bias": "CONSOLIDATION",
+    "agree": true,
+    "price": 1.34489
   }
 ]

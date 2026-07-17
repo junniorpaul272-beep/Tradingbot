@@ -22,7 +22,7 @@
     "hit_3r": 0
   },
   "EXP3_POI": {
-    "logged": 8,
+    "logged": 9,
     "resolved": 8,
     "wins": 2,
     "losses": 6,
@@ -77,7 +77,7 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 120,
+    "logged": 121,
     "resolved": 107,
     "wins": 21,
     "losses": 86,

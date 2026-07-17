@@ -2691,6 +2691,15 @@ def experiment_e_rejected_live(facts, ctx, state, live_result, now_utc,
         peek = tier_fn(facts, ctx, state, now_utc)  # read-only peek — state_updates discarded
         checks[tier_label] = {"activated": peek.activated, "reason": peek.reason}
 
+    # A tier can peek as structurally activated even on a scan where the
+    # GLOBAL ATR floor (ctx.tradeable) blocked the whole scan before
+    # Rule of Law ever ran — evaluate_rule_of_law() is never called in
+    # that case, so no tier-level conviction check happened at all. Without
+    # this flag, a tier blocked by the ATR floor and a tier blocked by its
+    # OWN conviction score are indistinguishable in the persisted record —
+    # this is the fix that makes /shadow blocked <tier> possible.
+    blocked_by_atr = not ctx.tradeable
+
     side = bias_to_side(facts.macro_bias)
     entry = float(facts.last_candle_5m()["Close"])
     generic_sl_distance = max(SL_ATR_MULT * facts.current_atr_5m(), SL_MIN_PIPS * PIP_SIZE)
@@ -2708,7 +2717,7 @@ def experiment_e_rejected_live(facts, ctx, state, live_result, now_utc,
     leg_id = "{}|{:.5f}|{:.5f}|{}".format(side, facts.swing_high, facts.swing_low, live_result.reason)
     setup = build_shadow_setup(
         "EXPE_REJECTED_LIVE", side, entry, sl_raw, now_utc,
-        tags=checks,
+        tags={"_blocked_by_atr": blocked_by_atr, **checks},
         note="Live bot took no action this scan — " + (live_result.reason or "no tier activated"),
         atr_pips=ctx.current_atr_pips,
     )
@@ -2905,8 +2914,12 @@ def compute_evidence(tier_label, breakdown, min_n=EVIDENCE_MIN_N):
     wins = sum(1 for r in r_values if r > 0)
     avg_r = sum(r_values) / n
 
-    from collections import Counter
-    most_common_r = Counter(round(r) for r in r_values).most_common(1)[0][0]
+    # "Let it say what it hit — 1R, 2R, 3R, or SL" (per chat): reuse the
+    # same exact-bucket distribution Research Centre's block analysis
+    # uses, rather than collapsing to one "most common" number. Two
+    # different summaries of the same underlying data is exactly the
+    # kind of clutter this whole reporting rework was meant to remove.
+    buckets = outcome_distribution(similar)
 
     strength = "MODERATE"
     for floor, label in EVIDENCE_STRENGTH_BANDS:
@@ -2918,7 +2931,7 @@ def compute_evidence(tier_label, breakdown, min_n=EVIDENCE_MIN_N):
         "n": n,
         "win_rate": round(100 * wins / n, 1),
         "avg_r": round(avg_r, 2),
-        "most_common_r": most_common_r,
+        "outcome_buckets": buckets,
         "strength": strength,
     }
 
@@ -2930,12 +2943,13 @@ def format_evidence_note(tier_label, evidence):
     if evidence is None:
         return None
     tier_number = TIER_NUMBER.get(tier_label, "?")
+    dist_line = format_outcome_distribution(evidence["outcome_buckets"])
     return (
         f"📚 *Research Evidence (Tier {tier_number}, informational only):*\n"
         f"`{evidence['n']}` similar resolved setups this tier has seen — "
-        f"`{evidence['win_rate']}%` win rate, avg `{evidence['avg_r']}R`, "
-        f"most common outcome `{evidence['most_common_r']}R`\n"
-        f"Strength: `{evidence['strength']}` — this never overrides Rule of Law."
+        f"`{evidence['win_rate']}%` win rate, avg `{evidence['avg_r']}R`\n"
+        + (dist_line + "\n" if dist_line else "")
+        + f"Strength: `{evidence['strength']}` — this never overrides Rule of Law."
     )
 
 
@@ -3210,6 +3224,15 @@ def format_rejected_live_detail(shadow_stats):
     lines.append(f"Average R: `{avg_r:+.2f}`" if avg_r is not None else "Average R: `—`")
 
     records = _read_shadow_trade_log(experiment=key)
+    # What actually hit, not just win/loss (per chat) — every resolved
+    # record has an exact r_achieved regardless of whether tags exist,
+    # so this line works even for records logged before the tag-
+    # persistence fix (unlike the reason/tier breakdowns below).
+    resolved_records = [r for r in records if r.get("outcome")]
+    dist_line = format_outcome_distribution(outcome_distribution(resolved_records))
+    if dist_line:
+        lines.append(dist_line.replace("    ↳ ", "Hit: "))
+
     tagged = [r for r in records if r.get("tags")]
     if not tagged:
         lines.append("\n_No tag data yet for reason/tier breakdowns — this needs at least one "
@@ -3219,12 +3242,14 @@ def format_rejected_live_detail(shadow_stats):
 
     reason_buckets = {}
     for r in tagged:
-        # tags here is the `checks` dict: {tier_label: {"activated","reason"}}
-        # Use TIER_3_STRUCTURE's reason as the representative "why nothing
-        # fired" signal when nothing activated at all; if something
-        # activated but the trade still didn't fire live, that's a
-        # conviction/risk-gate story, not a tier-gate story.
-        checks = r["tags"]
+        # tags here is {"_blocked_by_atr": bool, tier_label: {"activated","reason"}, ...}
+        # — _blocked_by_atr is a SIBLING key, not a per-tier entry, so it
+        # must be filtered out before treating every value as a tier dict.
+        # (Found via testing just now: this crashed on the first record
+        # logged after _blocked_by_atr was added — the two isinstance()
+        # guards two blocks below were already written correctly; these
+        # two were the gap.)
+        checks = {k: v for k, v in r["tags"].items() if isinstance(v, dict)}
         any_activated = any(v.get("activated") for v in checks.values())
         if any_activated:
             bucket = "Activated but didn't fire (conviction/risk gate)"
@@ -3245,13 +3270,14 @@ def format_rejected_live_detail(shadow_stats):
     # tier's conviction threshold is cutting real winners, not just the
     # numerator ("rejected winners") shown below.
     activated_not_fired = [r for r in tagged
-                           if any(v.get("activated") for v in r["tags"].values())]
+                           if any(isinstance(v, dict) and v.get("activated")
+                                  for v in r["tags"].values())]
     if activated_not_fired:
         tier_breakdown = {}
         for r in activated_not_fired:
             won = r.get("r_achieved", 0.0) > 0
             for tier_label, v in r["tags"].items():
-                if v.get("activated"):
+                if isinstance(v, dict) and v.get("activated"):
                     d = tier_breakdown.setdefault(tier_label, {"n": 0, "wins": 0})
                     d["n"] += 1
                     if won:
@@ -3266,7 +3292,7 @@ def format_rejected_live_detail(shadow_stats):
         tier_wins = {}
         for r in winners_tagged:
             for tier_label, v in r["tags"].items():
-                if v.get("activated"):
+                if isinstance(v, dict) and v.get("activated"):
                     tier_wins[tier_label] = tier_wins.get(tier_label, 0) + 1
         lines.append(f"\nRejected winners: `{len(winners_tagged)}`")
         if tier_wins:
@@ -3277,6 +3303,109 @@ def format_rejected_live_detail(shadow_stats):
             lines.append("_None of the tagged winners had any tier activated — "
                           "these were rejected before any tier saw a setup at all._")
 
+    return "\n".join(lines)
+
+
+def outcome_distribution(records):
+    """Exact R-outcome buckets for a set of resolved shadow records — SL
+    (-1R), 1R, 2R, 3R — not just win/loss. r_achieved in this codebase
+    only ever lands on one of these four values (see
+    update_pending_shadow_setups: it tracks max_r_reached as a discrete
+    1/2/3 checkpoint crossing, or -1.0 on a stop-out), so round()-based
+    bucketing here is exact, not an approximation. 'Other' exists only
+    to catch anything that doesn't fit that pattern (e.g. old records
+    from before this resolution logic), so it's never silently hidden."""
+    buckets = {"SL (-1R)": 0, "1R": 0, "2R": 0, "3R": 0, "Other": 0}
+    for r in records:
+        r_val = round(float(r.get("r_achieved", 0.0)))
+        if r_val == -1:
+            buckets["SL (-1R)"] += 1
+        elif r_val == 1:
+            buckets["1R"] += 1
+        elif r_val == 2:
+            buckets["2R"] += 1
+        elif r_val == 3:
+            buckets["3R"] += 1
+        else:
+            buckets["Other"] += 1
+    return buckets
+
+
+def format_outcome_distribution(buckets):
+    """Renders outcome_distribution()'s buckets as one compact line.
+    Zero-count buckets are omitted rather than padded with zeros — with
+    small samples, a row of mostly-zero buckets reads as more precision
+    than the data actually supports."""
+    parts = [f"{label} `{count}`" for label, count in buckets.items() if count > 0]
+    return "    ↳ " + "  ".join(parts) if parts else ""
+
+
+def format_tier_block_analysis(tier_label):
+    """
+    "Tier Block Analysis" (per chat, one level deeper than the existing
+    'activated but didn't fire, by tier' line): of this tier's own
+    resolved 'activated but didn't fire' cases, what specifically
+    blocked it, and how did those setups actually resolve — down to
+    which R level was hit, not just win/loss (per chat: "let it say
+    what it hit be it 1R or 2R or 3R or SL").
+
+    HONEST SCOPE NOTE: only two real, distinguishable block reasons
+    exist in this codebase today —
+      - ATR_FLOOR:        the GLOBAL ATR_MIN_PIPS gate blocked the whole
+                           scan before Rule of Law ever ran (this tier
+                           never got a conviction check at all that scan)
+      - CONVICTION_GATE:  this tier's own score, via classify_conviction(),
+                           came in under CONVICTION_MIN_BY_TIER
+    There is no separate risk:reward gate or spread gate anywhere in the
+    live code — the friend's 5-category list doesn't map onto what's
+    actually implemented. If those become real gates later, add their
+    own bucket here then; this function only reports what's computed.
+    """
+    records = _read_shadow_trade_log(experiment="EXPE_REJECTED_LIVE")
+    tier_number = TIER_NUMBER.get(tier_label, "?")
+
+    buckets = {"ATR_FLOOR": {"records": []},
+               "CONVICTION_GATE": {"records": []},
+               "OTHER / Unclassified": {"records": []}}
+
+    for r in records:
+        tags = r.get("tags") or {}
+        v = tags.get(tier_label)
+        if not isinstance(v, dict) or not v.get("activated"):
+            continue  # this tier wasn't even structurally activated that scan
+
+        if tags.get("_blocked_by_atr"):
+            bucket = "ATR_FLOOR"
+        elif "conviction" in (v.get("reason") or "").lower():
+            bucket = "CONVICTION_GATE"
+        else:
+            bucket = "OTHER / Unclassified"
+
+        buckets[bucket]["records"].append(r)
+
+    total = sum(len(b["records"]) for b in buckets.values())
+    if total == 0:
+        return (f"🔬 *{tier_label} — Block Analysis*\n"
+                "_No resolved 'activated but didn't fire' records for this tier yet._")
+
+    lines = [f"🔬 *Tier {tier_number} Block Analysis* (`{tier_label}`)",
+             "─────────────────────",
+             f"Activated-but-blocked (resolved): `{total}`", ""]
+    for bucket, b in sorted(buckets.items(), key=lambda kv: -len(kv[1]["records"])):
+        recs = b["records"]
+        n = len(recs)
+        if n == 0:
+            continue
+        wins = sum(1 for r in recs if r.get("r_achieved", 0.0) > 0)
+        wr = (wins / n * 100) if n else 0.0
+        lines.append(f"*{bucket}*: `{n}` (won `{wins}`, `{wr:.0f}%`)")
+        dist_line = format_outcome_distribution(outcome_distribution(recs))
+        if dist_line:
+            lines.append(dist_line)
+    lines.append("")
+    lines.append("_Only ATR floor and conviction gate are real, distinguishable blocks "
+                 "in the current code — no separate risk/spread gate exists yet to "
+                 "report on. Small buckets (<~30) are directional, not conclusive._")
     return "\n".join(lines)
 
 
@@ -3730,6 +3859,17 @@ def check_result_commands(stats):
             elif arg in ("recent", "last10"):
                 send_telegram(format_shadow_recent() or "🕒 _No resolved shadow trades yet._")
 
+            elif arg.startswith("blocked"):
+                tier_arg = arg[len("blocked"):].strip()
+                tier_map = {"tier1": "TIER_1_POI", "1": "TIER_1_POI",
+                            "tier2": "TIER_2_FIB", "2": "TIER_2_FIB",
+                            "tier3": "TIER_3_STRUCTURE", "3": "TIER_3_STRUCTURE"}
+                tier_label = tier_map.get(tier_arg)
+                if not tier_label:
+                    send_telegram("🔬 _Usage: `/shadow blocked tier1`, `tier2`, or `tier3`._")
+                else:
+                    send_telegram(format_tier_block_analysis(tier_label))
+
             elif arg in _SHADOW_ALIASES:
                 key = _SHADOW_ALIASES[arg]
                 if key == "EXPE_REJECTED_LIVE":
@@ -3741,7 +3881,8 @@ def check_result_commands(stats):
                 send_telegram(
                     f"🔬 _Don't recognize '{arg}'._\n"
                     "Try: `/shadow`, `/shadow exp1`..`/shadow exp7`, "
-                    "`/shadow rejected`, `/shadow recent`, or `/leaderboard`."
+                    "`/shadow rejected`, `/shadow blocked tier1|tier2|tier3`, "
+                    "`/shadow recent`, or `/leaderboard`."
                 )
 
         elif cmd in ("/leaderboard", "leaderboard"):
@@ -4335,5 +4476,5 @@ if __name__ == "__main__":
     scan()
   
             
-   
+         
         

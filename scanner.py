@@ -3238,6 +3238,29 @@ def format_rejected_live_detail(shadow_stats):
     for bucket, n in sorted(reason_buckets.items(), key=lambda kv: -kv[1]):
         lines.append(f"  {bucket}: `{n}`")
 
+    # Tier breakdown of the "activated but didn't fire" bucket specifically
+    # — i.e. of the setups blocked by conviction/risk gate rather than a
+    # tier gate, which tier(s) they belonged to, and how those actually
+    # resolved. This is the denominator needed to judge whether a given
+    # tier's conviction threshold is cutting real winners, not just the
+    # numerator ("rejected winners") shown below.
+    activated_not_fired = [r for r in tagged
+                           if any(v.get("activated") for v in r["tags"].values())]
+    if activated_not_fired:
+        tier_breakdown = {}
+        for r in activated_not_fired:
+            won = r.get("r_achieved", 0.0) > 0
+            for tier_label, v in r["tags"].items():
+                if v.get("activated"):
+                    d = tier_breakdown.setdefault(tier_label, {"n": 0, "wins": 0})
+                    d["n"] += 1
+                    if won:
+                        d["wins"] += 1
+        lines.append("\nOf 'activated but didn't fire', by tier:")
+        for tier_label, d in sorted(tier_breakdown.items(), key=lambda kv: -kv[1]["n"]):
+            wr = (d["wins"] / d["n"] * 100) if d["n"] else 0.0
+            lines.append(f"  {tier_label}: `{d['n']}` (won `{d['wins']}`, `{wr:.0f}%`)")
+
     winners_tagged = [r for r in tagged if r.get("r_achieved", 0.0) > 0]
     if winners_tagged:
         tier_wins = {}
@@ -4311,5 +4334,6 @@ def scan():
 if __name__ == "__main__":
     scan()
   
-
+            
+   
         

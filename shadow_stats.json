@@ -67,24 +67,24 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 5,
-    "resolved": 0,
-    "wins": 0,
+    "resolved": 1,
+    "wins": 1,
     "losses": 0,
     "timed_out": 0,
-    "sum_r": 0.0,
-    "hit_1r": 0,
-    "hit_2r": 0,
-    "hit_3r": 0
+    "sum_r": 3.0,
+    "hit_1r": 1,
+    "hit_2r": 1,
+    "hit_3r": 1
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 134,
-    "resolved": 124,
-    "wins": 34,
+    "logged": 135,
+    "resolved": 126,
+    "wins": 36,
     "losses": 90,
     "timed_out": 0,
-    "sum_r": -30.0,
-    "hit_1r": 34,
-    "hit_2r": 19,
-    "hit_3r": 7
+    "sum_r": -24.0,
+    "hit_1r": 36,
+    "hit_2r": 21,
+    "hit_3r": 9
   }
 }

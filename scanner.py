@@ -346,6 +346,46 @@ NEUTRAL_WATCH_MIN_RETRACE      = FIB_ZONE_FAR
 RESULT_TRACKING_ENABLED = True
 STATS_SUMMARY_EVERY     = 50
 
+# ---- EVIDENCE ENGINE (Phase 4 — "jury", never a judge) --------------------
+# Read-only annotation layer. Looks up EXP7_TIER_ATR's permanent, per-tier
+# resolved trade log (already tracks real R outcomes for every ACTIVATED
+# tier setup regardless of whether it fired live) for setups whose
+# STRUCTURAL FACTS — not scores — match the current one, and reports what
+# actually happened. This NEVER touches `fired`, `decision`, sizing, or
+# classify_conviction. It cannot override Rule of Law even by accident —
+# see compute_evidence()'s docstring and how it's wired into scan().
+#
+# Dormant by design: below EVIDENCE_MIN_N similar resolved trades, nothing
+# is shown at all. An n=7 "71% win rate" is noise wearing a lab coat, not
+# evidence — see chat history for why this gate exists.
+EVIDENCE_MIN_N = 50
+
+EVIDENCE_STRENGTH_BANDS = [
+    (200, "VERY_STRONG"),
+    (100, "STRONG"),
+    (50,  "MODERATE"),
+]
+
+# Only these boolean-valued keys from each tier's own `breakdown` dict are
+# compared for similarity — NOT the *_bonus/score-derived keys alongside
+# them (comparing those too would double-count the same underlying fact
+# and inflate apparent similarity). Fewer, honest dimensions beat many
+# correlated ones — this is the direct fix for the "25 features fake
+# precision" problem raised in chat.
+TIER_EVIDENCE_KEYS = {
+    "TIER_1_POI":       ["order_block", "rejection_candle", "fresh_bos_aligned", "choch"],
+    "TIER_2_FIB":        ["in_fib_zone", "rejection_candle", "bos_aligned", "liquidity_sweep"],
+    "TIER_3_STRUCTURE":  ["choch", "bos_aligned", "liquidity_sweep"],
+}
+# A historical record must agree with the live setup on this fraction of
+# its tier's own keys to count as "similar". Set to an EXACT match
+# (1.0) deliberately: with only 3-4 comparable keys per tier, any looser
+# threshold lets a single mismatched fact slip through as "similar" (e.g.
+# 3/4 keys agreeing = 0.75, which would silently equate a CHoCH setup
+# with a non-CHoCH one). Found via testing — see chat. Fewer, exactly-
+# matched facts beat many loosely-matched ones.
+EVIDENCE_MATCH_THRESHOLD = 1.0
+
 
 # =========================================================================
 # STATE / STATS PERSISTENCE
@@ -2722,8 +2762,15 @@ def experiment_7_tier_atr_mirror(facts, ctx, state, now_utc, shadow_state, shado
             "EXP7_TIER_ATR", peek.direction or bias_to_side(facts.macro_bias),
             entry, peek.sl_raw, now_utc,
             variant=tier_label,
+            # "Store everything" (per chat) — conviction_score/
+            # would_have_fired_live/atr_floor_pips were already here;
+            # peek.breakdown is merged in so the EVIDENCE ENGINE has the
+            # tier's actual structural facts (order_block, choch, sweep,
+            # etc.) to compare against, not just its final score. Raw
+            # facts, not another derived number — same principle as the
+            # friend's "rows of facts, not scores" design.
             tags={"conviction_score": peek.score, "would_have_fired_live": peek.fired,
-                  "atr_floor_pips": ATR_MIN_PIPS},
+                  "atr_floor_pips": ATR_MIN_PIPS, **(peek.breakdown or {})},
             note=f"Tier {tier_number} ({tier_label}) mirror — ATR {ctx.current_atr_pips:.1f}p, "
                  f"ATR floor {'MET' if ctx.tradeable else 'NOT MET (this scan would be skipped live)'}",
             atr_pips=ctx.current_atr_pips,
@@ -2806,6 +2853,92 @@ def format_atr_suitability_table(band_width=ATR_SUITABILITY_BAND_WIDTH_PIPS, min
 
 
 # ---- orchestrator -----------------------------------------------------------
+def _evidence_similarity(current_tags, historical_tags, keys):
+    """Fraction of `keys` on which current_tags and historical_tags agree
+    (both present AND equal). A key missing from either side counts as a
+    mismatch, not a skip — an older log line without a key can't be
+    assumed to match it. PURE."""
+    if not keys:
+        return 0.0
+    matches = sum(
+        1 for k in keys
+        if k in current_tags and k in historical_tags and current_tags[k] == historical_tags[k]
+    )
+    return matches / len(keys)
+
+
+def compute_evidence(tier_label, breakdown, min_n=EVIDENCE_MIN_N):
+    """
+    Phase 4 — Evidence Engine. PURE, read-only, informational ONLY.
+
+    "Jury, not judge" (per chat): looks up this tier's OWN permanent
+    EXP7_TIER_ATR log — tier-isolated on purpose, Tier 1 only ever learns
+    from Tier 1 — keeps records whose structural facts agree with
+    `breakdown` on at least EVIDENCE_MATCH_THRESHOLD of that tier's
+    TIER_EVIDENCE_KEYS, and reports what actually happened to them.
+
+    Returns None (stays SILENT — the "sleeping pathway") if fewer than
+    `min_n` similar RESOLVED trades exist yet. There is no code path from
+    this function back into `fired`, `decision`, `classify_conviction`,
+    or sizing — callers only ever use its output to annotate a message,
+    never to decide anything. If that ever changes, it stops being a
+    jury and starts being a second, un-validated rule engine — see chat
+    history for why that's the one thing this must never become.
+    """
+    keys = TIER_EVIDENCE_KEYS.get(tier_label)
+    if not keys or not breakdown:
+        return None
+
+    tier_number = TIER_NUMBER.get(tier_label)
+    records = _read_shadow_trade_log(experiment="EXP7_TIER_ATR")
+    similar = [
+        r for r in records
+        if r.get("tier_number") == tier_number
+        and _evidence_similarity(breakdown, r.get("tags") or {}, keys) >= EVIDENCE_MATCH_THRESHOLD
+    ]
+
+    n = len(similar)
+    if n < min_n:
+        return None  # dormant — not enough resolved history yet, say nothing at all
+
+    r_values = [float(r.get("r_achieved", 0.0)) for r in similar]
+    wins = sum(1 for r in r_values if r > 0)
+    avg_r = sum(r_values) / n
+
+    from collections import Counter
+    most_common_r = Counter(round(r) for r in r_values).most_common(1)[0][0]
+
+    strength = "MODERATE"
+    for floor, label in EVIDENCE_STRENGTH_BANDS:
+        if n >= floor:
+            strength = label
+            break
+
+    return {
+        "n": n,
+        "win_rate": round(100 * wins / n, 1),
+        "avg_r": round(avg_r, 2),
+        "most_common_r": most_common_r,
+        "strength": strength,
+    }
+
+
+def format_evidence_note(tier_label, evidence):
+    """Renders compute_evidence()'s output as a short, human-readable
+    annotation — never a directive, never a decision. `evidence` may be
+    None (dormant), in which case this returns None too."""
+    if evidence is None:
+        return None
+    tier_number = TIER_NUMBER.get(tier_label, "?")
+    return (
+        f"📚 *Research Evidence (Tier {tier_number}, informational only):*\n"
+        f"`{evidence['n']}` similar resolved setups this tier has seen — "
+        f"`{evidence['win_rate']}%` win rate, avg `{evidence['avg_r']}R`, "
+        f"most common outcome `{evidence['most_common_r']}R`\n"
+        f"Strength: `{evidence['strength']}` — this never overrides Rule of Law."
+    )
+
+
 def run_shadow_pipeline(facts, ctx, state, df_15m, live_result, now_utc):
     """
     Single entry point called from scan(). Every experiment is wrapped so
@@ -4021,6 +4154,41 @@ def scan():
             print(f"  [CONVICTION BREAKDOWN] {result.breakdown}")
     diag_set(diag, "tier_evaluation", result.activated, None if result.activated else result.reason)
 
+    # ── EVIDENCE ENGINE (Phase 4 — read-only, tier-isolated, cannot touch
+    # `fired`/`decision`/sizing; see compute_evidence()'s docstring) ──────
+    # NOTE: an activated-but-not-yet-firing tier (still WATCHING for its
+    # rejection candle) has an empty breakdown by construction — see each
+    # tier's evaluate() — so this naturally stays silent until a tier has
+    # actually reached a scored FIRE/REJECT decision, exactly when there's
+    # a real structural fact-set to compare.
+    evidence = None
+    if result.activated and result.tier_label:
+        try:
+            evidence = compute_evidence(result.tier_label, result.breakdown)
+        except Exception as e:
+            print("[EVIDENCE ERROR] " + str(e))
+            evidence = None
+        if evidence:
+            print(f"  [EVIDENCE] Tier {TIER_NUMBER.get(result.tier_label)}: "
+                  f"n={evidence['n']} win_rate={evidence['win_rate']}% "
+                  f"avg_r={evidence['avg_r']} strength={evidence['strength']}")
+
+    # Rule of Law said REJECT, but historical evidence on this exact
+    # structural shape exists and clears the min-N gate — surface it as a
+    # SEPARATE, clearly-labeled research note (never a signal, never
+    # touches sizing/state["active_trade"]). Deduped per leg+tier so a
+    # setup sitting rejected for hours doesn't resend the same note every
+    # 5-minute scan.
+    if evidence and not result.fired and result.activated:
+        leg_key = compute_leg_id(facts.macro_bias, facts.swing_high, facts.swing_low)
+        note_key = f"{result.tier_label}|{leg_key}"
+        if state.get("evidence_last_note_key") != note_key:
+            state["evidence_last_note_key"] = note_key
+            save_state(state)
+            note = format_evidence_note(result.tier_label, evidence)
+            if note:
+                send_telegram("🔬 *RESEARCH NOTE — Rule of Law said REJECT*\n\n" + note)
+
     # ── SHADOW PIPELINE (research only — never blocks or alters live flow) ─
     try:
         run_shadow_pipeline(facts, ctx, state, df_15m, result, now_utc)
@@ -4116,6 +4284,10 @@ def scan():
                      if risk_result["partial_r"] else "")
     be_line = (f"🔒 *Breakeven at:* `{risk_result['breakeven_r']}R`\n"
                if risk_result["breakeven_r"] else "")
+    # Evidence Engine — annotation only, appended after everything Rule of
+    # Law / Trade Management already decided. Empty string (not shown) if
+    # `evidence` is None, i.e. below EVIDENCE_MIN_N for this tier.
+    evidence_line = ("\n\n" + format_evidence_note(result.tier_label, evidence)) if evidence else ""
     send_telegram(
         "🚨 *SMC SIGNAL — GBPUSD* 🚨\n\n"
         f"{direction_emoji} *Action:* `{result.direction}`\n"
@@ -4130,6 +4302,7 @@ def scan():
         f"📏 *Suggested size:* `{risk_result['size_mult']}x base risk`\n"
         + partial_line + be_line
         + timeline_line
+        + evidence_line
     )
     save_stats(stats)
     save_state(state)
@@ -4138,6 +4311,5 @@ def scan():
 if __name__ == "__main__":
     scan()
   
-            
 
         

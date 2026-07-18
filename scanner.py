@@ -1270,23 +1270,29 @@ def compute_fib_fraction(swing_high, swing_low, extremity, macro_bias,
 
 def detect_liquidity_sweep(df_5m, df_15m, level, macro_bias,
                             lookback_candles=SWEEP_LOOKBACK_CANDLES):
-    """Generic sweep detector against ANY level. Returns (swept, label)."""
+    """Generic sweep detector against ANY level. Returns (swept, label,
+    distance_pips). distance_pips is how far price traded beyond `level`
+    before reclaiming it (None when not swept) — added per chat as one
+    of the fingerprint facts; the boolean/label behavior is UNCHANGED,
+    this only adds a third return value."""
     recent = df_5m.iloc[-(lookback_candles + 2):-2]
 
     if macro_bias == "BULLISH":
         swept = recent[(recent["Low"] < level) & (recent["Close"] > level)]
         if swept.empty:
-            return False, "no sweep"
+            return False, "no sweep", None
         if df_15m.iloc[-1]["Close"] <= level:
-            return False, "15M closed below level"
-        return True, "SWEEP CONFIRMED"
+            return False, "15M closed below level", None
+        distance_pips = round((level - swept["Low"].min()) / PIP_SIZE, 1)
+        return True, "SWEEP CONFIRMED", distance_pips
     else:
         swept = recent[(recent["High"] > level) & (recent["Close"] < level)]
         if swept.empty:
-            return False, "no sweep"
+            return False, "no sweep", None
         if df_15m.iloc[-1]["Close"] >= level:
-            return False, "15M closed above level"
-        return True, "SWEEP CONFIRMED"
+            return False, "15M closed above level", None
+        distance_pips = round((swept["High"].max() - level) / PIP_SIZE, 1)
+        return True, "SWEEP CONFIRMED", distance_pips
 
 
 def detect_order_block(df_15m, bos, atr_series,
@@ -1552,6 +1558,18 @@ class MarketFacts:
     def current_atr_5m_pips(self):
         return self.current_atr_5m() / PIP_SIZE
 
+    def atr_percentile_15m(self):
+        """Where the CURRENT 15m ATR sits within its own recent history
+        (0-100). Self-contained — uses only self._atr_15m_series, which
+        already exists on every MarketFacts instance, so this needed no
+        new plumbing into any call site. Fingerprint fact (per chat),
+        not a live gate."""
+        series = self._atr_15m_series.dropna()
+        if len(series) < 2:
+            return None
+        current = series.iloc[-1]
+        return round((series < current).mean() * 100, 1)
+
     # ---- structure facts ------------------------------------------------
     def bos_15m(self):
         """Fresh 15M BOS/CHoCH leg, or None."""
@@ -1636,12 +1654,18 @@ class MarketFacts:
             return max(c["High"], c_prev["High"]) >= level - tol
 
     def has_liquidity_sweep(self, level):
-        swept, _ = detect_liquidity_sweep(self.df_5m, self.df_15m, level, self.macro_bias)
+        swept, _, _ = detect_liquidity_sweep(self.df_5m, self.df_15m, level, self.macro_bias)
         return swept
 
     def liquidity_sweep_label(self, level):
-        _, label = detect_liquidity_sweep(self.df_5m, self.df_15m, level, self.macro_bias)
+        _, label, _ = detect_liquidity_sweep(self.df_5m, self.df_15m, level, self.macro_bias)
         return label
+
+    def sweep_distance_pips(self, level):
+        """How far price traded beyond `level` before reclaiming it, in
+        pips. None if there was no sweep. Fingerprint fact (per chat)."""
+        _, _, distance = detect_liquidity_sweep(self.df_5m, self.df_15m, level, self.macro_bias)
+        return distance
 
     # ---- candle-quality facts -------------------------------------------
     def rejection_candle(self, direction=None):
@@ -2507,6 +2531,15 @@ def _append_shadow_trade_log(setup, outcome, r_achieved, now_utc):
     raw per-trade record (tier, ATR, result) the ATR-suitability analysis
     is built on."""
     record = {
+        # FIX (per chat): build_shadow_setup() has generated a unique
+        # "id" per trade all along, but this function was building the
+        # permanent record from scratch and never carrying it over — so
+        # the id existed only while the trade sat in the transient
+        # pending queue, then vanished the moment it resolved. That's the
+        # exact gap that made "pinpoint which specific historical trade
+        # this is" impossible. Trades resolved BEFORE this fix simply
+        # won't have a trade_id; every reader must treat it as optional.
+        "trade_id":     setup.get("id"),
         "resolved_at":  now_utc.isoformat(),
         "experiment":   setup["experiment"],
         "variant":      setup["variant"],
@@ -2885,6 +2918,30 @@ def experiment_7_tier_atr_mirror(facts, ctx, state, now_utc, shadow_state, shado
     leg_key = compute_leg_id(facts.macro_bias, facts.swing_high, facts.swing_low)
     entry = float(facts.last_candle_5m()["Close"])
 
+    # Fingerprint facts (per chat) — cheap, self-contained, computed once
+    # per scan since they describe the current leg/market, not any one
+    # tier. Deliberately NOT included here: EMA slope (would need df_1h
+    # threaded into this function, which doesn't receive it today —
+    # bigger plumbing change, held back rather than rushed), sweep
+    # distance (needs detect_liquidity_sweep's return signature changed,
+    # done separately below), volume (Twelve Data's forex feed has no
+    # volume field at all — not a "later", genuinely unavailable),
+    # reaction-time-in-candles (needs cross-scan state tracking of first
+    # zone touch — real bug surface, held back for its own session).
+    bos = facts.bos_15m()
+    ob = facts.order_block()
+    fingerprint = {
+        "leg_length_pips": round(abs(bos["impulse_end"] - bos["impulse_start"]) / PIP_SIZE, 1) if bos else None,
+        "break_count": bos["break_count"] if bos else None,
+        "atr_percentile_15m": facts.atr_percentile_15m(),
+        "ob_freshness_candles": (len(facts.df_15m) - 1 - ob["origin_idx"]) if ob else None,
+        # Same level Tier 3 already checks liquidity_sweep against
+        # (bos["impulse_start"]) — kept consistent so this is directly
+        # comparable to that tier's own boolean flag, not a different
+        # measurement of a different thing wearing a similar name.
+        "sweep_distance_pips": facts.sweep_distance_pips(bos["impulse_start"]) if bos else None,
+    }
+
     for tier_label, tier_fn in TIER_REGISTRY.items():
         peek = tier_fn(facts, ctx, state, now_utc)  # read-only — state_updates discarded
         if not peek.activated:
@@ -2914,7 +2971,7 @@ def experiment_7_tier_atr_mirror(facts, ctx, state, now_utc, shadow_state, shado
             # facts, not another derived number — same principle as the
             # friend's "rows of facts, not scores" design.
             tags={"conviction_score": peek.score, "would_have_fired_live": peek.fired,
-                  "atr_floor_pips": ATR_MIN_PIPS, **(peek.breakdown or {})},
+                  "atr_floor_pips": ATR_MIN_PIPS, **(peek.breakdown or {}), **fingerprint},
             note=f"Tier {tier_number} ({tier_label}) mirror — ATR {ctx.current_atr_pips:.1f}p, "
                  f"ATR floor {'MET' if ctx.tradeable else 'NOT MET (this scan would be skipped live)'}",
             atr_pips=ctx.current_atr_pips,
@@ -4611,4 +4668,3 @@ if __name__ == "__main__":
     scan()
   
             
-  

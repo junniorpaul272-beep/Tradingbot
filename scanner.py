@@ -115,6 +115,7 @@ the actual test runs.
 
 import os
 import json
+import time
 import requests
 import pandas as pd
 import numpy as np
@@ -535,6 +536,32 @@ def send_telegram(message):
 # =========================================================================
 # DATA LAYER
 # =========================================================================
+# Per-interval cache of the last SUCCESSFULLY fetched dataframe, used only
+# as a fallback after every retry has failed. Deliberately capped by age
+# (see OHLC_FALLBACK_MAX_AGE_MIN) — silently trading off a badly stale
+# dataframe is arguably worse than skipping the scan entirely, since a
+# gap/news candle could be missing from it. This is a last resort for a
+# brief API hiccup, not a substitute for fresh data.
+_LAST_GOOD_OHLC = {}
+OHLC_FETCH_RETRIES = 3
+OHLC_FALLBACK_MAX_AGE_MIN = 30
+
+
+def _fallback_ohlc(interval):
+    cached = _LAST_GOOD_OHLC.get(interval)
+    if cached is None:
+        return None
+    df, fetched_at = cached
+    age_min = (time.time() - fetched_at) / 60.0
+    if age_min > OHLC_FALLBACK_MAX_AGE_MIN:
+        print(f"[FETCH FALLBACK] {interval}: last-good dataframe is {age_min:.1f} min old "
+              f"(> {OHLC_FALLBACK_MAX_AGE_MIN} min cap) — refusing to use it, returning None")
+        return None
+    print(f"[FETCH FALLBACK] {interval}: all retries failed — using last-good dataframe "
+          f"from {age_min:.1f} min ago")
+    return df
+
+
 def fetch_ohlc(interval, outputsize=200):
     url = "https://api.twelvedata.com/time_series"
     params = {
@@ -544,16 +571,39 @@ def fetch_ohlc(interval, outputsize=200):
         "apikey": TWELVE_DATA_KEY,
         "format": "JSON",
     }
-    try:
-        resp = requests.get(url, params=params, timeout=15).json()
-    except Exception as e:
-        print("[FETCH ERROR] " + interval + ": " + str(e))
-        return None
 
-    if "values" not in resp:
-        msg = resp.get("message") or resp.get("code") or "Unknown error"
-        print("[API ERROR] " + interval + ": " + str(msg))
-        return None
+    resp = None
+    for attempt in range(OHLC_FETCH_RETRIES):
+        is_last_attempt = attempt == OHLC_FETCH_RETRIES - 1
+        try:
+            resp = requests.get(url, params=params, timeout=15).json()
+        except Exception as e:
+            if is_last_attempt:
+                print(f"[FETCH ERROR] {interval} (all {OHLC_FETCH_RETRIES} attempts failed): {e}")
+                return _fallback_ohlc(interval)
+            backoff = 2 ** attempt  # 1s, 2s, 4s
+            print(f"[FETCH RETRY] {interval} attempt {attempt + 1}/{OHLC_FETCH_RETRIES} "
+                  f"failed ({e}); retrying in {backoff}s")
+            time.sleep(backoff)
+            continue
+
+        if "values" not in resp:
+            msg = resp.get("message") or resp.get("code") or "Unknown error"
+            if is_last_attempt:
+                print(f"[API ERROR] {interval} (all {OHLC_FETCH_RETRIES} attempts failed): {msg}")
+                return _fallback_ohlc(interval)
+            backoff = 2 ** attempt
+            print(f"[API RETRY] {interval} attempt {attempt + 1}/{OHLC_FETCH_RETRIES}: "
+                  f"{msg}; retrying in {backoff}s")
+            time.sleep(backoff)
+            continue
+
+        break  # got a response with "values" — proceed to parse below
+    else:
+        # Loop exhausted without an explicit return (shouldn't happen given
+        # the is_last_attempt branches above, but keep this as a hard
+        # backstop rather than let `resp` be used unset).
+        return _fallback_ohlc(interval)
 
     df = pd.DataFrame(resp["values"])
     df.index = pd.to_datetime(df["datetime"], utc=True)
@@ -561,14 +611,23 @@ def fetch_ohlc(interval, outputsize=200):
         "open": "Open", "high": "High", "low": "Low", "close": "Close"
     }).astype(float).sort_index()
 
-    return df.iloc[:-1]
+    df = df.iloc[:-1]
+    _LAST_GOOD_OHLC[interval] = (df, time.time())
+    return df
 
 
 def is_forex_weekend(now_utc):
     wd = now_utc.weekday()
     if wd == 5:
         return True
-    if wd == 6:
+    # FIX (per chat): forex reopens Sunday evening (~22:00 UTC / 5pm EST
+    # winter, 5pm EDT summer — using a fixed UTC hour here is an
+    # approximation; DST means the true reopen drifts by an hour twice a
+    # year, but 22:00 UTC is close enough not to matter for a 5-minute
+    # scan cadence). The old code treated ALL of Sunday as weekend with
+    # no reopen check at all, so it would keep skipping scans for hours
+    # after the market was genuinely back open.
+    if wd == 6 and now_utc.hour < 22:
         return True
     if wd == 4 and now_utc.hour >= 21:
         return True
@@ -1311,13 +1370,45 @@ def detect_order_block(df_15m, bos, atr_series,
     if ob_candle is None:
         return None
 
+    ob_high, ob_low = float(ob_candle["High"]), float(ob_candle["Low"])
+
+    # Real mitigation tracking (per chat — was a TODO stub returning
+    # False unconditionally, meaning the same OB could trigger repeat
+    # signals as price oscillated around it in a ranging market).
+    #
+    # An OB counts as MITIGATED if price already traded back into its
+    # zone on some PRIOR closed candle, AFTER the displacement leg that
+    # defined the OB completed — i.e. this is not price's first return
+    # since the OB formed. Scan starts at displacement_pos_global + 1,
+    # NOT ob_pos_global + 1: the displacement candle itself routinely
+    # opens from right inside/against the OB zone (that's the move AWAY
+    # from it) and would otherwise be misread as an immediate return —
+    # caught via testing (Case A below), not just by reading the logic.
+    #
+    # The most recent CLOSED candle is deliberately EXCLUDED from this
+    # scan: it may BE the current reaction that has_order_block()/
+    # price_in_order_block() are being asked to evaluate right now — a
+    # first touch must not be able to mark itself as already-mitigated.
+    #
+    # df_15m here is already closed-candles-only (fetch_ohlc drops the
+    # still-forming bar before this function ever sees the data).
+    mitigated = False
+    mitigated_at_idx = None
+    for pos in range(displacement_pos_global + 1, len(df_15m) - 1):
+        candle = df_15m.iloc[pos]
+        if candle["High"] >= ob_low and candle["Low"] <= ob_high:
+            mitigated = True
+            mitigated_at_idx = pos
+            break
+
     return {
-        "high": float(ob_candle["High"]),
-        "low": float(ob_candle["Low"]),
+        "high": ob_high,
+        "low": ob_low,
         "origin_idx": ob_pos_global,
         "displacement_idx": displacement_pos_global,
         "direction": direction,
-        "mitigated": False,   # TODO (Stage 3): real mitigation tracking
+        "mitigated": mitigated,
+        "mitigated_at_idx": mitigated_at_idx,
     }
 
 
@@ -1485,7 +1576,14 @@ class MarketFacts:
         return b is not None and b.get("break_count") == 1
 
     def has_order_block(self):
-        return self.order_block() is not None
+        # A MITIGATED OB is treated as if it doesn't exist for live
+        # gating purposes (per chat — this is what stops the same OB
+        # from re-triggering as price oscillates around it in a ranging
+        # market). order_block() itself still returns the raw dict with
+        # mitigated=True so research/tags can see it happened — only the
+        # live gate treats it as absent.
+        ob = self.order_block()
+        return ob is not None and not ob.get("mitigated", False)
 
     def order_block(self):
         if self._ob_cache == "UNSET":
@@ -1503,7 +1601,7 @@ class MarketFacts:
 
     def price_in_order_block(self, tolerance_pips=ZONE_TOLERANCE_PIPS):
         ob = self.order_block()
-        if ob is None:
+        if ob is None or ob.get("mitigated", False):
             return False
         tol = tolerance_pips * PIP_SIZE
         c = self.last_candle_5m()
@@ -2110,6 +2208,40 @@ TIER_REGISTRY = {
 }
 
 
+def _gate_stale_bias(result, state):
+    """
+    Hard live-fire gate (per chat — real live risk, not just a research
+    finding): when the confirmed 1H bias is STALE (the leg that last
+    confirmed it has since invalidated and nothing fresh has replaced
+    it), a tier may still ACTIVATE or sit WATCHING — leg-ownership
+    bookkeeping stays honest either way — but it can never actually
+    FIRE a live signal off a held-over, no-longer-confirmed direction.
+
+    MUST be applied to `result` BEFORE the caller decides
+    apply_leg_ownership(status="FIRED" if result.fired else "WATCHING").
+    Applying it after would still record the leg as FIRED in state for
+    a signal that was silently suppressed — permanently freezing that
+    leg as "untouchable FIRED" for a trade that never happened. Every
+    call site in evaluate_rule_of_law() gates immediately after _run(),
+    before any ownership decision — see the three call sites.
+    """
+    if not (result.fired and state.get("macro_bias_stale")):
+        return result
+    conviction = dict(result.conviction) if result.conviction else None
+    if conviction is not None:
+        conviction["decision"] = "REJECT"
+        conviction["reason"] = "macro_bias_stale=True — held-over direction, not live-confirmed"
+    return TierResult(
+        activated=result.activated, fired=False, direction=result.direction,
+        entry=result.entry, sl_raw=result.sl_raw, tier_label=result.tier_label,
+        score=result.score, tier_rating=result.tier_rating,
+        breakdown=result.breakdown, conviction=conviction,
+        reason=result.reason + " — BLOCKED: macro_bias_stale=True "
+               "(1H bias is a held-over direction, not live-confirmed)",
+        state_updates=result.state_updates,
+    )
+
+
 def evaluate_rule_of_law(facts, ctx, state, stats, now_utc):
     """
     The arbitration layer. Returns the winning tier's TierResult (or an
@@ -2183,6 +2315,7 @@ def evaluate_rule_of_law(facts, ctx, state, stats, now_utc):
         if can_upgrade:
             for tier_label in TIER_PRIORITY[:owner_priority]:
                 result = _run(tier_label)
+                result = _gate_stale_bias(result, state)
                 if result.activated:
                     apply_leg_ownership(state, {
                         "action": "claim", "tier": tier_label, "leg_id": leg_id,
@@ -2195,6 +2328,7 @@ def evaluate_rule_of_law(facts, ctx, state, stats, now_utc):
                     return result
 
         result = _run(owner["tier"])
+        result = _gate_stale_bias(result, state)
         if not result.activated:
             apply_leg_ownership(state, {
                 "action": "release",
@@ -2211,6 +2345,7 @@ def evaluate_rule_of_law(facts, ctx, state, stats, now_utc):
     # Unclaimed leg — priority walk, first activation wins.
     for tier_label in TIER_PRIORITY:
         result = _run(tier_label)
+        result = _gate_stale_bias(result, state)
         if result.activated:
             apply_leg_ownership(state, {
                 "action": "claim", "tier": tier_label, "leg_id": leg_id,
@@ -4476,5 +4611,4 @@ if __name__ == "__main__":
     scan()
   
             
-         
-        
+  

@@ -2,8 +2,8 @@
 GBPUSD SMC Scanner V3 — "Rule of Law" Edition
 ================================================
 STAGE 3 — Tiers are fully implemented (no longer stubs), FVG has been
-removed from every LIVE decision path, and a full Shadow Pipeline of
-independent research experiments has been added alongside the live bot.
+removed from every LIVE decision path, and a full Market Intelligence
+Network (MIN) has been added alongside the live bot.
 
 ARCHITECTURE
 ------------
@@ -32,10 +32,38 @@ ARCHITECTURE
     TRADE MANAGEMENT      <- Risk gate, dedup backstop, alerting,
                              active-trade freeze.
       |
-    SHADOW PIPELINE        <- Research only, never touches a live
-                             decision. Runs every scan, independently of
-                             what the live bot did. See "SHADOW PIPELINE"
-                             section for the full experiment list.
+    MARKET INTELLIGENCE   <- Research only, never touches a live
+    NETWORK (MIN)            decision. Runs every scan, independently of
+                             what the live bot did. Renamed from "Shadow
+                             Pipeline" (per chat) into named departments,
+                             each with one job — nothing here was
+                             discarded, only reorganized and, in one
+                             case, merged:
+                               - Intelligence Database:  the permanent
+                                 record (SHADOW_TRADE_LOG_FILE — file
+                                 name unchanged on purpose, see below).
+                               - Evidence & Research Department: proves
+                                 things about resolved trades. Merged
+                                 from what were separately drafted as
+                                 "Evidence", "Research", and "Historical
+                                 Analysis" departments — all three were
+                                 mechanically the same operation (find
+                                 similar past setups, report facts), so
+                                 keeping them apart would have meant two
+                                 near-identical systems for one job.
+                               - Experimental Lab: EXP1-7, the filter/
+                                 variant A-B tests.
+                             NOT YET BUILT (parked pending 2 weeks of
+                             clean data — see chat): Forward Observation
+                             (predicts the next structural event, not
+                             win/loss) and the Failure Investigation
+                             Bureau (per-loss fingerprint deviation
+                             report) — both are next in line, in that
+                             priority order, once there's enough data
+                             to make either one meaningful.
+                             See the "MARKET INTELLIGENCE NETWORK"
+                             section for the full department/experiment
+                             list.
 
 FVG — LIVE vs SHADOW
 ---------------------
@@ -286,21 +314,29 @@ def classify_conviction(tier_label, score):
         **band,
     }
 
-# ---- SHADOW PIPELINE (research only — never touches a live decision) ------
+# ---- MARKET INTELLIGENCE NETWORK: Intelligence Database -------------------
 # "What could we have learned from this setup?" Every experiment below
 # logs setups the live bot would never touch (or touches for a different
 # reason), and tracks them forward to 1R/2R/3R so the STATS answer the
 # question, not a gut feeling. Nothing here can ever set stats["active_trade"]
 # or state["leg_owner"] — it is strictly read-only against live state.
+#
+# Renamed from "Shadow Pipeline" to "Market Intelligence Network" (per
+# chat) — pure reorganization/documentation, zero logic changes. File
+# names below are DELIBERATELY left unchanged even though they still say
+# "shadow" — renaming them would orphan every trade already logged on
+# disk under the old names. The constant names stay for the same reason;
+# only the surrounding language and section banners changed.
 SHADOW_STATE_FILE = "shadow_state.json"
 SHADOW_STATS_FILE = "shadow_stats.json"
 # Permanent, append-only, NEVER overwritten wholesale (unlike the two
 # files above, which are full-state snapshots rewritten every scan).
 # Every resolved shadow trade — win, loss, or timeout — gets one line
-# appended here forever. This is the actual raw dataset the ATR
-# suitability analysis (compute_atr_suitability) reads from, and it
-# survives even if shadow_state.json/shadow_stats.json were ever lost,
-# reset, or corrupted.
+# appended here forever. This IS the Intelligence Database: the actual
+# raw dataset the ATR suitability analysis (compute_atr_suitability) and
+# the Evidence & Research Department both read from, and it survives
+# even if shadow_state.json/shadow_stats.json were ever lost, reset, or
+# corrupted.
 SHADOW_TRADE_LOG_FILE = "shadow_trade_log.jsonl"
 BIAS_AB_LOG_FILE  = "bias_ab_log.json"    # live (gated) vs shadow (old-rule) 1H bias, for /biasab
 BIAS_AB_LOG_MAX_ENTRIES = 500
@@ -315,6 +351,10 @@ JOURNAL_MAX_ENTRIES = 100
 SHADOW_MAX_PENDING_BARS   = 200   # ~16.6h of 5M bars before a stale shadow setup is force-resolved
 SHADOW_MAX_PENDING_PER_EXPERIMENT = 20   # safety valve against runaway logging
 
+# ---- MARKET INTELLIGENCE NETWORK: Experimental Lab -------------------------
+# "What if...?" — every question below becomes an experiment, tracked
+# forward the same way as everything else in the Database.
+#
 # Experiment 5 (Filter Ablation) — each variant strips exactly ONE filter
 # from an otherwise-Tier-3-shaped structure setup, so any R-multiple
 # difference vs Experiment 1 is attributable to that ONE filter.
@@ -347,7 +387,13 @@ NEUTRAL_WATCH_MIN_RETRACE      = FIB_ZONE_FAR
 RESULT_TRACKING_ENABLED = True
 STATS_SUMMARY_EVERY     = 50
 
-# ---- EVIDENCE ENGINE (Phase 4 — "jury", never a judge) --------------------
+# ---- MARKET INTELLIGENCE NETWORK: Evidence & Research Department ----------
+# Merged department (per chat) — absorbs what were separately proposed as
+# "Evidence", "Research", and "Historical Analysis": all three asked the
+# same underlying question ("have I seen something like this before, and
+# what happened?"), just phrased differently. One department, one method,
+# rather than two/three near-identical systems doing the same lookup.
+#
 # Read-only annotation layer. Looks up EXP7_TIER_ATR's permanent, per-tier
 # resolved trade log (already tracks real R outcomes for every ACTIVATED
 # tier setup regardless of whether it fired live) for setups whose
@@ -2384,10 +2430,12 @@ def evaluate_rule_of_law(facts, ctx, state, stats, now_utc):
 
 
 # =========================================================================
-# SHADOW PIPELINE — research only. "What could we have learned from this
-# setup?" Nothing in this section can ever touch stats["active_trade"] or
-# state["leg_owner"] — every experiment below is READ-ONLY against live
-# state and free-running against its own shadow_state.json/shadow_stats.json.
+# MARKET INTELLIGENCE NETWORK — Experimental Lab. "What could we have
+# learned from this setup?" Nothing in this section can ever touch
+# stats["active_trade"] or state["leg_owner"] — every experiment below
+# is READ-ONLY against live state and free-running against its own
+# shadow_state.json/shadow_stats.json (file names unchanged — see the
+# Intelligence Database banner above for why).
 #
 # These are called "experiments," not "tiers": in the live system tiers
 # represent PRIORITY (who gets the leg). In research nothing has priority
@@ -3191,14 +3239,18 @@ def run_shadow_pipeline(facts, ctx, state, df_15m, live_result, now_utc):
     save_shadow_stats(shadow_stats)
 
 
-# ---- Shadow reporting: dashboard + drill-downs ------------------------
+# ---- Market Intelligence Network reporting: dashboard + drill-downs ---
 # REWORK NOTE: /shadow used to print one full paragraph per experiment,
 # which stopped being readable once EXPE_REJECTED_LIVE alone hit 90+
 # logged setups. Now /shadow is a compact aligned table (a health check,
 # not a report), and everything else lives behind drill-down commands:
-#   /shadow            -> this table
-#   /shadow <name>     -> per-experiment detail (aliases below)
-#   /shadow rejected   -> EXPE_REJECTED_LIVE-specific breakdown
+#   /shadow            -> this table (renamed "Market Intelligence
+#                          Network" on screen — command itself left as
+#                          /shadow on purpose, so nothing you already
+#                          type by habit breaks)
+#   /shadow <name>     -> per-experiment detail (Experimental Lab, aliases below)
+#   /shadow rejected   -> EXPE_REJECTED_LIVE-specific breakdown (Evidence & Research)
+#   /shadow blocked    -> per-tier block-reason breakdown (Evidence & Research)
 #   /shadow recent     -> last 10 resolved shadow trades, any experiment
 #   /leaderboard       -> every experiment ranked by avg R
 
@@ -3315,7 +3367,7 @@ def format_shadow_summary(shadow_stats):
         return None
 
     name_w = max(len(_SHADOW_DISPLAY_NAME.get(k, k)) for k, _, _, _ in rows)
-    lines = ["🔬 *Shadow Pipeline*", "`" + "─" * (name_w + 28) + "`"]
+    lines = ["🔬 *Market Intelligence Network*", "`" + "─" * (name_w + 28) + "`"]
     for key, s, win_rate, avg_r in rows:
         name = _SHADOW_DISPLAY_NAME.get(key, key).ljust(name_w)
         wr_str = f"WR {win_rate:3.0f}%" if win_rate is not None else "WR  — "
@@ -3577,7 +3629,7 @@ def format_tier_block_analysis(tier_label):
 
     total = sum(len(b["records"]) for b in buckets.values())
     if total == 0:
-        return (f"🔬 *{tier_label} — Block Analysis*\n"
+        return (f"🔬 *Tier {tier_number} Block Analysis* (`{tier_label}`)\n"
                 "_No resolved 'activated but didn't fire' records for this tier yet._")
 
     lines = [f"🔬 *Tier {tier_number} Block Analysis* (`{tier_label}`)",
@@ -3598,6 +3650,72 @@ def format_tier_block_analysis(tier_label):
     lines.append("_Only ATR floor and conviction gate are real, distinguishable blocks "
                  "in the current code — no separate risk/spread gate exists yet to "
                  "report on. Small buckets (<~30) are directional, not conclusive._")
+    return "\n".join(lines)
+
+
+def format_advisory_council(tier_label):
+    """
+    Advisory Council (per chat) — SAFE, concatenation-only version.
+    Lays out what the Experimental Lab and Evidence & Research
+    Department have ALREADY separately computed about one tier, side by
+    side, clearly labeled by source. Deliberately does NOT synthesize a
+    combined verdict, confidence score, or recommendation — that would
+    reintroduce the exact "unearned number" problem already declined for
+    /shadow lab's auto-discovery and Mirror Learning's auto-apply path
+    (see chat). This is a reading room, not a judge: every figure below
+    is produced by calling that section's own existing function/formula
+    — nothing here is a newly invented statistic.
+    """
+    tier_number = TIER_NUMBER.get(tier_label, "?")
+    lines = [f"🏛 *Advisory Council — Tier {tier_number}* (`{tier_label}`)",
+             "─────────────────────",
+             "_Concatenation only — no combined score, no recommendation. "
+             "Each section is exactly what that department already reports._",
+             ""]
+
+    # ---- Experimental Lab: this tier's own fired-side EXP7 stats -------
+    # Same n/win-rate/avg-R computation format_shadow_detail's "By
+    # variant" section already uses for EXP7 — reused verbatim, not
+    # recomputed a second, possibly-inconsistent way.
+    records = _read_shadow_trade_log(experiment="EXP7_TIER_ATR")
+    tier_records = [r for r in records if r.get("variant") == tier_label]
+    lines.append("*Experimental Lab — EXP7 (fired-side):*")
+    if tier_records:
+        n = len(tier_records)
+        wins = sum(1 for r in tier_records if r.get("r_achieved", 0.0) > 0)
+        sum_r = sum(r.get("r_achieved", 0.0) for r in tier_records)
+        lines.append(f"  `{n}` resolved — win rate `{wins / n * 100:.0f}%`, avg `{sum_r / n:+.2f}R`")
+        dist_line = format_outcome_distribution(outcome_distribution(tier_records))
+        if dist_line:
+            lines.append("  " + dist_line.strip())
+    else:
+        lines.append("  _No resolved EXP7 data for this tier yet._")
+    lines.append("")
+
+    # ---- Evidence & Research Department: block analysis (blocked-side) -
+    lines.append("*Evidence & Research Department — blocked-side:*")
+    block_report = format_tier_block_analysis(tier_label)
+    block_body = "\n".join(
+        ln for ln in block_report.split("\n")
+        if not ln.startswith(f"🔬 *Tier {tier_number} Block Analysis*")
+    ).strip()
+    lines.append(("  " + block_body.replace("\n", "\n  ")) if block_body else "  _Nothing to report yet._")
+    lines.append("")
+
+    # ---- Experimental Lab: ATR suitability for this tier ---------------
+    lines.append("*Experimental Lab — ATR Suitability (this tier):*")
+    tier_bands = compute_atr_suitability().get(tier_number, {})
+    if tier_bands:
+        for band_label, bucket in sorted(tier_bands.items(), key=lambda kv: float(kv[0].split("-")[0])):
+            n = bucket["n"]
+            if n == 0:
+                continue
+            wr = bucket["wins"] / n * 100
+            avg_r = bucket["sum_r"] / n
+            lines.append(f"  `{band_label}p`: n=`{n}` WR `{wr:.0f}%` avgR `{avg_r:+.2f}`")
+    else:
+        lines.append("  _No ATR-banded data for this tier yet._")
+
     return "\n".join(lines)
 
 
@@ -4061,6 +4179,17 @@ def check_result_commands(stats):
                     send_telegram("🔬 _Usage: `/shadow blocked tier1`, `tier2`, or `tier3`._")
                 else:
                     send_telegram(format_tier_block_analysis(tier_label))
+
+            elif arg.startswith("advisory"):
+                tier_arg = arg[len("advisory"):].strip()
+                tier_map = {"tier1": "TIER_1_POI", "1": "TIER_1_POI",
+                            "tier2": "TIER_2_FIB", "2": "TIER_2_FIB",
+                            "tier3": "TIER_3_STRUCTURE", "3": "TIER_3_STRUCTURE"}
+                tier_label = tier_map.get(tier_arg)
+                if not tier_label:
+                    send_telegram("🏛 _Usage: `/shadow advisory tier1`, `tier2`, or `tier3`._")
+                else:
+                    send_telegram(format_advisory_council(tier_label))
 
             elif arg in _SHADOW_ALIASES:
                 key = _SHADOW_ALIASES[arg]

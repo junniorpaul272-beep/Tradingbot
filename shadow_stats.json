@@ -23,14 +23,14 @@
   },
   "EXP3_POI": {
     "logged": 23,
-    "resolved": 13,
-    "wins": 3,
+    "resolved": 14,
+    "wins": 4,
     "losses": 10,
     "timed_out": 0,
-    "sum_r": -5.0,
-    "hit_1r": 3,
-    "hit_2r": 1,
-    "hit_3r": 1
+    "sum_r": -2.0,
+    "hit_1r": 4,
+    "hit_2r": 2,
+    "hit_3r": 2
   },
   "EXP4_LIQUIDITY": {
     "logged": 0,
@@ -77,7 +77,7 @@
     "hit_3r": 1
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 256,
+    "logged": 257,
     "resolved": 252,
     "wins": 116,
     "losses": 136,

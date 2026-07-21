@@ -1,6 +1,6 @@
 {
   "EXP1_STRUCTURE": {
-    "logged": 24,
+    "logged": 25,
     "resolved": 18,
     "wins": 4,
     "losses": 14,
@@ -22,7 +22,7 @@
     "hit_3r": 1
   },
   "EXP3_POI": {
-    "logged": 32,
+    "logged": 33,
     "resolved": 27,
     "wins": 15,
     "losses": 12,
@@ -44,7 +44,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 30,
+    "logged": 31,
     "resolved": 24,
     "wins": 6,
     "losses": 18,

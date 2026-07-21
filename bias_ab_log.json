@@ -2791,5 +2791,12 @@
     "shadow_bias": "BEARISH",
     "agree": true,
     "price": 1.3456
+  },
+  {
+    "time": "2026-07-21 07:20 UTC",
+    "live_bias": "BEARISH",
+    "shadow_bias": "BEARISH",
+    "agree": true,
+    "price": 1.34474
   }
 ]

@@ -1,6 +1,6 @@
 {
   "EXP1_STRUCTURE": {
-    "logged": 30,
+    "logged": 31,
     "resolved": 19,
     "wins": 4,
     "losses": 15,
@@ -44,7 +44,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 40,
+    "logged": 41,
     "resolved": 27,
     "wins": 6,
     "losses": 21,
@@ -77,14 +77,14 @@
     "hit_3r": 3
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 323,
-    "resolved": 303,
-    "wins": 136,
+    "logged": 324,
+    "resolved": 304,
+    "wins": 137,
     "losses": 167,
     "timed_out": 0,
-    "sum_r": 158.0,
-    "hit_1r": 136,
-    "hit_2r": 109,
-    "hit_3r": 80
+    "sum_r": 161.0,
+    "hit_1r": 137,
+    "hit_2r": 110,
+    "hit_3r": 81
   }
 }

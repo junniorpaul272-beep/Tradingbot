@@ -1,13 +1,13 @@
 {
   "EXP1_STRUCTURE": {
     "logged": 42,
-    "resolved": 33,
-    "wins": 9,
+    "resolved": 34,
+    "wins": 10,
     "losses": 24,
-    "timed_out": 19,
-    "sum_r": -8.0,
-    "hit_1r": 9,
-    "hit_2r": 5,
+    "timed_out": 20,
+    "sum_r": -6.0,
+    "hit_1r": 10,
+    "hit_2r": 6,
     "hit_3r": 2
   },
   "EXP2_FIB": {
@@ -45,13 +45,13 @@
   },
   "EXP5_ABLATION": {
     "logged": 54,
-    "resolved": 43,
-    "wins": 11,
+    "resolved": 46,
+    "wins": 14,
     "losses": 32,
-    "timed_out": 23,
-    "sum_r": -14.0,
-    "hit_1r": 11,
-    "hit_2r": 5,
+    "timed_out": 26,
+    "sum_r": -8.0,
+    "hit_1r": 14,
+    "hit_2r": 8,
     "hit_3r": 2
   },
   "EXP6_ALT_BIAS": {
@@ -67,13 +67,13 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 12,
-    "resolved": 11,
-    "wins": 4,
+    "resolved": 12,
+    "wins": 5,
     "losses": 7,
-    "timed_out": 3,
-    "sum_r": 3.0,
-    "hit_1r": 4,
-    "hit_2r": 3,
+    "timed_out": 4,
+    "sum_r": 5.0,
+    "hit_1r": 5,
+    "hit_2r": 4,
     "hit_3r": 3
   },
   "EXPE_REJECTED_LIVE": {

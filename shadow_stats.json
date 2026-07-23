@@ -23,13 +23,13 @@
   },
   "EXP3_POI": {
     "logged": 69,
-    "resolved": 59,
-    "wins": 37,
+    "resolved": 60,
+    "wins": 38,
     "losses": 22,
-    "timed_out": 12,
-    "sum_r": 66.0,
-    "hit_1r": 37,
-    "hit_2r": 30,
+    "timed_out": 13,
+    "sum_r": 68.0,
+    "hit_1r": 38,
+    "hit_2r": 31,
     "hit_3r": 21
   },
   "EXP4_LIQUIDITY": {

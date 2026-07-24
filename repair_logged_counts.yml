@@ -1,0 +1,36 @@
+name: Repair logged counts (one-off)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Back up current shadow_stats.json
+        run: |
+          cp shadow_stats.json shadow_stats.json.pre_logged_repair.bak
+
+      - name: Repair 'logged' counters
+        run: |
+          python3 repair_logged_counts.py shadow_stats.json shadow_state.json shadow_stats.repaired.json
+
+      - name: Replace live file with repaired version
+        run: |
+          mv shadow_stats.repaired.json shadow_stats.json
+
+      - name: Commit repaired stats
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add shadow_stats.json shadow_stats.json.pre_logged_repair.bak
+          git commit -m "One-off repair: raise 'logged' counters to true lower bound (resolved + pending)"
+          git push

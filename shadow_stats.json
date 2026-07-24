@@ -12,7 +12,7 @@
     "hit_3r": 0
   },
   "EXP2_FIB": {
-    "logged": 15,
+    "logged": 19,
     "resolved": 9,
     "wins": 0,
     "losses": 9,
@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 4,
+    "logged": 5,
     "resolved": 2,
     "wins": 0,
     "losses": 2,
@@ -79,11 +79,11 @@
   },
   "EXPE_REJECTED_LIVE": {
     "logged": 5,
-    "resolved": 4,
+    "resolved": 5,
     "wins": 0,
-    "losses": 4,
+    "losses": 5,
     "timed_out": 1,
-    "sum_r": -3.3400000000000443,
+    "sum_r": -4.340000000000044,
     "hit_1r": 2,
     "hit_2r": 0,
     "hit_3r": 0

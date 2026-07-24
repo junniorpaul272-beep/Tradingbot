@@ -24,12 +24,12 @@
   },
   "EXP3_POI": {
     "logged": 1,
-    "resolved": 0,
+    "resolved": 1,
     "wins": 0,
-    "losses": 0,
+    "losses": 1,
     "timed_out": 0,
-    "sum_r": 0.0,
-    "hit_1r": 0,
+    "sum_r": -1.0,
+    "hit_1r": 1,
     "hit_2r": 0,
     "hit_3r": 0
   },
@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 2,
+    "logged": 3,
     "resolved": 1,
     "wins": 0,
     "losses": 1,
@@ -78,13 +78,13 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 2,
-    "resolved": 1,
+    "logged": 3,
+    "resolved": 2,
     "wins": 0,
-    "losses": 1,
+    "losses": 2,
     "timed_out": 1,
-    "sum_r": -0.34000000000004443,
-    "hit_1r": 1,
+    "sum_r": -1.3400000000000445,
+    "hit_1r": 2,
     "hit_2r": 0,
     "hit_3r": 0
   }

@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 8,
+    "logged": 9,
     "resolved": 2,
     "wins": 0,
     "losses": 2,
@@ -78,7 +78,7 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 22,
+    "logged": 23,
     "resolved": 16,
     "wins": 3,
     "losses": 13,

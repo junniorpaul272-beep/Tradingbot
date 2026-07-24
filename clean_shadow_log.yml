@@ -1,0 +1,42 @@
+name: Clean shadow trade log (one-off)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Back up original files
+        run: |
+          cp shadow_trade_log.jsonl shadow_trade_log.jsonl.bak
+          cp shadow_stats.json shadow_stats.json.bak
+
+      - name: Dedupe trade log
+        run: |
+          python3 dedupe_shadow_log.py shadow_trade_log.jsonl shadow_trade_log.cleaned.jsonl
+
+      - name: Rebuild shadow stats from cleaned log
+        run: |
+          python3 rebuild_shadow_stats.py shadow_trade_log.cleaned.jsonl shadow_stats.json shadow_stats.rebuilt.json
+
+      - name: Replace live files with cleaned versions
+        run: |
+          mv shadow_trade_log.cleaned.jsonl shadow_trade_log.jsonl
+          mv shadow_stats.rebuilt.json shadow_stats.json
+
+      - name: Commit cleaned files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add shadow_trade_log.jsonl shadow_stats.json shadow_trade_log.jsonl.bak shadow_stats.json.bak
+          git commit -m "One-off cleanup: dedupe shadow trade log + rebuild shadow_stats.json (originals kept as .bak)"
+          git push

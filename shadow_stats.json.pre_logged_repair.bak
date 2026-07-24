@@ -1,7 +1,7 @@
 {
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
-    "logged": 42,
+    "logged": 32,
     "resolved": 42,
     "wins": 16,
     "losses": 26,
@@ -23,7 +23,7 @@
     "hit_3r": 128
   },
   "EXP3_POI": {
-    "logged": 64,
+    "logged": 4,
     "resolved": 63,
     "wins": 38,
     "losses": 25,
@@ -78,7 +78,7 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 432,
+    "logged": 68,
     "resolved": 429,
     "wins": 219,
     "losses": 210,

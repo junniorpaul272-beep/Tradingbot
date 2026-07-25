@@ -50,7 +50,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          for f in stats.json state.json shadow_state.json shadow_stats.json shadow_trade_log.jsonl bias_ab_log.json; do
+          for f in stats.json state.json shadow_state.json shadow_stats.json shadow_trade_log.jsonl bias_ab_log.json leg_obs_log.jsonl failure_case_log.jsonl live_trade_log.jsonl; do
             [ -f "$f" ] && git add -f "$f"
           done
           git diff --cached --quiet || git commit -m "chore: update scan stats and state [skip ci]"
@@ -76,4 +76,14 @@ jobs:
               exit 1
             }
           done
-          
+
+      # Runs after the git push on purpose: if Supabase is briefly down or
+      # the DB secret is wrong, that should never block state.json/stats.json
+      # from being saved back to the repo — the scanner's own continuity
+      # matters more than the dashboard being up to date this exact minute.
+      - name: Ingest to Supabase
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python ingest.py --data-dir .
+
+

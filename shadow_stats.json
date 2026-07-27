@@ -67,7 +67,7 @@
     "hit_3r": 0
   },
   "EXP7_TIER_ATR": {
-    "logged": 31,
+    "logged": 32,
     "resolved": 12,
     "wins": 5,
     "losses": 7,
@@ -79,12 +79,12 @@
   },
   "EXPE_REJECTED_LIVE": {
     "logged": 459,
-    "resolved": 446,
+    "resolved": 447,
     "wins": 219,
-    "losses": 227,
+    "losses": 228,
     "timed_out": 3,
-    "sum_r": 313.66,
-    "hit_1r": 437,
+    "sum_r": 312.66,
+    "hit_1r": 438,
     "hit_2r": 431,
     "hit_3r": 415
   }

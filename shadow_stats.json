@@ -12,12 +12,12 @@
     "hit_3r": 0
   },
   "EXP2_FIB": {
-    "logged": 295,
-    "resolved": 204,
+    "logged": 296,
+    "resolved": 205,
     "wins": 40,
-    "losses": 164,
+    "losses": 165,
     "timed_out": 9,
-    "sum_r": -44.79,
+    "sum_r": -45.79,
     "hit_1r": 361,
     "hit_2r": 240,
     "hit_3r": 160
@@ -78,7 +78,7 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 635,
+    "logged": 636,
     "resolved": 612,
     "wins": 240,
     "losses": 372,

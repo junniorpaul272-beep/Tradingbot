@@ -12,7 +12,7 @@
     "hit_3r": 0
   },
   "EXP2_FIB": {
-    "logged": 298,
+    "logged": 299,
     "resolved": 214,
     "wins": 40,
     "losses": 174,
@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 219,
+    "logged": 220,
     "resolved": 98,
     "wins": 35,
     "losses": 63,
@@ -78,7 +78,7 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 638,
+    "logged": 639,
     "resolved": 615,
     "wins": 240,
     "losses": 375,

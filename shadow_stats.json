@@ -45,15 +45,15 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 242,
-    "resolved": 117,
-    "wins": 51,
+    "logged": 243,
+    "resolved": 118,
+    "wins": 52,
     "losses": 66,
     "timed_out": 81,
-    "sum_r": 0.9395456153512043,
-    "hit_1r": 16,
-    "hit_2r": 6,
-    "hit_3r": 1
+    "sum_r": 3.9395456153512045,
+    "hit_1r": 17,
+    "hit_2r": 7,
+    "hit_3r": 2
   },
   "EXP6_ALT_BIAS": {
     "logged": 1,

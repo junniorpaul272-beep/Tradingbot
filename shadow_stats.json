@@ -24,11 +24,11 @@
   },
   "EXP3_POI": {
     "logged": 75,
-    "resolved": 74,
+    "resolved": 75,
     "wins": 41,
-    "losses": 33,
+    "losses": 34,
     "timed_out": 14,
-    "sum_r": 64.50458715596334,
+    "sum_r": 63.504587155963335,
     "hit_1r": 7,
     "hit_2r": 4,
     "hit_3r": 3

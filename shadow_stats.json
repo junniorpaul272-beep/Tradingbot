@@ -24,13 +24,13 @@
   },
   "EXP3_POI": {
     "logged": 76,
-    "resolved": 75,
-    "wins": 41,
+    "resolved": 76,
+    "wins": 42,
     "losses": 34,
-    "timed_out": 14,
-    "sum_r": 63.504587155963335,
-    "hit_1r": 7,
-    "hit_2r": 4,
+    "timed_out": 15,
+    "sum_r": 64.11385867914197,
+    "hit_1r": 8,
+    "hit_2r": 5,
     "hit_3r": 3
   },
   "EXP4_LIQUIDITY": {
@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 248,
+    "logged": 249,
     "resolved": 128,
     "wins": 55,
     "losses": 73,
@@ -78,7 +78,7 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 676,
+    "logged": 677,
     "resolved": 654,
     "wins": 254,
     "losses": 400,

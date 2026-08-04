@@ -1,7 +1,7 @@
 {
-  "total_scans": 2463,
+  "total_scans": 2464,
   "consolidation_skip": 183,
-  "atr_too_low": 1333,
+  "atr_too_low": 1334,
   "regime_shift_skip": 5,
   "session_skip": 1,
   "no_leg_owner": 376,

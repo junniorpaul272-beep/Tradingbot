@@ -79,13 +79,13 @@
   },
   "EXPE_REJECTED_LIVE": {
     "logged": 755,
-    "resolved": 723,
-    "wins": 279,
+    "resolved": 724,
+    "wins": 280,
     "losses": 444,
-    "timed_out": 14,
-    "sum_r": 262.76046946388135,
-    "hit_1r": 576,
-    "hit_2r": 508,
+    "timed_out": 15,
+    "sum_r": 265.3251744628675,
+    "hit_1r": 577,
+    "hit_2r": 509,
     "hit_3r": 466
   }
 }

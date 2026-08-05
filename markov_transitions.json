@@ -1,0 +1,7 @@
+{
+  "transitions": {
+    "BULLISH_STALE": {
+      "CONSOLIDATION": 1
+    }
+  }
+}

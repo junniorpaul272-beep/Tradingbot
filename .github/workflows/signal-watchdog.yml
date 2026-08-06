@@ -1,0 +1,68 @@
+name: GBPUSD SMC Scanner — Watchdog
+
+# TRIGGER: point a THIRD cron-job.org job at this workflow_dispatch
+# endpoint, firing every 30-60 min (not every 5 — this checks health,
+# it doesn't need live-scan's cadence, and a coarser interval avoids
+# alert spam while a real drought is ongoing).
+#
+# PURPOSE: catches exactly the failure mode that triggered this audit —
+# the scanner running "successfully" (exit 0, no error in the Actions
+# tab) but producing no signals for weeks, which nobody notices unless
+# they go looking. This checks GitHub's own run history for both
+# scanner workflows and alerts if too much time has passed since their
+# last SUCCESSFUL run — independent of whatever scanner_live.py/
+# min_scanner.py think their own state is.
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check last successful run of each scanner workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Max minutes allowed since last SUCCESS before alerting.
+          # Live cadence is ~5 min; 45 gives room for a few consecutive
+          # transient runner failures before paging. MIN gets more slack
+          # since it's less time-critical.
+          LIVE_MAX_MIN: 45
+          MIN_MAX_MIN: 90
+        run: |
+          set -e
+          check_workflow () {
+            local file="$1" label="$2" max_min="$3"
+            local last_success
+            last_success=$(gh api "repos/${{ github.repository }}/actions/workflows/${file}/runs?status=success&per_page=1" \
+              --jq '.workflow_runs[0].updated_at' 2>/dev/null || echo "")
+
+            if [ -z "$last_success" ] || [ "$last_success" = "null" ]; then
+              echo "::warning::Could not determine last successful run for $label"
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+                -d chat_id="${TELEGRAM_CHAT_ID}" \
+                -d text="🐕 Watchdog: no successful runs found at all for $label — check this immediately." > /dev/null
+              return
+            fi
+
+            local last_epoch now_epoch age_min
+            last_epoch=$(date -d "$last_success" +%s)
+            now_epoch=$(date +%s)
+            age_min=$(( (now_epoch - last_epoch) / 60 ))
+
+            echo "$label: last success $age_min min ago (limit $max_min)"
+
+            if [ "$age_min" -gt "$max_min" ]; then
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+                -d chat_id="${TELEGRAM_CHAT_ID}" \
+                -d text="🐕 Watchdog: $label has had NO successful run in ${age_min} min (limit ${max_min}min). Something is silently broken — check Actions tab." > /dev/null
+            fi
+          }
+
+          check_workflow "live-scan.yml"  "Live scanner"  "$LIVE_MAX_MIN"
+          check_workflow "min-scan.yml"   "MIN scanner"   "$MIN_MAX_MIN"

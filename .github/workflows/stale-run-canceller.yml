@@ -1,0 +1,52 @@
+name: GBPUSD SMC Scanner — Stale Run Canceller
+
+# TRIGGER: same cron-job.org pattern, every ~15 min is plenty.
+#
+# PURPOSE: timeout-minutes in live-scan.yml/min-scan.yml only starts
+# counting once a runner is ACQUIRED. The "not acquired by Runner of
+# type hosted even after multiple attempts" failure you hit means a run
+# can sit `queued` for a long time first (image 2 showed 15m53s total
+# duration against a 4-min timeout). With cancel-in-progress: false,
+# every subsequent trigger for that workflow queues up BEHIND it, so one
+# bad queue event can back up the next several scheduled scans with no
+# ceiling from your side. This cancels anything still queued or
+# in_progress past a sane limit so the group self-clears instead of
+# silently backing up.
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  cancel-stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Cancel runs stuck queued/in_progress too long
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Generous vs. the 4-min job timeout — this only catches runs
+          # that are stuck BEFORE execution starts, or that somehow
+          # ignored timeout-minutes. 10 min gives normal queueing room.
+          MAX_AGE_MIN: 10
+        run: |
+          set -e
+          now_epoch=$(date +%s)
+
+          for wf in live-scan.yml min-scan.yml; do
+            run_ids=$(gh api "repos/${{ github.repository }}/actions/workflows/${wf}/runs?status=queued&per_page=10" --jq '.workflow_runs[].id')
+            run_ids="$run_ids $(gh api "repos/${{ github.repository }}/actions/workflows/${wf}/runs?status=in_progress&per_page=10" --jq '.workflow_runs[].id')"
+
+            for run_id in $run_ids; do
+              [ -z "$run_id" ] && continue
+              created=$(gh api "repos/${{ github.repository }}/actions/runs/${run_id}" --jq '.created_at')
+              created_epoch=$(date -d "$created" +%s)
+              age_min=$(( (now_epoch - created_epoch) / 60 ))
+
+              if [ "$age_min" -gt "$MAX_AGE_MIN" ]; then
+                echo "Cancelling ${wf} run ${run_id}, stuck ${age_min} min"
+                gh api -X POST "repos/${{ github.repository }}/actions/runs/${run_id}/cancel" || true
+              fi
+            done
+          done

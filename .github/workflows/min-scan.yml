@@ -1,0 +1,127 @@
+name: GBPUSD SMC Scanner — Market Intelligence Network
+
+# TRIGGER: cron-job.org hitting workflow_dispatch, same as live-scan.yml —
+# NOT GitHub's native `schedule:` (unreliable on this account). Set up a
+# SEPARATE cron-job.org job for this workflow, offset by ~2-5 minutes from
+# the live job's trigger time (e.g. live at :00/:05/:10..., this one at
+# :02/:07/:12...) so a typical run's checkout lands after live's push for
+# the same candle close, rather than racing to read a not-yet-committed
+# candle_cache.json. load_candle_cache()'s own 20-minute staleness check
+# is the real safety net if that ordering ever fails.
+#
+# The offset reduces the race, it doesn't eliminate it (runner-acquisition
+# delays can blow past 2-5 min — see AUDIT_NOTES.md). The merge=union
+# driver configured below is the actual safety net for the one file both
+# workflows write to.
+on:
+  workflow_dispatch:
+
+# A DIFFERENT concurrency group than live — no reason for MIN to queue
+# behind live's own scan-to-scan lock, they're independent processes now.
+concurrency:
+  group: gbpusd-scanner-min
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run MIN scanner
+        env:
+          # NOTE: deliberately NO TWELVE_DATA_KEY here. min_scanner.py
+          # never calls Twelve Data — reading candle_cache.json off disk
+          # is its only source of market data. If this job ever throws a
+          # missing-secret error, something has regressed the split.
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python min_scanner.py
+
+      - name: Validate JSON integrity before commit
+        run: |
+          set -e
+          fail=0
+          for f in shadow_state.json shadow_stats.json leg_obs_state.json; do
+            if [ -f "$f" ]; then
+              jq empty "$f" >/dev/null 2>&1 || { echo "::error::$f failed JSON validation — NOT committing"; fail=1; }
+            fi
+          done
+          for f in shadow_trade_log.jsonl leg_obs_log.jsonl failure_case_log.jsonl rejected_live_queue.jsonl; do
+            if [ -f "$f" ]; then
+              line_no=0
+              while IFS= read -r line || [ -n "$line" ]; do
+                line_no=$((line_no + 1))
+                [ -z "$line" ] && continue
+                echo "$line" | jq empty >/dev/null 2>&1 || { echo "::error::$f line $line_no failed JSON validation"; fail=1; }
+              done < "$f"
+            fi
+          done
+          if [ "$fail" -eq 1 ]; then
+            echo "::error::One or more owned files failed integrity validation — aborting before commit to avoid poisoning main."
+            exit 1
+          fi
+
+      - name: Save MIN-owned files back to repo
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # min_scanner.py is the sole writer of every file in this list.
+          # rejected_live_queue.jsonl is included here too, but only to
+          # commit its TRUNCATION after draining — scanner_live.py is the
+          # only one that ever appends to it. The merge=union driver means
+          # a truncation here can no longer silently erase an append that
+          # live pushed in the same window; git will union both sides'
+          # lines instead of picking one file wholesale.
+          for f in shadow_state.json shadow_stats.json shadow_trade_log.jsonl \
+                   leg_obs_state.json leg_obs_log.jsonl failure_case_log.jsonl \
+                   rejected_live_queue.jsonl; do
+            [ -f "$f" ] && git add -f "$f"
+          done
+          git diff --cached --quiet || git commit -m "chore: MIN pass update [skip ci]"
+
+          for attempt in 1 2 3; do
+            if git push; then
+              break
+            fi
+            echo "Push rejected (attempt $attempt) — fetching and rebasing before retry..."
+            git fetch origin main
+            # -X ours removed — see live-scan.yml for why. Union-merge
+            # handles the one genuinely shared file; anything else that
+            # conflicts here means two owners are writing the same file,
+            # which is itself a bug worth surfacing loudly, not masking.
+            git rebase origin/main || {
+              echo "::error::Rebase conflict could not be auto-resolved — aborting rather than risk silent data loss."
+              git rebase --abort
+              exit 1
+            }
+          done
+
+      - name: Alert on job failure
+        if: failure()
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="⚠️ GBPUSD MIN scan FAILED — run #${{ github.run_number }}. Check Actions tab." \
+            > /dev/null
+
+      - name: Ingest to Supabase
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python ingest.py --data-dir .

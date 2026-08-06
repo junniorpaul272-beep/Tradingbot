@@ -6,6 +6,9 @@
     "CONSOLIDATION": {
       "CONSOLIDATION": 36,
       "BEARISH_STALE": 1
+    },
+    "BEARISH_STALE": {
+      "BEARISH_STALE": 1
     }
   },
   "calibration_predictions": [

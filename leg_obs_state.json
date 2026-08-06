@@ -1,0 +1,35 @@
+{
+  "open": {
+    "id": "5a2ea0ee60ea",
+    "methodology_version": 2,
+    "leg_id": "BEARISH|1.35065|1.34183",
+    "opened_at": "2026-08-06T14:07:27.643551+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-06T23:55:00+00:00",
+    "fate": null,
+    "resolved_at": null,
+    "formation_state": {
+      "macro_was_choch": false,
+      "macro_leg_direction": "BEARISH",
+      "macro_leg_length_pips": 88.2,
+      "bos_15m_direction": "BULLISH",
+      "bos_15m_break_count": 3,
+      "bos_15m_was_choch": false,
+      "atr_pips": 3.72,
+      "atr_percentile_15m": 98.2,
+      "atr_bucket": "high_vol",
+      "session": "london_ny_overlap",
+      "bias_state": "fresh",
+      "spike_state": "normal",
+      "trend_strength_atr_mult": 4.44,
+      "volatility_state": "expanding",
+      "compression_ratio": 3.62,
+      "pullback_depth_pct": 5.2
+    },
+    "tier1_touched_bar": null,
+    "tier2_touched_bar": null,
+    "tier3_touched_bar": null
+  },
+  "closed_ids": [],
+  "methodology_version": 2
+}

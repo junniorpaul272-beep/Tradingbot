@@ -8,7 +8,7 @@
       "BEARISH_STALE": 1
     },
     "BEARISH_STALE": {
-      "BEARISH_STALE": 9
+      "BEARISH_STALE": 10
     }
   },
   "calibration_predictions": [
@@ -1109,6 +1109,31 @@
     },
     {
       "stated_prob": 0.0769,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0714,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0714,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0714,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.7143,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true
+    },
+    {
+      "stated_prob": 0.0714,
       "predicted_state": "CONSOLIDATION",
       "actual_happened": false
     }

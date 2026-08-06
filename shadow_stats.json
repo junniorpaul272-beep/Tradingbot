@@ -87,5 +87,16 @@
     "hit_1r": 593,
     "hit_2r": 525,
     "hit_3r": 481
+  },
+  "EXP8_CISD": {
+    "logged": 0,
+    "resolved": 0,
+    "wins": 0,
+    "losses": 0,
+    "timed_out": 0,
+    "sum_r": 0.0,
+    "hit_1r": 0,
+    "hit_2r": 0,
+    "hit_3r": 0
   }
 }

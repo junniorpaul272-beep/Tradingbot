@@ -4,7 +4,7 @@
       "CONSOLIDATION": 1
     },
     "CONSOLIDATION": {
-      "CONSOLIDATION": 16
+      "CONSOLIDATION": 17
     }
   },
   "calibration_predictions": [
@@ -380,6 +380,31 @@
     },
     {
       "stated_prob": 0.8,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": true
+    },
+    {
+      "stated_prob": 0.0476,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0476,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0476,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0476,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.8095,
       "predicted_state": "CONSOLIDATION",
       "actual_happened": true
     }

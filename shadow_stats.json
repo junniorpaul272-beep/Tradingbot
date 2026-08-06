@@ -46,11 +46,11 @@
   },
   "EXP5_ABLATION": {
     "logged": 282,
-    "resolved": 161,
+    "resolved": 162,
     "wins": 78,
-    "losses": 83,
+    "losses": 84,
     "timed_out": 112,
-    "sum_r": 6.823003589155212,
+    "sum_r": 5.823003589155212,
     "hit_1r": 25,
     "hit_2r": 7,
     "hit_3r": 2
@@ -79,14 +79,14 @@
   },
   "EXPE_REJECTED_LIVE": {
     "logged": 775,
-    "resolved": 743,
-    "wins": 296,
+    "resolved": 748,
+    "wins": 301,
     "losses": 447,
     "timed_out": 16,
-    "sum_r": 308.28517446286725,
-    "hit_1r": 593,
-    "hit_2r": 525,
-    "hit_3r": 481
+    "sum_r": 323.28517446286725,
+    "hit_1r": 598,
+    "hit_2r": 530,
+    "hit_3r": 486
   },
   "EXP8_CISD": {
     "logged": 0,

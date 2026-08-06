@@ -13,6 +13,9 @@
     "BEARISH_STALE": {
       "BEARISH_STALE": 11,
       "CONSOLIDATION": 1
+    },
+    "BEARISH_FRESH": {
+      "BEARISH_FRESH": 1
     }
   },
   "calibration_predictions": [

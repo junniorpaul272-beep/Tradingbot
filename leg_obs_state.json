@@ -4,8 +4,8 @@
     "methodology_version": 2,
     "leg_id": "BEARISH|1.35065|1.34183",
     "opened_at": "2026-08-06T14:07:27.643551+00:00",
-    "bars_open": 0,
-    "last_processed_candle": "2026-08-06T23:55:00+00:00",
+    "bars_open": 1,
+    "last_processed_candle": "2026-08-07T00:00:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -27,7 +27,7 @@
       "pullback_depth_pct": 5.2
     },
     "tier1_touched_bar": null,
-    "tier2_touched_bar": null,
+    "tier2_touched_bar": 1,
     "tier3_touched_bar": null
   },
   "closed_ids": [],

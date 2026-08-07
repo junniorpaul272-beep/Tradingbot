@@ -79,14 +79,14 @@
   },
   "EXPE_REJECTED_LIVE": {
     "logged": 780,
-    "resolved": 756,
-    "wins": 309,
+    "resolved": 757,
+    "wins": 310,
     "losses": 447,
     "timed_out": 18,
-    "sum_r": 345.62276426966713,
-    "hit_1r": 606,
-    "hit_2r": 538,
-    "hit_3r": 492
+    "sum_r": 348.62276426966713,
+    "hit_1r": 607,
+    "hit_2r": 539,
+    "hit_3r": 493
   },
   "EXP8_CISD": {
     "logged": 2,

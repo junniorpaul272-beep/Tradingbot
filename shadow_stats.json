@@ -68,25 +68,25 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 63,
-    "resolved": 21,
-    "wins": 11,
+    "resolved": 22,
+    "wins": 12,
     "losses": 10,
-    "timed_out": 11,
-    "sum_r": 6.892052002682125,
-    "hit_1r": 3,
+    "timed_out": 12,
+    "sum_r": 7.853733516477524,
+    "hit_1r": 4,
     "hit_2r": 0,
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 775,
-    "resolved": 748,
-    "wins": 301,
+    "logged": 776,
+    "resolved": 753,
+    "wins": 306,
     "losses": 447,
-    "timed_out": 16,
-    "sum_r": 323.28517446286725,
-    "hit_1r": 598,
-    "hit_2r": 530,
-    "hit_3r": 486
+    "timed_out": 18,
+    "sum_r": 336.62276426966713,
+    "hit_1r": 603,
+    "hit_2r": 535,
+    "hit_3r": 489
   },
   "EXP8_CISD": {
     "logged": 0,

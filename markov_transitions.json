@@ -2,7 +2,7 @@
   "transitions": {
     "BULLISH_STALE": {
       "CONSOLIDATION": 1,
-      "BULLISH_STALE": 42,
+      "BULLISH_STALE": 43,
       "BEARISH_FRESH": 1
     },
     "CONSOLIDATION": {
@@ -4592,6 +4592,31 @@
     },
     {
       "stated_prob": 0.0417,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0204,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.8776,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true
+    },
+    {
+      "stated_prob": 0.0408,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0204,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0408,
       "predicted_state": "CONSOLIDATION",
       "actual_happened": false
     }

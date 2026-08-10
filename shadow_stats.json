@@ -1,12 +1,12 @@
 {
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
-    "logged": 113,
-    "resolved": 91,
-    "wins": 49,
+    "logged": 114,
+    "resolved": 92,
+    "wins": 50,
     "losses": 42,
-    "timed_out": 65,
-    "sum_r": 11.96150753625053,
+    "timed_out": 66,
+    "sum_r": 12.59334833227053,
     "hit_1r": 11,
     "hit_2r": 4,
     "hit_3r": 1
@@ -23,7 +23,7 @@
     "hit_3r": 286
   },
   "EXP3_POI": {
-    "logged": 79,
+    "logged": 80,
     "resolved": 78,
     "wins": 42,
     "losses": 36,
@@ -45,12 +45,12 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 290,
-    "resolved": 168,
-    "wins": 82,
+    "logged": 291,
+    "resolved": 169,
+    "wins": 83,
     "losses": 86,
-    "timed_out": 116,
-    "sum_r": 4.799427900138398,
+    "timed_out": 117,
+    "sum_r": 5.4312686961584,
     "hit_1r": 25,
     "hit_2r": 7,
     "hit_3r": 2

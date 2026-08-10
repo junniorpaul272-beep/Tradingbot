@@ -18,6 +18,9 @@
     "BEARISH_FRESH": {
       "BEARISH_FRESH": 78,
       "CONSOLIDATION": 1
+    },
+    "BULLISH_FRESH": {
+      "BULLISH_FRESH": 1
     }
   },
   "calibration_predictions": [

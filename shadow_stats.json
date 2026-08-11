@@ -46,11 +46,11 @@
   },
   "EXP5_ABLATION": {
     "logged": 298,
-    "resolved": 175,
+    "resolved": 176,
     "wins": 84,
-    "losses": 91,
-    "timed_out": 123,
-    "sum_r": 4.124310800384114,
+    "losses": 92,
+    "timed_out": 124,
+    "sum_r": 3.977418145016928,
     "hit_1r": 25,
     "hit_2r": 7,
     "hit_3r": 2

@@ -4,8 +4,8 @@
     "methodology_version": 2,
     "leg_id": "BULLISH|1.35312|1.34347",
     "opened_at": "2026-08-10T15:07:22.883232+00:00",
-    "bars_open": 202,
-    "last_processed_candle": "2026-08-12T00:35:00+00:00",
+    "bars_open": 203,
+    "last_processed_candle": "2026-08-12T00:40:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -33,7 +33,7 @@
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
-    "tier3_touched_bar": null
+    "tier3_touched_bar": 203
   },
   "closed_ids": [],
   "methodology_version": 2

@@ -1,69 +1,46 @@
 {
   "open": {
-    "id": "77cb13ea867f",
+    "id": "38828bfa13a5",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.35312|1.34519",
-    "opened_at": "2026-08-12T07:07:41.902839+00:00",
-    "bars_open": 71,
-    "last_processed_candle": "2026-08-12T22:50:00+00:00",
+    "leg_id": "BULLISH|1.35402|1.34519",
+    "opened_at": "2026-08-12T13:07:23.141087+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-12T22:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": true,
       "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 79.3,
-      "bos_15m_direction": null,
-      "bos_15m_break_count": null,
-      "bos_15m_was_choch": null,
-      "atr_pips": 1.92,
-      "atr_percentile_15m": 45.6,
+      "macro_leg_length_pips": 88.3,
+      "bos_15m_direction": "BULLISH",
+      "bos_15m_break_count": 4,
+      "bos_15m_was_choch": false,
+      "atr_pips": 6.34,
+      "atr_percentile_15m": 98.2,
       "market_phase": "exhaustion",
-      "market_phase_age_bars": 1,
-      "measured_move_ratio": 0.822,
+      "market_phase_age_bars": 73,
+      "measured_move_ratio": 0.915,
       "measured_move_bucket": "UNDER_100",
       "transition_cause": "EMA_EXHAUSTION",
-      "atr_bucket": "normal_vol",
-      "session": "london_early",
+      "campaign_extension_multiple": 1.11,
+      "campaign_continuation_count": 52,
+      "atr_bucket": "high_vol",
+      "session": "london_ny_overlap",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": null,
+      "trend_strength_atr_mult": 4.35,
       "volatility_state": "expanding",
-      "compression_ratio": 1.97,
-      "pullback_depth_pct": null
+      "compression_ratio": 3.31,
+      "pullback_depth_pct": 14.1
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
-    "tier3_touched_bar": 21,
+    "tier3_touched_bar": null,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 BULLISH, was_choch=True"
-      },
-      {
-        "bar": 21,
-        "kind": "choch",
-        "detail": "15M CHoCH confirmed"
-      },
-      {
-        "bar": 21,
-        "kind": "zone_touch",
-        "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
-      },
-      {
-        "bar": 42,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 3"
-      },
-      {
-        "bar": 57,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 3"
-      },
-      {
-        "bar": 60,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 4"
       }
     ],
     "_tl_last_break_count": 4,

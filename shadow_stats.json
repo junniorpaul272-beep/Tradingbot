@@ -2,11 +2,11 @@
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
     "logged": 127,
-    "resolved": 103,
+    "resolved": 104,
     "wins": 55,
-    "losses": 48,
+    "losses": 49,
     "timed_out": 76,
-    "sum_r": 15.30766247001887,
+    "sum_r": 14.30766247001887,
     "hit_1r": 15,
     "hit_2r": 6,
     "hit_3r": 2
@@ -46,11 +46,11 @@
   },
   "EXP5_ABLATION": {
     "logged": 313,
-    "resolved": 189,
+    "resolved": 190,
     "wins": 91,
-    "losses": 98,
+    "losses": 99,
     "timed_out": 136,
-    "sum_r": 8.54379145394497,
+    "sum_r": 7.543791453944969,
     "hit_1r": 31,
     "hit_2r": 11,
     "hit_3r": 3

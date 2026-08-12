@@ -20,7 +20,7 @@
       "CONSOLIDATION": 1
     },
     "BULLISH_FRESH": {
-      "BULLISH_FRESH": 192
+      "BULLISH_FRESH": 193
     }
   },
   "calibration_predictions": [
@@ -9501,6 +9501,31 @@
     },
     {
       "stated_prob": 0.9796,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true
+    },
+    {
+      "stated_prob": 0.0051,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0051,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0051,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0051,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.9797,
       "predicted_state": "BULLISH_FRESH",
       "actual_happened": true
     },

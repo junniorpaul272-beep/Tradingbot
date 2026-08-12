@@ -90,11 +90,11 @@
   },
   "EXP8_CISD": {
     "logged": 11,
-    "resolved": 5,
+    "resolved": 7,
     "wins": 3,
-    "losses": 2,
+    "losses": 4,
     "timed_out": 0,
-    "sum_r": 7.0,
+    "sum_r": 5.0,
     "hit_1r": 3,
     "hit_2r": 3,
     "hit_3r": 3

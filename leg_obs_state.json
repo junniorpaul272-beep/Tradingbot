@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BULLISH|1.35402|1.34519",
     "opened_at": "2026-08-12T13:07:23.141087+00:00",
-    "bars_open": 34,
-    "last_processed_candle": "2026-08-13T01:45:00+00:00",
+    "bars_open": 133,
+    "last_processed_candle": "2026-08-13T16:50:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -34,7 +34,7 @@
       "pullback_depth_pct": 14.1
     },
     "tier1_touched_bar": null,
-    "tier2_touched_bar": null,
+    "tier2_touched_bar": 133,
     "tier3_touched_bar": null,
     "timeline": [
       {
@@ -46,10 +46,20 @@
         "bar": 3,
         "kind": "break",
         "detail": "New 15M break \u2014 count now 5"
+      },
+      {
+        "bar": 133,
+        "kind": "choch",
+        "detail": "15M CHoCH confirmed"
+      },
+      {
+        "bar": 133,
+        "kind": "zone_touch",
+        "detail": "Tier 2 zone touched (Fib pocket)"
       }
     ],
-    "_tl_last_break_count": 5,
-    "_tl_choch_active": false,
+    "_tl_last_break_count": 3,
+    "_tl_choch_active": true,
     "_tl_last_phase": "exhaustion"
   },
   "closed_ids": [],

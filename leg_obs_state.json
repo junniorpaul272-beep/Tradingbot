@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.35402|1.34750",
     "opened_at": "2026-08-13T07:07:26.805695+00:00",
-    "bars_open": 0,
-    "last_processed_candle": "2026-08-13T16:55:00+00:00",
+    "bars_open": 1,
+    "last_processed_candle": "2026-08-13T17:00:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -35,12 +35,17 @@
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
-    "tier3_touched_bar": null,
+    "tier3_touched_bar": 1,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 BEARISH, was_choch=True"
+      },
+      {
+        "bar": 1,
+        "kind": "zone_touch",
+        "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
       }
     ],
     "_tl_last_break_count": 3,

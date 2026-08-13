@@ -16,7 +16,7 @@
       "CONSOLIDATION": 1
     },
     "BEARISH_FRESH": {
-      "BEARISH_FRESH": 115,
+      "BEARISH_FRESH": 116,
       "CONSOLIDATION": 1
     },
     "BULLISH_FRESH": {
@@ -13122,6 +13122,31 @@
     },
     {
       "stated_prob": 0.0167,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0083,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0083,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.9587,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": true
+    },
+    {
+      "stated_prob": 0.0083,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0165,
       "predicted_state": "CONSOLIDATION",
       "actual_happened": false
     }

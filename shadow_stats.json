@@ -13,24 +13,24 @@
   },
   "EXP2_FIB": {
     "logged": 1140,
-    "resolved": 1040,
-    "wins": 296,
+    "resolved": 1044,
+    "wins": 300,
     "losses": 744,
     "timed_out": 62,
-    "sum_r": 36.671311561647315,
-    "hit_1r": 837,
-    "hit_2r": 579,
-    "hit_3r": 415
+    "sum_r": 48.671311561647315,
+    "hit_1r": 841,
+    "hit_2r": 583,
+    "hit_3r": 419
   },
   "EXP3_POI": {
     "logged": 84,
-    "resolved": 83,
+    "resolved": 84,
     "wins": 43,
-    "losses": 40,
+    "losses": 41,
     "timed_out": 16,
-    "sum_r": 61.36164628976147,
-    "hit_1r": 10,
-    "hit_2r": 6,
+    "sum_r": 60.36164628976147,
+    "hit_1r": 11,
+    "hit_2r": 7,
     "hit_3r": 4
   },
   "EXP4_LIQUIDITY": {

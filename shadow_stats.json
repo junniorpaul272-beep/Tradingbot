@@ -1,7 +1,7 @@
 {
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
-    "logged": 138,
+    "logged": 139,
     "resolved": 108,
     "wins": 55,
     "losses": 53,
@@ -12,26 +12,26 @@
     "hit_3r": 2
   },
   "EXP2_FIB": {
-    "logged": 1338,
-    "resolved": 1235,
-    "wins": 390,
+    "logged": 1339,
+    "resolved": 1236,
+    "wins": 391,
     "losses": 845,
     "timed_out": 64,
-    "sum_r": 213.29324601240995,
-    "hit_1r": 970,
-    "hit_2r": 697,
-    "hit_3r": 521
+    "sum_r": 216.29324601240995,
+    "hit_1r": 971,
+    "hit_2r": 698,
+    "hit_3r": 522
   },
   "EXP3_POI": {
     "logged": 86,
-    "resolved": 85,
-    "wins": 44,
+    "resolved": 86,
+    "wins": 45,
     "losses": 41,
     "timed_out": 16,
-    "sum_r": 63.36164628976147,
-    "hit_1r": 12,
-    "hit_2r": 8,
-    "hit_3r": 5
+    "sum_r": 66.36164628976147,
+    "hit_1r": 13,
+    "hit_2r": 9,
+    "hit_3r": 6
   },
   "EXP4_LIQUIDITY": {
     "logged": 0,
@@ -45,12 +45,12 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 339,
-    "resolved": 207,
-    "wins": 99,
+    "logged": 340,
+    "resolved": 208,
+    "wins": 100,
     "losses": 108,
-    "timed_out": 147,
-    "sum_r": 8.908593345779225,
+    "timed_out": 148,
+    "sum_r": 9.774028701979748,
     "hit_1r": 37,
     "hit_2r": 12,
     "hit_3r": 3

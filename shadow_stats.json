@@ -12,7 +12,7 @@
     "hit_3r": 2
   },
   "EXP2_FIB": {
-    "logged": 1227,
+    "logged": 1230,
     "resolved": 1127,
     "wins": 331,
     "losses": 796,
@@ -90,11 +90,11 @@
   },
   "EXP8_CISD": {
     "logged": 22,
-    "resolved": 19,
+    "resolved": 22,
     "wins": 7,
-    "losses": 12,
+    "losses": 15,
     "timed_out": 1,
-    "sum_r": 7.27210884353737,
+    "sum_r": 4.27210884353737,
     "hit_1r": 7,
     "hit_2r": 6,
     "hit_3r": 6

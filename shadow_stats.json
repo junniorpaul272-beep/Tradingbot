@@ -46,12 +46,12 @@
   },
   "EXP5_ABLATION": {
     "logged": 339,
-    "resolved": 204,
-    "wins": 96,
+    "resolved": 205,
+    "wins": 97,
     "losses": 108,
-    "timed_out": 144,
-    "sum_r": 6.59719558967684,
-    "hit_1r": 36,
+    "timed_out": 145,
+    "sum_r": 7.548584478565719,
+    "hit_1r": 37,
     "hit_2r": 12,
     "hit_3r": 3
   },
@@ -78,7 +78,7 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 795,
+    "logged": 796,
     "resolved": 771,
     "wins": 315,
     "losses": 456,

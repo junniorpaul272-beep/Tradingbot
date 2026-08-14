@@ -22,7 +22,7 @@
       "BULLISH_FRESH": 1
     },
     "BULLISH_FRESH": {
-      "BULLISH_FRESH": 374,
+      "BULLISH_FRESH": 375,
       "BEARISH_FRESH": 1
     }
   },
@@ -17299,6 +17299,31 @@
     },
     {
       "stated_prob": 0.0027,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.9868,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true
+    },
+    {
+      "stated_prob": 0.0026,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0053,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0026,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false
+    },
+    {
+      "stated_prob": 0.0026,
       "predicted_state": "CONSOLIDATION",
       "actual_happened": false
     },

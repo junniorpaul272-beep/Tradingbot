@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BULLISH|1.35426|1.34750",
     "opened_at": "2026-08-14T12:07:19.143101+00:00",
-    "bars_open": 8,
-    "last_processed_candle": "2026-08-14T22:35:00+00:00",
+    "bars_open": 9,
+    "last_processed_candle": "2026-08-14T22:40:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -46,10 +46,15 @@
         "bar": 1,
         "kind": "zone_touch",
         "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
+      },
+      {
+        "bar": 9,
+        "kind": "break",
+        "detail": "New 15M break \u2014 count now 3"
       }
     ],
-    "_tl_last_break_count": 2,
-    "_tl_choch_active": true,
+    "_tl_last_break_count": 3,
+    "_tl_choch_active": false,
     "_tl_last_phase": "exhaustion"
   },
   "closed_ids": [],

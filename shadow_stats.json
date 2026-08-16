@@ -23,15 +23,15 @@
     "hit_3r": 527
   },
   "EXP3_POI": {
-    "logged": 87,
-    "resolved": 87,
-    "wins": 45,
-    "losses": 42,
-    "timed_out": 16,
-    "sum_r": 65.36164628976147,
-    "hit_1r": 13,
-    "hit_2r": 9,
-    "hit_3r": 6
+    "logged": 0,
+    "resolved": 0,
+    "wins": 0,
+    "losses": 0,
+    "timed_out": 0,
+    "sum_r": 0.0,
+    "hit_1r": 0,
+    "hit_2r": 0,
+    "hit_3r": 0
   },
   "EXP4_LIQUIDITY": {
     "logged": 0,
@@ -100,6 +100,17 @@
     "hit_3r": 6
   },
   "EXP4_POLICY_LAB": {
+    "logged": 0,
+    "resolved": 0,
+    "wins": 0,
+    "losses": 0,
+    "timed_out": 0,
+    "sum_r": 0.0,
+    "hit_1r": 0,
+    "hit_2r": 0,
+    "hit_3r": 0
+  },
+  "EXP3_SR": {
     "logged": 0,
     "resolved": 0,
     "wins": 0,

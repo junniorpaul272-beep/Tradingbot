@@ -1,1 +1,1 @@
-{"levels": [], "next_id": 1, "methodology_version": 1}
+{"levels": [{"id": 1, "role": "RESISTANCE", "zone_low": 1.3558630366901763, "zone_high": 1.3563969633098238, "anchor_price": 1.35613, "flip_count": 0, "last_flip_bar": null, "born_bar": 57, "state": "ACTIVE", "retested_since_flip": false}, {"id": 2, "role": "SUPPORT", "zone_low": 1.3472330366901761, "zone_high": 1.3477669633098237, "anchor_price": 1.3475, "flip_count": 0, "last_flip_bar": null, "born_bar": 57, "state": "ACTIVE", "retested_since_flip": false}], "next_id": 3, "methodology_version": 1}

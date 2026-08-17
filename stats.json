@@ -1,5 +1,5 @@
 {
-  "total_scans": 3402,
+  "total_scans": 3403,
   "consolidation_skip": 274,
   "atr_invalid": 0,
   "signals_very_low_atr": 0,
@@ -16,7 +16,7 @@
   "wins": 1,
   "losses": 3,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-08-17 07:50",
+  "last_scan": "2026-08-17 07:55",
   "last_update_id": 628997534,
   "result_logged_for_signal": "2026-07-10 14:40 UTC",
   "last_closed_trade": {
@@ -126,7 +126,7 @@
     "1-2p": 11,
     "2-3p": 134,
     "3-4p": 78,
-    "4-5p": 56,
+    "4-5p": 57,
     "5-6p": 28,
     "6-7p": 13,
     "7-8p": 3

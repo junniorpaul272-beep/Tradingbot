@@ -1,57 +1,5 @@
 {
-  "open": {
-    "id": "c8de56e54bf8",
-    "methodology_version": 3,
-    "leg_id": "BEARISH|1.35720|1.35201",
-    "opened_at": "2026-08-18T11:07:18.796255+00:00",
-    "bars_open": 23,
-    "last_processed_candle": "2026-08-18T12:50:00+00:00",
-    "fate": null,
-    "resolved_at": null,
-    "formation_state": {
-      "macro_was_choch": true,
-      "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 51.9,
-      "bos_15m_direction": "BEARISH",
-      "bos_15m_break_count": 5,
-      "bos_15m_was_choch": false,
-      "atr_pips": 2.92,
-      "atr_percentile_15m": 66.7,
-      "market_phase": "expansion",
-      "market_phase_age_bars": 0,
-      "measured_move_ratio": 0.565,
-      "measured_move_bucket": "UNDER_100",
-      "transition_cause": "CHOCH",
-      "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
-      "atr_bucket": "normal_vol",
-      "session": "london_early",
-      "bias_state": "fresh",
-      "spike_state": "normal",
-      "trend_strength_atr_mult": 6.61,
-      "volatility_state": "flat",
-      "compression_ratio": 1.82,
-      "pullback_depth_pct": 19.9
-    },
-    "tier1_touched_bar": null,
-    "tier2_touched_bar": null,
-    "tier3_touched_bar": null,
-    "timeline": [
-      {
-        "bar": 0,
-        "kind": "formed",
-        "detail": "Leg formed \u2014 BEARISH, was_choch=True"
-      },
-      {
-        "bar": 3,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 6"
-      }
-    ],
-    "_tl_last_break_count": 5,
-    "_tl_choch_active": false,
-    "_tl_last_phase": "expansion"
-  },
+  "open": null,
   "closed_ids": [],
   "methodology_version": 3
 }

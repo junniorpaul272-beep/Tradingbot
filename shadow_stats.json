@@ -12,7 +12,7 @@
     "hit_3r": 2
   },
   "EXP2_FIB": {
-    "logged": 1523,
+    "logged": 1542,
     "resolved": 1440,
     "wins": 434,
     "losses": 1006,
@@ -67,7 +67,7 @@
     "hit_3r": 0
   },
   "EXP7_TIER_ATR": {
-    "logged": 76,
+    "logged": 77,
     "resolved": 35,
     "wins": 20,
     "losses": 15,
@@ -78,7 +78,7 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 802,
+    "logged": 803,
     "resolved": 780,
     "wins": 319,
     "losses": 461,
@@ -100,7 +100,7 @@
     "hit_3r": 12
   },
   "EXP4_POLICY_LAB": {
-    "logged": 0,
+    "logged": 2,
     "resolved": 0,
     "wins": 0,
     "losses": 0,

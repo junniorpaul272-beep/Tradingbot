@@ -1,56 +1,51 @@
 {
   "open": {
-    "id": "79db76062ac6",
+    "id": "c8de56e54bf8",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.35720|1.34802",
-    "opened_at": "2026-08-18T07:02:19.312903+00:00",
-    "bars_open": 12,
-    "last_processed_candle": "2026-08-18T07:50:00+00:00",
+    "leg_id": "BEARISH|1.35720|1.35201",
+    "opened_at": "2026-08-18T11:07:18.796255+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-18T10:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
-      "macro_was_choch": false,
-      "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 91.8,
+      "macro_was_choch": true,
+      "macro_leg_direction": "BEARISH",
+      "macro_leg_length_pips": 51.9,
       "bos_15m_direction": "BEARISH",
-      "bos_15m_break_count": 3,
-      "bos_15m_was_choch": true,
-      "atr_pips": 3.8,
-      "atr_percentile_15m": 98.2,
-      "market_phase": "exhaustion",
+      "bos_15m_break_count": 5,
+      "bos_15m_was_choch": false,
+      "atr_pips": 2.92,
+      "atr_percentile_15m": 66.7,
+      "market_phase": "expansion",
       "market_phase_age_bars": 0,
-      "measured_move_ratio": null,
-      "measured_move_bucket": null,
-      "transition_cause": "EMA_EXHAUSTION",
+      "measured_move_ratio": 0.565,
+      "measured_move_bucket": "UNDER_100",
+      "transition_cause": "CHOCH",
       "campaign_extension_multiple": 1.0,
       "campaign_continuation_count": 1,
-      "atr_bucket": "high_vol",
+      "atr_bucket": "normal_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 5.55,
-      "volatility_state": "expanding",
-      "compression_ratio": 2.93,
-      "pullback_depth_pct": 18.9
+      "trend_strength_atr_mult": 6.61,
+      "volatility_state": "flat",
+      "compression_ratio": 1.82,
+      "pullback_depth_pct": 19.9
     },
     "tier1_touched_bar": null,
-    "tier2_touched_bar": 1,
+    "tier2_touched_bar": null,
     "tier3_touched_bar": null,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
-        "detail": "Leg formed \u2014 BULLISH, was_choch=False"
-      },
-      {
-        "bar": 1,
-        "kind": "zone_touch",
-        "detail": "Tier 2 zone touched (Fib pocket)"
+        "detail": "Leg formed \u2014 BEARISH, was_choch=True"
       }
     ],
-    "_tl_last_break_count": 3,
-    "_tl_choch_active": true,
-    "_tl_last_phase": "exhaustion"
+    "_tl_last_break_count": 5,
+    "_tl_choch_active": false,
+    "_tl_last_phase": "expansion"
   },
   "closed_ids": [],
   "methodology_version": 3

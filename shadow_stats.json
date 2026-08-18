@@ -13,12 +13,12 @@
   },
   "EXP2_FIB": {
     "logged": 1483,
-    "resolved": 1389,
+    "resolved": 1395,
     "wins": 424,
-    "losses": 965,
+    "losses": 971,
     "timed_out": 69,
-    "sum_r": 186.27449688973923,
-    "hit_1r": 1047,
+    "sum_r": 180.27449688973923,
+    "hit_1r": 1049,
     "hit_2r": 744,
     "hit_3r": 557
   },

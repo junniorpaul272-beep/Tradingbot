@@ -1,5 +1,52 @@
 {
-  "open": null,
+  "open": {
+    "id": "6a48f6d66566",
+    "methodology_version": 3,
+    "leg_id": "BULLISH|1.35507|1.35201",
+    "opened_at": "2026-08-18T15:07:17.738866+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-18T14:55:00+00:00",
+    "fate": null,
+    "resolved_at": null,
+    "formation_state": {
+      "macro_was_choch": false,
+      "macro_leg_direction": "BULLISH",
+      "macro_leg_length_pips": 30.6,
+      "bos_15m_direction": null,
+      "bos_15m_break_count": null,
+      "bos_15m_was_choch": null,
+      "atr_pips": 4.58,
+      "atr_percentile_15m": 91.2,
+      "market_phase": "expansion",
+      "market_phase_age_bars": 0,
+      "measured_move_ratio": 0.59,
+      "measured_move_bucket": "UNDER_100",
+      "transition_cause": "FRESH_BOS",
+      "campaign_extension_multiple": 1.0,
+      "campaign_continuation_count": 1,
+      "atr_bucket": "high_vol",
+      "session": "london_ny_overlap",
+      "bias_state": "fresh",
+      "spike_state": "normal",
+      "trend_strength_atr_mult": null,
+      "volatility_state": "expanding",
+      "compression_ratio": 3.89,
+      "pullback_depth_pct": null
+    },
+    "tier1_touched_bar": null,
+    "tier2_touched_bar": null,
+    "tier3_touched_bar": null,
+    "timeline": [
+      {
+        "bar": 0,
+        "kind": "formed",
+        "detail": "Leg formed \u2014 BULLISH, was_choch=False"
+      }
+    ],
+    "_tl_last_break_count": null,
+    "_tl_choch_active": false,
+    "_tl_last_phase": "expansion"
+  },
   "closed_ids": [],
   "methodology_version": 3
 }

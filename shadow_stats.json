@@ -2,24 +2,24 @@
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
     "logged": 146,
-    "resolved": 124,
+    "resolved": 126,
     "wins": 66,
-    "losses": 58,
-    "timed_out": 91,
-    "sum_r": 12.882278760326509,
+    "losses": 60,
+    "timed_out": 93,
+    "sum_r": 12.321902678729364,
     "hit_1r": 17,
     "hit_2r": 6,
     "hit_3r": 2
   },
   "EXP2_FIB": {
     "logged": 1560,
-    "resolved": 1457,
+    "resolved": 1477,
     "wins": 438,
-    "losses": 1019,
+    "losses": 1039,
     "timed_out": 69,
-    "sum_r": 174.27449688973923,
-    "hit_1r": 1094,
-    "hit_2r": 768,
+    "sum_r": 154.27449688973923,
+    "hit_1r": 1106,
+    "hit_2r": 771,
     "hit_3r": 575
   },
   "EXP3_POI": {
@@ -46,11 +46,11 @@
   },
   "EXP5_ABLATION": {
     "logged": 352,
-    "resolved": 231,
+    "resolved": 232,
     "wins": 112,
-    "losses": 119,
-    "timed_out": 170,
-    "sum_r": 10.782226555008751,
+    "losses": 120,
+    "timed_out": 171,
+    "sum_r": 10.444478210637886,
     "hit_1r": 38,
     "hit_2r": 12,
     "hit_3r": 3
@@ -68,23 +68,23 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 78,
-    "resolved": 35,
+    "resolved": 37,
     "wins": 20,
-    "losses": 15,
+    "losses": 17,
     "timed_out": 22,
-    "sum_r": 9.761391422298187,
-    "hit_1r": 6,
+    "sum_r": 7.761391422298187,
+    "hit_1r": 7,
     "hit_2r": 1,
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
     "logged": 805,
-    "resolved": 781,
+    "resolved": 783,
     "wins": 319,
-    "losses": 462,
+    "losses": 464,
     "timed_out": 23,
-    "sum_r": 355.0529136754019,
-    "hit_1r": 622,
+    "sum_r": 353.0529136754019,
+    "hit_1r": 623,
     "hit_2r": 550,
     "hit_3r": 498
   },
@@ -101,12 +101,12 @@
   },
   "EXP4_POLICY_LAB": {
     "logged": 2,
-    "resolved": 0,
+    "resolved": 2,
     "wins": 0,
-    "losses": 0,
+    "losses": 2,
     "timed_out": 0,
-    "sum_r": 0.0,
-    "hit_1r": 0,
+    "sum_r": -2.0,
+    "hit_1r": 2,
     "hit_2r": 0,
     "hit_3r": 0
   },
@@ -120,5 +120,6 @@
     "hit_1r": 0,
     "hit_2r": 0,
     "hit_3r": 0
-  }
+  },
+  "_persisted_at": "2026-08-19T07:02:22.060302+00:00"
 }

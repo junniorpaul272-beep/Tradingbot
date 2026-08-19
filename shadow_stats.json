@@ -1,7 +1,7 @@
 {
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
-    "logged": 150,
+    "logged": 151,
     "resolved": 127,
     "wins": 67,
     "losses": 60,
@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 356,
+    "logged": 357,
     "resolved": 233,
     "wins": 113,
     "losses": 120,
@@ -78,7 +78,7 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 809,
+    "logged": 810,
     "resolved": 787,
     "wins": 321,
     "losses": 466,
@@ -121,5 +121,5 @@
     "hit_2r": 0,
     "hit_3r": 0
   },
-  "_persisted_at": "2026-08-19T13:02:20.594791+00:00"
+  "_persisted_at": "2026-08-19T13:07:17.588609+00:00"
 }

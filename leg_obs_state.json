@@ -1,56 +1,46 @@
 {
   "open": {
-    "id": "a427a9446494",
+    "id": "022c0a4df826",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.35571|1.35237",
-    "opened_at": "2026-08-19T07:07:25.707574+00:00",
-    "bars_open": 23,
-    "last_processed_candle": "2026-08-19T08:50:00+00:00",
+    "leg_id": "BULLISH|1.35665|1.35237",
+    "opened_at": "2026-08-19T09:07:19.369374+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-19T08:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": false,
       "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 33.4,
+      "macro_leg_length_pips": 42.8,
       "bos_15m_direction": "BULLISH",
-      "bos_15m_break_count": 1,
+      "bos_15m_break_count": 2,
       "bos_15m_was_choch": false,
-      "atr_pips": 3.42,
-      "atr_percentile_15m": 86.0,
+      "atr_pips": 4.17,
+      "atr_percentile_15m": 98.2,
       "market_phase": "expansion",
-      "market_phase_age_bars": 0,
+      "market_phase_age_bars": 24,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "FRESH_BOS",
-      "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
+      "campaign_extension_multiple": 1.28,
+      "campaign_continuation_count": 25,
       "atr_bucket": "high_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 6.7,
+      "trend_strength_atr_mult": 6.18,
       "volatility_state": "expanding",
-      "compression_ratio": 4.11,
-      "pullback_depth_pct": 17.1
+      "compression_ratio": 3.14,
+      "pullback_depth_pct": 28.7
     },
     "tier1_touched_bar": null,
-    "tier2_touched_bar": 4,
+    "tier2_touched_bar": null,
     "tier3_touched_bar": null,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 BULLISH, was_choch=False"
-      },
-      {
-        "bar": 4,
-        "kind": "zone_touch",
-        "detail": "Tier 2 zone touched (Fib pocket)"
-      },
-      {
-        "bar": 12,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 2"
       }
     ],
     "_tl_last_break_count": 2,
@@ -59,5 +49,5 @@
   },
   "closed_ids": [],
   "methodology_version": 3,
-  "_persisted_at": "2026-08-19T09:02:22.500021+00:00"
+  "_persisted_at": "2026-08-19T09:07:19.427930+00:00"
 }

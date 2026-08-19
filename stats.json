@@ -1,12 +1,12 @@
 {
-  "total_scans": 3626,
+  "total_scans": 3627,
   "consolidation_skip": 322,
   "atr_invalid": 0,
   "signals_very_low_atr": 0,
   "signals_low_atr": 0,
   "regime_shift_skip": 5,
   "session_skip": 2,
-  "no_leg_owner": 743,
+  "no_leg_owner": 744,
   "tier1_signals": 0,
   "tier2_signals": 0,
   "tier3_signals": 0,
@@ -16,7 +16,7 @@
   "wins": 1,
   "losses": 3,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-08-19 08:35",
+  "last_scan": "2026-08-19 08:40",
   "last_update_id": 628997544,
   "result_logged_for_signal": "2026-07-10 14:40 UTC",
   "last_closed_trade": {
@@ -125,7 +125,7 @@
   "atr_histogram": {
     "1-2p": 11,
     "2-3p": 157,
-    "3-4p": 186,
+    "3-4p": 187,
     "4-5p": 98,
     "5-6p": 30,
     "6-7p": 13,

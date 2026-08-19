@@ -1,37 +1,37 @@
 {
   "open": {
-    "id": "3a6b8949ce29",
+    "id": "55a28a0e6584",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.36020|1.35237",
-    "opened_at": "2026-08-19T13:07:17.512594+00:00",
-    "bars_open": 11,
-    "last_processed_candle": "2026-08-19T13:50:00+00:00",
+    "leg_id": "BULLISH|1.36241|1.35096",
+    "opened_at": "2026-08-19T14:07:23.130320+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-19T13:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
-      "macro_was_choch": false,
+      "macro_was_choch": true,
       "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 78.3,
+      "macro_leg_length_pips": 114.5,
       "bos_15m_direction": "BULLISH",
       "bos_15m_break_count": 4,
       "bos_15m_was_choch": false,
-      "atr_pips": 8.14,
-      "atr_percentile_15m": 98.2,
+      "atr_pips": 7.94,
+      "atr_percentile_15m": 96.5,
       "market_phase": "exhaustion",
-      "market_phase_age_bars": 0,
-      "measured_move_ratio": null,
-      "measured_move_bucket": null,
+      "market_phase_age_bars": 12,
+      "measured_move_ratio": 1.462,
+      "measured_move_bucket": "EXT_100_150",
       "transition_cause": "EMA_EXHAUSTION",
-      "campaign_extension_multiple": 2.34,
-      "campaign_continuation_count": 73,
+      "campaign_extension_multiple": 3.01,
+      "campaign_continuation_count": 85,
       "atr_bucket": "high_vol",
       "session": "london_ny_overlap",
       "bias_state": "fresh",
-      "spike_state": "post_spike",
-      "trend_strength_atr_mult": 6.1,
+      "spike_state": "normal",
+      "trend_strength_atr_mult": 7.49,
       "volatility_state": "expanding",
-      "compression_ratio": 5.15,
-      "pullback_depth_pct": 5.2
+      "compression_ratio": 6.62,
+      "pullback_depth_pct": 3.1
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
@@ -40,7 +40,7 @@
       {
         "bar": 0,
         "kind": "formed",
-        "detail": "Leg formed \u2014 Bullish (as continuation)"
+        "detail": "Leg formed \u2014 Bullish (via CHoCH)"
       }
     ],
     "_tl_last_break_count": 4,
@@ -49,5 +49,5 @@
   },
   "closed_ids": [],
   "methodology_version": 3,
-  "_persisted_at": "2026-08-19T14:02:22.889526+00:00"
+  "_persisted_at": "2026-08-19T14:07:23.190206+00:00"
 }

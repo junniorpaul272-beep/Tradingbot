@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BULLISH|1.35665|1.35237",
     "opened_at": "2026-08-19T09:05:17.089665+00:00",
-    "bars_open": 33,
-    "last_processed_candle": "2026-08-19T11:40:00+00:00",
+    "bars_open": 34,
+    "last_processed_candle": "2026-08-19T11:45:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "expansion",
     "watch_codes": [
@@ -22,8 +22,12 @@
       "1H volatility expanding",
       "Low-ATR warning \u2014 4.2p, below the 6p floor"
     ],
-    "materialized_codes": [],
-    "materialized_at_bar": {},
+    "materialized_codes": [
+      "PULLBACK_TO_FIB_POCKET"
+    ],
+    "materialized_at_bar": {
+      "PULLBACK_TO_FIB_POCKET": 34
+    },
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
@@ -38,5 +42,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-08-19T11:50:27.248214+00:00"
+  "_persisted_at": "2026-08-19T11:55:21.715123+00:00"
 }

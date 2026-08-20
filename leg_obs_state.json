@@ -1,56 +1,46 @@
 {
   "open": {
-    "id": "fbad70133444",
+    "id": "ba8fd76de90d",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.36294|1.35237",
-    "opened_at": "2026-08-20T07:02:16.416558+00:00",
-    "bars_open": 24,
-    "last_processed_candle": "2026-08-20T08:50:00+00:00",
+    "leg_id": "BULLISH|1.36377|1.35237",
+    "opened_at": "2026-08-20T09:07:17.357621+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-20T08:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": false,
       "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 105.7,
+      "macro_leg_length_pips": 114.0,
       "bos_15m_direction": "BULLISH",
-      "bos_15m_break_count": 1,
+      "bos_15m_break_count": 2,
       "bos_15m_was_choch": true,
-      "atr_pips": 3.44,
-      "atr_percentile_15m": 42.1,
+      "atr_pips": 4.09,
+      "atr_percentile_15m": 89.5,
       "market_phase": "exhaustion",
-      "market_phase_age_bars": 0,
+      "market_phase_age_bars": 24,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "EMA_EXHAUSTION",
-      "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
-      "atr_bucket": "normal_vol",
+      "campaign_extension_multiple": 1.08,
+      "campaign_continuation_count": 25,
+      "atr_bucket": "high_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 4.22,
-      "volatility_state": "flat",
-      "compression_ratio": 3.17,
-      "pullback_depth_pct": 34.6
+      "trend_strength_atr_mult": 5.96,
+      "volatility_state": "expanding",
+      "compression_ratio": 4.41,
+      "pullback_depth_pct": 5.8
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
-    "tier3_touched_bar": 1,
+    "tier3_touched_bar": null,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bullish (as continuation)"
-      },
-      {
-        "bar": 1,
-        "kind": "zone_touch",
-        "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
-      },
-      {
-        "bar": 10,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 2"
       }
     ],
     "_tl_last_break_count": 2,
@@ -59,5 +49,5 @@
   },
   "closed_ids": [],
   "methodology_version": 3,
-  "_persisted_at": "2026-08-20T09:02:17.733644+00:00"
+  "_persisted_at": "2026-08-20T09:07:17.420310+00:00"
 }

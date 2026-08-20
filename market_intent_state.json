@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "26e8be0d1802",
+    "id": "8e2df3191af1",
     "methodology_version": 1,
-    "leg_id": "BULLISH|1.36377|1.35237",
-    "opened_at": "2026-08-20T09:05:15.966031+00:00",
-    "bars_open": 11,
-    "last_processed_candle": "2026-08-20T09:50:00+00:00",
+    "leg_id": "BULLISH|1.36471|1.35237",
+    "opened_at": "2026-08-20T10:05:19.591877+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-20T09:55:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -22,9 +22,9 @@
       "Fresh 15M BOS aligned with bias",
       "15M CHoCH confirming direction",
       "Order block already mitigated",
-      "Low-ATR warning \u2014 4.1p, below the 6p floor",
+      "Very-low-ATR warning \u2014 3.6p, below the 4p floor",
       "5 breaks into this leg \u2014 getting old",
-      "5.3 ATR from EMA_100 \u2014 extended"
+      "5.9 ATR from EMA_100 \u2014 extended"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -33,14 +33,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 4.093066837708382,
+      "atr_5m_pips": 3.5631811248583807,
       "break_count": 5,
-      "campaign_continuation_count": 25,
+      "campaign_continuation_count": 37,
       "num_watch_codes": 2,
       "num_caution_codes": 3,
-      "very_low_atr_warning": false
+      "very_low_atr_warning": true
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-08-20T10:00:25.832898+00:00"
+  "_persisted_at": "2026-08-20T10:05:22.747995+00:00"
 }

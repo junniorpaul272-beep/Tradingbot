@@ -1,26 +1,26 @@
 {
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
-    "logged": 155,
-    "resolved": 129,
-    "wins": 69,
-    "losses": 60,
-    "timed_out": 96,
-    "sum_r": 15.599747450420773,
+    "logged": 156,
+    "resolved": 135,
+    "wins": 71,
+    "losses": 64,
+    "timed_out": 102,
+    "sum_r": 15.174386093854645,
     "hit_1r": 19,
     "hit_2r": 7,
     "hit_3r": 2
   },
   "EXP2_FIB": {
-    "logged": 1718,
-    "resolved": 1632,
-    "wins": 476,
-    "losses": 1156,
-    "timed_out": 69,
-    "sum_r": 151.27449688973923,
-    "hit_1r": 1186,
-    "hit_2r": 830,
-    "hit_3r": 618
+    "logged": 1727,
+    "resolved": 1635,
+    "wins": 477,
+    "losses": 1158,
+    "timed_out": 71,
+    "sum_r": 153.2944310270346,
+    "hit_1r": 1188,
+    "hit_2r": 831,
+    "hit_3r": 619
   },
   "EXP3_POI": {
     "logged": 0,
@@ -45,12 +45,12 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 361,
-    "resolved": 235,
-    "wins": 115,
-    "losses": 120,
-    "timed_out": 174,
-    "sum_r": 13.722322982329295,
+    "logged": 364,
+    "resolved": 241,
+    "wins": 117,
+    "losses": 124,
+    "timed_out": 180,
+    "sum_r": 13.296961625763167,
     "hit_1r": 40,
     "hit_2r": 13,
     "hit_3r": 3
@@ -67,7 +67,7 @@
     "hit_3r": 0
   },
   "EXP7_TIER_ATR": {
-    "logged": 79,
+    "logged": 80,
     "resolved": 38,
     "wins": 21,
     "losses": 17,
@@ -78,23 +78,23 @@
     "hit_3r": 0
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 814,
-    "resolved": 790,
-    "wins": 321,
-    "losses": 469,
-    "timed_out": 23,
-    "sum_r": 354.0529136754019,
-    "hit_1r": 626,
-    "hit_2r": 552,
+    "logged": 815,
+    "resolved": 792,
+    "wins": 322,
+    "losses": 470,
+    "timed_out": 24,
+    "sum_r": 353.093841657371,
+    "hit_1r": 627,
+    "hit_2r": 553,
     "hit_3r": 500
   },
   "EXP8_CISD": {
     "logged": 46,
-    "resolved": 44,
-    "wins": 19,
+    "resolved": 46,
+    "wins": 21,
     "losses": 25,
-    "timed_out": 7,
-    "sum_r": 16.358595330023764,
+    "timed_out": 9,
+    "sum_r": 16.6743848037079,
     "hit_1r": 25,
     "hit_2r": 18,
     "hit_3r": 12
@@ -121,5 +121,5 @@
     "hit_2r": 0,
     "hit_3r": 0
   },
-  "_persisted_at": "2026-08-19T15:57:19.568330+00:00"
+  "_persisted_at": "2026-08-20T07:02:16.535301+00:00"
 }

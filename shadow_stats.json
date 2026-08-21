@@ -12,7 +12,7 @@
     "hit_3r": 2
   },
   "EXP2_FIB": {
-    "logged": 1900,
+    "logged": 1908,
     "resolved": 1805,
     "wins": 531,
     "losses": 1274,
@@ -111,7 +111,7 @@
     "hit_3r": 0
   },
   "EXP3_SR": {
-    "logged": 7,
+    "logged": 8,
     "resolved": 6,
     "wins": 3,
     "losses": 3,
@@ -121,5 +121,5 @@
     "hit_2r": 3,
     "hit_3r": 2
   },
-  "_persisted_at": "2026-08-21T10:32:21.125906+00:00"
+  "_persisted_at": "2026-08-21T10:37:23.077915+00:00"
 }

@@ -1,36 +1,36 @@
 {
   "open": {
-    "id": "4284cfc60c22",
+    "id": "62c58254b9a3",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.36638|1.35096",
-    "opened_at": "2026-08-21T09:07:20.968465+00:00",
-    "bars_open": 11,
-    "last_processed_candle": "2026-08-21T09:50:00+00:00",
+    "leg_id": "BULLISH|1.36752|1.35096",
+    "opened_at": "2026-08-21T10:07:21.613827+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-21T09:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
-      "macro_was_choch": true,
+      "macro_was_choch": false,
       "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 154.2,
+      "macro_leg_length_pips": 165.6,
       "bos_15m_direction": null,
       "bos_15m_break_count": null,
       "bos_15m_was_choch": null,
-      "atr_pips": 4.93,
-      "atr_percentile_15m": 98.2,
+      "atr_pips": 4.35,
+      "atr_percentile_15m": 93.0,
       "market_phase": "exhaustion",
-      "market_phase_age_bars": 25,
+      "market_phase_age_bars": 37,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "EMA_EXHAUSTION",
-      "campaign_extension_multiple": 1.04,
-      "campaign_continuation_count": 26,
+      "campaign_extension_multiple": 1.11,
+      "campaign_continuation_count": 38,
       "atr_bucket": "high_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
       "trend_strength_atr_mult": null,
       "volatility_state": "expanding",
-      "compression_ratio": 3.51,
+      "compression_ratio": 4.72,
       "pullback_depth_pct": null
     },
     "tier1_touched_bar": null,
@@ -40,7 +40,7 @@
       {
         "bar": 0,
         "kind": "formed",
-        "detail": "Leg formed \u2014 Bullish (via CHoCH)"
+        "detail": "Leg formed \u2014 Bullish (as continuation)"
       }
     ],
     "_tl_last_break_count": null,
@@ -49,5 +49,5 @@
   },
   "closed_ids": [],
   "methodology_version": 3,
-  "_persisted_at": "2026-08-21T10:02:19.171598+00:00"
+  "_persisted_at": "2026-08-21T10:07:21.674651+00:00"
 }

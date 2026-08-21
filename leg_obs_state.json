@@ -1,39 +1,39 @@
 {
   "open": {
-    "id": "e20ee003c753",
+    "id": "4284cfc60c22",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.36584|1.35096",
-    "opened_at": "2026-08-21T07:02:21.570678+00:00",
-    "bars_open": 24,
-    "last_processed_candle": "2026-08-21T08:50:00+00:00",
+    "leg_id": "BULLISH|1.36638|1.35096",
+    "opened_at": "2026-08-21T09:07:20.968465+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-21T08:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": true,
       "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 148.8,
-      "bos_15m_direction": "BULLISH",
-      "bos_15m_break_count": 5,
-      "bos_15m_was_choch": false,
-      "atr_pips": 3.81,
+      "macro_leg_length_pips": 154.2,
+      "bos_15m_direction": null,
+      "bos_15m_break_count": null,
+      "bos_15m_was_choch": null,
+      "atr_pips": 4.93,
       "atr_percentile_15m": 98.2,
       "market_phase": "exhaustion",
-      "market_phase_age_bars": 0,
+      "market_phase_age_bars": 25,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "EMA_EXHAUSTION",
-      "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
+      "campaign_extension_multiple": 1.04,
+      "campaign_continuation_count": 26,
       "atr_bucket": "high_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 5.23,
+      "trend_strength_atr_mult": null,
       "volatility_state": "expanding",
-      "compression_ratio": 2.44,
-      "pullback_depth_pct": 32.4
+      "compression_ratio": 3.51,
+      "pullback_depth_pct": null
     },
-    "tier1_touched_bar": 19,
+    "tier1_touched_bar": null,
     "tier2_touched_bar": null,
     "tier3_touched_bar": null,
     "timeline": [
@@ -41,23 +41,13 @@
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bullish (via CHoCH)"
-      },
-      {
-        "bar": 1,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 6"
-      },
-      {
-        "bar": 19,
-        "kind": "zone_touch",
-        "detail": "Tier 1 zone touched (Order Block)"
       }
     ],
-    "_tl_last_break_count": 1,
+    "_tl_last_break_count": null,
     "_tl_choch_active": false,
     "_tl_last_phase": "exhaustion"
   },
   "closed_ids": [],
   "methodology_version": 3,
-  "_persisted_at": "2026-08-21T09:02:21.947934+00:00"
+  "_persisted_at": "2026-08-21T09:07:21.029918+00:00"
 }

@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BULLISH|1.36752|1.35096",
     "opened_at": "2026-08-21T10:05:19.192569+00:00",
-    "bars_open": 30,
-    "last_processed_candle": "2026-08-21T12:25:00+00:00",
+    "bars_open": 31,
+    "last_processed_candle": "2026-08-21T12:30:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -40,5 +40,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-08-21T12:35:18.897699+00:00"
+  "_persisted_at": "2026-08-21T12:40:21.795966+00:00"
 }

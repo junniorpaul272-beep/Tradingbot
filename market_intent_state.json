@@ -1,30 +1,27 @@
 {
   "open": {
-    "id": "8ced97b3fa49",
+    "id": "a89666f54a0c",
     "methodology_version": 1,
-    "leg_id": "BULLISH|1.36584|1.35237",
-    "opened_at": "2026-08-20T11:05:19.081306+00:00",
-    "bars_open": 58,
-    "last_processed_candle": "2026-08-20T15:45:00+00:00",
+    "leg_id": "BULLISH|1.36584|1.35096",
+    "opened_at": "2026-08-21T07:00:18.434313+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-21T06:50:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "exhaustion",
     "watch_codes": [
       "PULLBACK_TO_FIB_POCKET",
-      "SWEEP_AND_RECLAIM"
+      "SWEEP_AND_RECLAIM",
+      "FIVE_M_ALIGNMENT"
     ],
     "caution_codes": [
-      "AGING_CAMPAIGN",
-      "UNSWEPT_CHOCH",
       "ATR_INCOMPATIBLE"
     ],
     "reasons": [
       "HTF bias: BULLISH",
       "Fresh 15M BOS aligned with bias",
-      "15M CHoCH confirming direction",
-      "Order block already mitigated",
-      "Low-ATR warning \u2014 4.2p, below the 6p floor",
-      "5 breaks into this leg \u2014 getting old",
-      "5.4 ATR from EMA_100 \u2014 extended"
+      "Very-low-ATR warning \u2014 3.8p, below the 4p floor",
+      "7 breaks into this leg \u2014 getting old",
+      "6.3 ATR from EMA_100 \u2014 extended"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -33,14 +30,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 4.206121771335046,
-      "break_count": 5,
-      "campaign_continuation_count": 49,
-      "num_watch_codes": 2,
-      "num_caution_codes": 3,
-      "very_low_atr_warning": false
+      "atr_5m_pips": 3.8057472596927644,
+      "break_count": 7,
+      "campaign_continuation_count": 1,
+      "num_watch_codes": 3,
+      "num_caution_codes": 1,
+      "very_low_atr_warning": true
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-08-20T15:55:23.075774+00:00"
+  "_persisted_at": "2026-08-21T07:00:24.152017+00:00"
 }

@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BULLISH|1.36584|1.35096",
     "opened_at": "2026-08-21T07:00:18.434313+00:00",
-    "bars_open": 1,
-    "last_processed_candle": "2026-08-21T06:55:00+00:00",
+    "bars_open": 2,
+    "last_processed_candle": "2026-08-21T07:00:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -23,8 +23,12 @@
       "7 breaks into this leg \u2014 getting old",
       "6.3 ATR from EMA_100 \u2014 extended"
     ],
-    "materialized_codes": [],
-    "materialized_at_bar": {},
+    "materialized_codes": [
+      "FIVE_M_ALIGNMENT"
+    ],
+    "materialized_at_bar": {
+      "FIVE_M_ALIGNMENT": 2
+    },
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
@@ -39,5 +43,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-08-21T07:05:19.576749+00:00"
+  "_persisted_at": "2026-08-21T07:10:22.534505+00:00"
 }

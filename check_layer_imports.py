@@ -24,9 +24,15 @@ import sys
 from pathlib import Path
 
 # Lower layer -> set of modules it is FORBIDDEN to import (higher layers).
+# system_ledger.py added 2026-08-23, per chat — sits at the same layer as
+# scanner_observation.py (a leaf that only imports scanner_common), so it
+# gets the same forbidden set. min_scanner.py importing it is expected
+# and fine (min_scanner's own forbidden set already only excludes
+# scanner_live, unchanged).
 FORBIDDEN = {
-    "scanner_common":      {"scanner_observation", "scanner_live", "min_scanner"},
+    "scanner_common":      {"scanner_observation", "scanner_live", "min_scanner", "system_ledger"},
     "scanner_observation": {"scanner_live", "min_scanner"},
+    "system_ledger":       {"scanner_live", "min_scanner", "scanner_observation"},
     "min_scanner":         {"scanner_live"},
     # scanner_live.py is the top of the stack — nothing is forbidden to it.
 }

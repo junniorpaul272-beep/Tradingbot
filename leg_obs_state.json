@@ -1,37 +1,37 @@
 {
   "open": {
-    "id": "1b8598607fa8",
+    "id": "952df44bc0fa",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.36752|1.35468",
-    "opened_at": "2026-08-24T07:02:18.428751+00:00",
-    "bars_open": 12,
-    "last_processed_candle": "2026-08-24T07:50:00+00:00",
+    "leg_id": "BULLISH|1.36752|1.35880",
+    "opened_at": "2026-08-24T08:07:19.402199+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-24T07:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": false,
       "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 128.4,
+      "macro_leg_length_pips": 87.2,
       "bos_15m_direction": "BEARISH",
-      "bos_15m_break_count": 1,
+      "bos_15m_break_count": 2,
       "bos_15m_was_choch": true,
-      "atr_pips": 2.97,
-      "atr_percentile_15m": 24.6,
+      "atr_pips": 4.34,
+      "atr_percentile_15m": 63.2,
       "market_phase": "exhaustion",
-      "market_phase_age_bars": 0,
-      "measured_move_ratio": null,
-      "measured_move_bucket": null,
+      "market_phase_age_bars": 13,
+      "measured_move_ratio": 0.679,
+      "measured_move_bucket": "UNDER_100",
       "transition_cause": "EMA_EXHAUSTION",
       "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
-      "atr_bucket": "low_vol",
+      "campaign_continuation_count": 14,
+      "atr_bucket": "normal_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 4.19,
-      "volatility_state": "flat",
-      "compression_ratio": 2.26,
-      "pullback_depth_pct": 15.8
+      "trend_strength_atr_mult": 3.85,
+      "volatility_state": "expanding",
+      "compression_ratio": 2.78,
+      "pullback_depth_pct": 15.7
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
@@ -41,11 +41,6 @@
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bullish (as continuation)"
-      },
-      {
-        "bar": 10,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 2"
       }
     ],
     "_tl_last_break_count": 2,
@@ -54,5 +49,5 @@
   },
   "closed_ids": [],
   "methodology_version": 3,
-  "_persisted_at": "2026-08-24T08:02:19.309317+00:00"
+  "_persisted_at": "2026-08-24T08:07:19.523625+00:00"
 }

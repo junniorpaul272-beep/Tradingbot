@@ -1,0 +1,55 @@
+# ONE-OFF — workflow_dispatch only, deliberately NOT on a schedule.
+# Run this manually, once, from the Actions tab after backfill_system_
+# ledger.py is committed. It should not exist as a recurring workflow —
+# delete this file (or leave it, since workflow_dispatch never fires on
+# its own) once the backfill has actually been run successfully.
+#
+# FIXED 2026-08-23, per chat: the first version of this file was missing
+# its `env:` block entirely — scanner_common.py hard-requires TELEGRAM_
+# TOKEN/TELEGRAM_CHAT_ID as env vars at IMPORT time (see scanner_common.
+# py's own top-level os.environ[...] lines), and backfill_system_ledger.
+# py imports scanner_common transitively (via system_ledger.py). Without
+# the secrets wired in, the import itself throws KeyError before a
+# single line of the backfill logic runs — exactly the failure seen in
+# the Actions log (KeyError: 'TELEGRAM_TOKEN' at scanner_common.py line
+# 81, inside the "Run backfill" step). Confirmed against the real
+# min-scan.yml/live-scan.yml: TELEGRAM_TOKEN + TELEGRAM_CHAT_ID only —
+# no TWELVE_DATA_KEY, matching min-scan.yml's own convention (this
+# backfill never touches candles either, same reasoning). Also switched
+# to `pip install -r requirements.txt` to match the real workflows
+# exactly, instead of the inline package list the first version guessed.
+
+name: One-off — Backfill System Ledger
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backfill (read-only against source logs, writes ONLY daily_ledger.jsonl — never touches shadow_trade_log.jsonl, bank_transactions.jsonl, leg_obs_log.jsonl, or failure_case_log.jsonl)
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python backfill_system_ledger.py
+
+      - name: Commit new ledger file back to repo
+        run: |
+          git config user.name "ledger-backfill-bot"
+          git config user.email "actions@github.com"
+          git add daily_ledger.jsonl
+          git diff --cached --quiet && echo "Nothing to commit" || \
+            git commit -m "One-off: backfill daily_ledger.jsonl from existing history"
+          git push

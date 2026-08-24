@@ -7,7 +7,7 @@
       "BULLISH_FRESH": 3
     },
     "CONSOLIDATION": {
-      "CONSOLIDATION": 120,
+      "CONSOLIDATION": 121,
       "BEARISH_STALE": 1,
       "BULLISH_STALE": 2,
       "BEARISH_FRESH": 2
@@ -35709,6 +35709,36 @@
     },
     {
       "stated_prob": 0.9302,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": true,
+      "from_state": "CONSOLIDATION"
+    },
+    {
+      "stated_prob": 0.0077,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "CONSOLIDATION"
+    },
+    {
+      "stated_prob": 0.0231,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "CONSOLIDATION"
+    },
+    {
+      "stated_prob": 0.0231,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "CONSOLIDATION"
+    },
+    {
+      "stated_prob": 0.0154,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "CONSOLIDATION"
+    },
+    {
+      "stated_prob": 0.9308,
       "predicted_state": "CONSOLIDATION",
       "actual_happened": true,
       "from_state": "CONSOLIDATION"

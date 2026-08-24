@@ -68,11 +68,11 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 85,
-    "resolved": 43,
-    "wins": 23,
+    "resolved": 44,
+    "wins": 24,
     "losses": 20,
-    "timed_out": 28,
-    "sum_r": 9.33562609179723,
+    "timed_out": 29,
+    "sum_r": 9.759735156358008,
     "hit_1r": 8,
     "hit_2r": 2,
     "hit_3r": 0
@@ -121,5 +121,5 @@
     "hit_2r": 3,
     "hit_3r": 2
   },
-  "_persisted_at": "2026-08-24T13:12:17.814441+00:00"
+  "_persisted_at": "2026-08-24T13:17:29.404605+00:00"
 }

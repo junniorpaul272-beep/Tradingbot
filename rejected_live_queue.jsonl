@@ -1,0 +1,1 @@
+{"queued_at": "2026-08-24T11:15:17.194041+00:00", "leg_id": "BUY|1.36752|1.35880|TIER_2_FIB", "side": "BUY", "entry": 1.36283, "sl_raw": 1.36163104, "atr_pips": 3.0854203582634954, "note": "Live risk gate suppressed this trade \u2014 12.0p > 9.3p ATR cap (3.0x)", "tags": {"_blocked_by_risk_gate_width": true, "tier_label": "TIER_2_FIB", "risk_pips": 12.0, "atr_ratio": 3.89}}

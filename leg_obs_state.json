@@ -1,58 +1,53 @@
 {
   "open": {
-    "id": "d5f5b898fa53",
+    "id": "191cef0754d4",
     "methodology_version": 3,
-    "leg_id": "BEARISH|1.36553|1.36179",
-    "opened_at": "2026-08-26T11:07:24.886678+00:00",
-    "bars_open": 23,
-    "last_processed_candle": "2026-08-26T12:50:00+00:00",
+    "leg_id": "BEARISH|1.36553|1.36078",
+    "opened_at": "2026-08-26T13:12:24.588982+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-26T13:00:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": true,
       "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 37.4,
+      "macro_leg_length_pips": 47.5,
       "bos_15m_direction": "BEARISH",
-      "bos_15m_break_count": 4,
+      "bos_15m_break_count": 5,
       "bos_15m_was_choch": false,
-      "atr_pips": 2.37,
-      "atr_percentile_15m": 73.7,
+      "atr_pips": 4.6,
+      "atr_percentile_15m": 98.2,
       "market_phase": "expansion",
-      "market_phase_age_bars": 0,
+      "market_phase_age_bars": 24,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "CHOCH",
-      "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
-      "atr_bucket": "normal_vol",
-      "session": "london_early",
+      "campaign_extension_multiple": 1.27,
+      "campaign_continuation_count": 25,
+      "atr_bucket": "high_vol",
+      "session": "london_ny_overlap",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 7.36,
-      "volatility_state": "flat",
-      "compression_ratio": 3.94,
-      "pullback_depth_pct": 4.8
+      "trend_strength_atr_mult": 5.87,
+      "volatility_state": "expanding",
+      "compression_ratio": 4.11,
+      "pullback_depth_pct": 8.6
     },
     "tier1_touched_bar": null,
-    "tier2_touched_bar": 16,
+    "tier2_touched_bar": null,
     "tier3_touched_bar": null,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bearish (via CHoCH)"
-      },
-      {
-        "bar": 16,
-        "kind": "zone_touch",
-        "detail": "Tier 2 zone touched (Fib pocket)"
       }
     ],
-    "_tl_last_break_count": 4,
+    "_tl_last_break_count": 5,
     "_tl_choch_active": false,
     "_tl_last_phase": "expansion"
   },
   "closed_ids": [],
   "methodology_version": 3,
-  "_persisted_at": "2026-08-26T13:07:22.410343+00:00"
+  "_persisted_at": "2026-08-26T13:12:24.691688+00:00"
 }

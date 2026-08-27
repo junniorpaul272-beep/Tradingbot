@@ -112,14 +112,14 @@
   },
   "EXP3_SR": {
     "logged": 11,
-    "resolved": 10,
+    "resolved": 11,
     "wins": 3,
-    "losses": 7,
+    "losses": 8,
     "timed_out": 1,
-    "sum_r": 0.3683277368724287,
-    "hit_1r": 4,
+    "sum_r": -0.6316722631275713,
+    "hit_1r": 5,
     "hit_2r": 3,
     "hit_3r": 2
   },
-  "_persisted_at": "2026-08-27T14:22:20.671947+00:00"
+  "_persisted_at": "2026-08-27T14:27:18.906199+00:00"
 }

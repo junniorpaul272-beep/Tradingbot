@@ -1,0 +1,1 @@
+{"pair": "GBP/USD", "direction": "SELL", "entry_price": 1.35808, "exit_price": 1.3554999999999997, "sl": 1.35894, "tp": 1.3554999999999997, "opened_at": "2026-08-28T13:15:19.776328+00:00", "closed_at": "2026-08-28T14:15:17.944124+00:00", "outcome": "WIN", "r_achieved": 3.0, "target_r": 3.0, "tier_label": "TIER_1_POI", "score": 70, "tier_rating": "B", "close_method": "auto"}

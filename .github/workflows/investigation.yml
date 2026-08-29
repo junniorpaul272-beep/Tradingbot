@@ -1,0 +1,93 @@
+name: GBPUSD SMC Scanner — Trade Investigation
+
+# MANUAL ONLY — unlike live-scan.yml/min-scan.yml, this is not triggered
+# by cron-job.org. It's a point-in-time investigation over already-
+# committed history (shadow_trade_log.jsonl, leg_obs_log.jsonl,
+# live_trade_log.jsonl), not a recurring scan — run it from the Actions
+# tab whenever you actually want a fresh reconstruction, not every 5
+# minutes. Read-only: nothing here writes back to the repo (see "Upload
+# results" below — output goes to a downloadable artifact, not a commit,
+# since this is a research snapshot, not persisted scanner state).
+#
+# PREREQUISITE: investigation_lib.py, shadow_investigation.py, and
+# live_investigation.py must be committed to the repo root (same place
+# as scanner_live.py/min_scanner.py) — this workflow does not vendor
+# them in, it runs whatever's checked out. All three are pure stdlib
+# (json/csv/argparse/datetime/collections) — no requirements.txt
+# install, no TWELVE_DATA_KEY/TELEGRAM secrets needed, since they only
+# read already-committed local files, never call an API.
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: 'Shadow experiment to investigate (e.g. EXP2_FIB), or "all" for every experiment'
+        required: false
+        default: 'all'
+      run_live:
+        description: 'Also run the live-trade investigation'
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: gbpusd-scanner-investigation
+  cancel-in-progress: false
+
+jobs:
+  investigate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          # No cache/requirements install — these scripts are pure
+          # stdlib, deliberately, so this job has nothing to install.
+
+      - name: Confirm the source files this investigation reads exist
+        # Fails loudly and early rather than letting the scripts run
+        # against an empty/missing log and silently report "0 trades" —
+        # that's a much easier thing to miss than a clear error here.
+        run: |
+          missing=0
+          for f in shadow_trade_log.jsonl leg_obs_log.jsonl live_trade_log.jsonl; do
+            if [ ! -f "$f" ]; then
+              echo "::warning::$f not found in repo root — related investigation will report 0 trades, not fail."
+              missing=1
+            fi
+          done
+          exit 0
+
+      - name: Run shadow experiment investigation
+        run: |
+          if [ "${{ github.event.inputs.experiment }}" = "all" ] || [ -z "${{ github.event.inputs.experiment }}" ]; then
+            python3 shadow_investigation.py --all
+          else
+            python3 shadow_investigation.py --experiment "${{ github.event.inputs.experiment }}"
+          fi
+
+      - name: Run live trade investigation
+        if: ${{ github.event.inputs.run_live != 'false' }}
+        run: python3 live_investigation.py
+
+      - name: Upload results
+        # Artifact, not a commit — this is a point-in-time research
+        # snapshot over history that's already permanently on main, not
+        # new scanner state that needs to persist forward. Nothing this
+        # job produces should go through the same git add -f / commit
+        # path live-scan.yml and min-scan.yml use for owned files.
+        uses: actions/upload-artifact@v4
+        with:
+          name: trade-investigation-${{ github.run_number }}
+          path: |
+            shadow_investigation_report.md
+            shadow_investigation_per_trade.csv
+            live_investigation_report.md
+            live_investigation_per_trade.csv
+          if-no-files-found: warn
+          retention-days: 90

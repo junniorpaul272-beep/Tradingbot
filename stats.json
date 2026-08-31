@@ -1,5 +1,5 @@
 {
-  "total_scans": 4564,
+  "total_scans": 4565,
   "consolidation_skip": 404,
   "atr_invalid": 0,
   "signals_very_low_atr": 1,
@@ -16,7 +16,7 @@
   "wins": 2,
   "losses": 3,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-08-31 15:35",
+  "last_scan": "2026-08-31 15:40",
   "last_update_id": 628997586,
   "result_logged_for_signal": null,
   "last_closed_trade": {
@@ -152,7 +152,7 @@
     "9-10p": 7,
     "10p+": 7
   },
-  "pending_confirmation": {
+  "active_trade": {
     "direction": "BUY",
     "entry": 1.35507,
     "sl": 1.3533393720222862,
@@ -162,18 +162,13 @@
     "tier_label": "TIER_1_POI",
     "opened_at": "2026-08-31T15:35:16.863355+00:00",
     "opened_at_display": "2026-08-31 15:35 UTC",
-    "last_update_sent_at": null,
-    "last_checked_candle": "2026-08-31T15:25:00+00:00",
+    "last_update_sent_at": "2026-08-31T15:40:23.192079+00:00",
+    "last_checked_candle": "2026-08-31T15:30:00+00:00",
     "band_label": null,
     "target_r": 3.0,
     "size_mult": 1.0,
     "partial_r": null,
     "breakeven_r": null,
-    "risk_band": "HIGH",
-    "risk_reasons": [
-      "no CHoCH \u2014 continuation OB, not a flip-driven reaction"
-    ],
-    "risk_recommendation": "Standard structural stop still applies, but the reasons above describe real invalidation risk \u2014 consider whether your own risk tolerance wants extra room or a smaller size.",
-    "awaiting_confirmation_since": "2026-08-31T15:35:16.863355+00:00"
+    "risk_recommendation": "Standard structural stop still applies, but the reasons above describe real invalidation risk \u2014 consider whether your own risk tolerance wants extra room or a smaller size."
   }
 }

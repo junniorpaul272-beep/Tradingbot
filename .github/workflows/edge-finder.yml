@@ -1,0 +1,122 @@
+name: GBPUSD SMC Scanner — Edge Finder (manual)
+
+# MANUAL ONLY, and deliberately NOT on the 5-minute cron loop this
+# scanner otherwise runs on. Per chat (Vally): "I definitely would not
+# run deep edge discovery after every trade... 7 days passing does not
+# create new evidence, new resolved observations do." edge_finder.py
+# itself refuses to run a full cycle if too few new trades have
+# accumulated since the last one (see --force below to override) — this
+# workflow does not second-guess that gate, it just exposes it as an
+# input.
+#
+# COEXISTS WITH edge-research.yml (2026-08-30, per chat — Vally's
+# "same engine, different trigger" recommendation), does not duplicate
+# it: THIS workflow is for a deliberate, single-scope, on-demand
+# question ("show me EXP2_FIB specifically, right now"). edge-research.
+# yml is the scheduled, per-experiment-eligibility-aware automated
+# counterpart (--auto mode) that wakes up periodically and decides FOR
+# ITSELF whether anything is worth running. Use this one when you know
+# exactly what you want to look at; let the other one run in the
+# background for everything else.
+#
+# PREREQUISITE: edge_finder.py and edge_finder_lib.py must be committed
+# to the repo root, alongside investigation_lib.py (edge_finder_lib.py
+# imports from it — load_jsonl/_r_stats/CONDITION_DIMENSIONS/etc). All
+# three are pure stdlib, same as the shadow/live investigation scripts —
+# no requirements.txt install, no secrets, since this only reads
+# already-committed local files.
+#
+# edge_finder_log.jsonl is the Edge Finder's OWN persisted research
+# history (one entry per cycle) — it is NOT currently in live-scan.yml/
+# min-scan.yml's commit lists, because this workflow itself commits it
+# back (see the commit step below), the same "one owner, one committer"
+# discipline the rest of this project's persisted files follow. Do NOT
+# also add it to the other two workflows' commit lists without removing
+# it here first — that would make it a second, uncoordinated writer of
+# the same file, exactly the class of bug the market_event_pending.jsonl
+# fix earlier this project existed to prevent.
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: 'Restrict to one experiment (blank = pooled across all)'
+        required: false
+        default: ''
+      force:
+        description: 'Run even if the sample-based trigger says not enough new data'
+        required: false
+        default: false
+        type: boolean
+      min_new_trades:
+        description: 'How many new resolved trades must exist since the last cycle to run normally'
+        required: false
+        default: '25'
+
+concurrency:
+  group: gbpusd-scanner-edge-finder
+  cancel-in-progress: false
+
+jobs:
+  edge_finder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Confirm the source file exists
+        run: |
+          if [ ! -f "shadow_trade_log.jsonl" ]; then
+            echo "::warning::shadow_trade_log.jsonl not found in repo root — nothing to analyze."
+          fi
+
+      - name: Run Edge Finder
+        id: run
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.experiment }}" ]; then
+            ARGS="$ARGS --experiment ${{ github.event.inputs.experiment }}"
+          fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          ARGS="$ARGS --min-new-trades ${{ github.event.inputs.min_new_trades }}"
+          python3 edge_finder.py $ARGS
+
+      - name: Commit edge_finder_log.jsonl if it changed
+        # Only this workflow ever writes this file (see the header note
+        # above) — safe to commit unconditionally here, same pattern
+        # live-scan.yml/min-scan.yml use for their own owned files, just
+        # scoped to a single file since this is the only thing this job
+        # produces that needs to persist forward.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- edge_finder_log.jsonl 2>/dev/null; then
+            git add -f edge_finder_log.jsonl
+            git commit -m "Edge Finder research cycle $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git pull --rebase
+            git push
+          else
+            echo "No change to edge_finder_log.jsonl (cycle was skipped or produced nothing new) — nothing to commit."
+          fi
+
+      - name: Upload report
+        # The markdown report is a point-in-time artifact, not owned
+        # state — same reasoning as investigation.yml's report/CSV
+        # outputs. edge_finder_log.jsonl (the actual research history)
+        # is committed above instead, since future cycles need to read
+        # it back.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-finder-report-${{ github.run_number }}
+          path: edge_finder_report.md
+          if-no-files-found: warn
+          retention-days: 90

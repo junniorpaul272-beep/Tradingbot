@@ -1,0 +1,130 @@
+name: GBPUSD SMC Scanner — Edge Research (automated)
+
+# SCHEDULED, not manual-only — this is the automated counterpart to
+# edge-finder.yml (which stays as-is for deliberate, single-scope,
+# on-demand runs — see that file's own header). Per chat (Vally):
+# "I wouldn't put the actual Edge Finder analysis inside either the
+# 2-minute or 5-minute scan loop... Research and live observation
+# operate on fundamentally different clocks. The scanners ask What's
+# happening now? The Edge Finder asks What have we learned over enough
+# history? Those shouldn't be tied to the same heartbeat."
+#
+# So this wakes up on its OWN schedule (every 30 minutes — cheap to
+# check, not cheap to skip entirely) and does a CHEAP eligibility check
+# per experiment before doing any real analysis. Per chat: "Its job is
+# not necessarily to always run research — just check whether research
+# is due." Most wake-ups should do nothing at all — that's expected
+# and correct, not a sign anything's broken.
+#
+# PREREQUISITE: edge_finder.py, edge_finder_lib.py, investigation_lib.py
+# committed to repo root (edge_finder_lib.py imports from investigation_
+# lib.py). Needs `requests` installed (see below) — the ONE dependency
+# beyond pure stdlib these scripts otherwise avoid, needed specifically
+# for send_telegram_message() in edge_finder.py. TELEGRAM_TOKEN/
+# TELEGRAM_CHAT_ID reuse the SAME secrets live-scan.yml already has —
+# no new secret setup needed.
+on:
+  schedule:
+    # Every 30 minutes. GitHub's scheduler is best-effort (can run late
+    # under load) — that's fine here specifically, since the actual
+    # trigger is "N new resolved trades," not wall-clock time; a late
+    # wake-up just means the eligibility check happens a bit later, not
+    # that evidence was missed.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      experiments:
+        description: 'Comma-separated experiment list (blank = all known experiments)'
+        required: false
+        default: ''
+      force:
+        description: 'Force a run on every listed experiment regardless of eligibility'
+        required: false
+        default: false
+        type: boolean
+      telegram:
+        description: 'Send a Telegram summary if anything runs'
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: gbpusd-scanner-edge-research
+  cancel-in-progress: false
+
+jobs:
+  edge_research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install requests
+        # The one real dependency in this whole family of investigation
+        # scripts — needed only for Telegram. shadow_investigation.py/
+        # live_investigation.py/edge_finder.py's non-Telegram paths stay
+        # pure stdlib; this workflow specifically wants --telegram.
+        run: pip install --quiet requests
+
+      - name: Confirm source file exists
+        run: |
+          if [ ! -f "shadow_trade_log.jsonl" ]; then
+            echo "::warning::shadow_trade_log.jsonl not found — every experiment will show 0 trades, nothing will be eligible."
+          fi
+
+      - name: Run Edge Finder (auto mode)
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          ARGS="--auto"
+          if [ -n "${{ github.event.inputs.experiments }}" ]; then
+            ARGS="$ARGS --experiments ${{ github.event.inputs.experiments }}"
+          fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] || [ "${{ github.event.inputs.telegram }}" != "false" ]; then
+            ARGS="$ARGS --telegram"
+          fi
+          python3 edge_finder.py $ARGS
+
+      - name: Commit edge_finder_log.jsonl and candidate_registry.json if changed
+        # Same "one owner, one committer" discipline as edge-finder.yml's
+        # own commit step — this workflow is the only writer of both
+        # files. Do NOT also add these to live-scan.yml/min-scan.yml.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          CHANGED=0
+          if ! git diff --quiet -- edge_finder_log.jsonl 2>/dev/null; then
+            git add -f edge_finder_log.jsonl
+            CHANGED=1
+          fi
+          if ! git diff --quiet -- candidate_registry.json 2>/dev/null; then
+            git add -f candidate_registry.json
+            CHANGED=1
+          fi
+          if [ "$CHANGED" = "1" ]; then
+            git commit -m "Edge Research cycle $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git pull --rebase
+            git push
+          else
+            echo "No eligible experiment ran this wake-up (or none produced a change) — nothing to commit."
+          fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-research-${{ github.run_number }}
+          path: edge_finder_report.md
+          if-no-files-found: ignore
+          retention-days: 90

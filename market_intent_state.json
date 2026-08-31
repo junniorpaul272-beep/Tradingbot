@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BULLISH|1.35558|1.34902",
     "opened_at": "2026-08-31T09:05:16.695327+00:00",
-    "bars_open": 70,
-    "last_processed_candle": "2026-08-31T14:45:00+00:00",
+    "bars_open": 71,
+    "last_processed_candle": "2026-08-31T14:50:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "expansion",
     "watch_codes": [
@@ -19,8 +19,12 @@
       "HTF bias: BULLISH",
       "Very-low-ATR warning \u2014 3.2p, below the 4p floor"
     ],
-    "materialized_codes": [],
-    "materialized_at_bar": {},
+    "materialized_codes": [
+      "FIVE_M_ALIGNMENT"
+    ],
+    "materialized_at_bar": {
+      "FIVE_M_ALIGNMENT": 71
+    },
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
@@ -35,5 +39,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-08-31T14:55:26.696086+00:00"
+  "_persisted_at": "2026-08-31T15:00:30.654887+00:00"
 }

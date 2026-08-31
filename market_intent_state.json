@@ -1,43 +1,38 @@
 {
   "open": {
-    "id": "821f723aa995",
+    "id": "576679356dcd",
     "methodology_version": 1,
-    "leg_id": "BULLISH|1.35558|1.34902",
-    "opened_at": "2026-08-31T09:05:16.695327+00:00",
-    "bars_open": 71,
-    "last_processed_candle": "2026-08-31T14:50:00+00:00",
+    "leg_id": "BULLISH|1.35652|1.34902",
+    "opened_at": "2026-08-31T15:05:18.691612+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-08-31T14:55:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "expansion",
     "watch_codes": [
-      "PULLBACK_TO_FIB_POCKET",
-      "FIVE_M_ALIGNMENT"
+      "PULLBACK_TO_OB",
+      "PULLBACK_TO_FIB_POCKET"
     ],
-    "caution_codes": [
-      "ATR_INCOMPATIBLE"
-    ],
+    "caution_codes": [],
     "reasons": [
       "HTF bias: BULLISH",
-      "Very-low-ATR warning \u2014 3.2p, below the 4p floor"
+      "Fresh 15M BOS aligned with bias",
+      "Order block confirmed, unmitigated"
     ],
-    "materialized_codes": [
-      "FIVE_M_ALIGNMENT"
-    ],
-    "materialized_at_bar": {
-      "FIVE_M_ALIGNMENT": 71
-    },
+    "materialized_codes": [],
+    "materialized_at_bar": {},
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
     "tags": {
       "phase": "expansion",
-      "atr_5m_pips": 3.168166790452582,
+      "atr_5m_pips": 7.775824869881486,
       "break_count": 1,
-      "campaign_continuation_count": 1,
+      "campaign_continuation_count": 73,
       "num_watch_codes": 2,
-      "num_caution_codes": 1,
-      "very_low_atr_warning": true
+      "num_caution_codes": 0,
+      "very_low_atr_warning": false
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-08-31T15:00:30.654887+00:00"
+  "_persisted_at": "2026-08-31T15:05:21.491770+00:00"
 }

@@ -67,7 +67,7 @@
     "hit_3r": 0
   },
   "EXP7_TIER_ATR": {
-    "logged": 92,
+    "logged": 93,
     "resolved": 51,
     "wins": 26,
     "losses": 25,
@@ -100,7 +100,7 @@
     "hit_3r": 15
   },
   "EXP4_POLICY_LAB": {
-    "logged": 4,
+    "logged": 6,
     "resolved": 4,
     "wins": 2,
     "losses": 2,
@@ -121,5 +121,5 @@
     "hit_2r": 3,
     "hit_3r": 2
   },
-  "_persisted_at": "2026-08-31T15:32:19.752448+00:00"
+  "_persisted_at": "2026-08-31T15:37:18.093377+00:00"
 }

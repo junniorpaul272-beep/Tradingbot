@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BULLISH|1.35652|1.34902",
     "opened_at": "2026-08-31T15:05:18.691612+00:00",
-    "bars_open": 110,
-    "last_processed_candle": "2026-09-01T08:05:00+00:00",
+    "bars_open": 111,
+    "last_processed_candle": "2026-09-01T08:10:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "expansion",
     "watch_codes": [
@@ -19,10 +19,12 @@
       "Order block confirmed, unmitigated"
     ],
     "materialized_codes": [
-      "PULLBACK_TO_OB"
+      "PULLBACK_TO_OB",
+      "PULLBACK_TO_FIB_POCKET"
     ],
     "materialized_at_bar": {
-      "PULLBACK_TO_OB": 2
+      "PULLBACK_TO_OB": 2,
+      "PULLBACK_TO_FIB_POCKET": 111
     },
     "fate": null,
     "leg_fate": null,
@@ -38,5 +40,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-01T08:15:26.525311+00:00"
+  "_persisted_at": "2026-09-01T08:20:18.655351+00:00"
 }

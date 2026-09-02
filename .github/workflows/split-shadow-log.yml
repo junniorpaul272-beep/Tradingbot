@@ -1,0 +1,77 @@
+# ONE-OFF UTILITY — delete this file after you've downloaded the split output.
+# Does not touch scanner_live.py / scanner_observation.py / scanner_common.py.
+# Does not commit anything back to the repo — output is an artifact only.
+
+name: Split Shadow Trade Log by Experiment
+
+on:
+  workflow_dispatch:
+    inputs:
+      log_path:
+        description: 'Path to the shadow trade log JSONL file in the repo'
+        required: true
+        default: 'shadow_trade_log.jsonl'
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Split log by experiment
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, sys
+
+          log_path = "${{ inputs.log_path }}"
+          out_dir = "split_output"
+          os.makedirs(out_dir, exist_ok=True)
+
+          if not os.path.isfile(log_path):
+              print(f"ERROR: '{log_path}' not found in repo checkout.", file=sys.stderr)
+              sys.exit(1)
+
+          counts = {}
+          bad_lines = 0
+          handles = {}
+
+          try:
+              with open(log_path, "r") as f:
+                  for i, line in enumerate(f, 1):
+                      line = line.strip()
+                      if not line:
+                          continue
+                      try:
+                          rec = json.loads(line)
+                      except json.JSONDecodeError:
+                          bad_lines += 1
+                          print(f"WARN: skipping malformed line {i}", file=sys.stderr)
+                          continue
+
+                      exp = rec.get("experiment") or "UNTAGGED"
+                      if exp not in handles:
+                          safe_name = exp.replace("/", "_")
+                          handles[exp] = open(os.path.join(out_dir, f"{safe_name}.jsonl"), "w")
+                      handles[exp].write(line + "\n")
+                      counts[exp] = counts.get(exp, 0) + 1
+          finally:
+              for h in handles.values():
+                  h.close()
+
+          summary_path = os.path.join(out_dir, "_SUMMARY.txt")
+          with open(summary_path, "w") as s:
+              s.write(f"Source: {log_path}\n")
+              s.write(f"Malformed lines skipped: {bad_lines}\n\n")
+              for exp, n in sorted(counts.items(), key=lambda x: -x[1]):
+                  s.write(f"{exp}: {n}\n")
+
+          print(open(summary_path).read())
+          PYEOF
+
+      - name: Upload split files as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadow-log-split-${{ github.run_id }}
+          path: split_output/
+          retention-days: 7

@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.35652|1.34780",
     "opened_at": "2026-09-02T11:07:19.787944+00:00",
-    "bars_open": 232,
-    "last_processed_candle": "2026-09-03T13:05:00+00:00",
+    "bars_open": 233,
+    "last_processed_candle": "2026-09-03T13:10:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -56,13 +56,18 @@
         "bar": 157,
         "kind": "phase_change",
         "detail": "Phase changed: expansion \u2192 exhaustion"
+      },
+      {
+        "bar": 233,
+        "kind": "choch",
+        "detail": "15M CHoCH confirmed"
       }
     ],
     "_tl_last_break_count": 1,
-    "_tl_choch_active": false,
+    "_tl_choch_active": true,
     "_tl_last_phase": "exhaustion"
   },
   "closed_ids": [],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-03T13:17:23.289691+00:00"
+  "_persisted_at": "2026-09-03T13:22:27.340263+00:00"
 }

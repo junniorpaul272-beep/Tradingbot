@@ -1,5 +1,5 @@
 {
-  "total_scans": 4889,
+  "total_scans": 4890,
   "consolidation_skip": 404,
   "atr_invalid": 0,
   "signals_very_low_atr": 1,
@@ -16,7 +16,7 @@
   "wins": 2,
   "losses": 4,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-09-03 15:45",
+  "last_scan": "2026-09-03 15:50",
   "last_update_id": 628997586,
   "result_logged_for_signal": null,
   "last_closed_trade": {
@@ -166,7 +166,7 @@
     "9-10p": 7,
     "10p+": 7
   },
-  "pending_confirmation": {
+  "active_trade": {
     "direction": "SELL",
     "entry": 1.3531,
     "sl": 1.3539976749862948,
@@ -176,19 +176,13 @@
     "tier_label": "TIER_2_FIB",
     "opened_at": "2026-09-03T15:45:22.573209+00:00",
     "opened_at_display": "2026-09-03 15:45 UTC",
-    "last_update_sent_at": null,
-    "last_checked_candle": "2026-09-03T15:35:00+00:00",
+    "last_update_sent_at": "2026-09-03T15:50:17.420529+00:00",
+    "last_checked_candle": "2026-09-03T15:40:00+00:00",
     "band_label": null,
     "target_r": 3.0,
     "size_mult": 1.0,
     "partial_r": null,
     "breakeven_r": null,
-    "risk_band": "MEDIUM",
-    "risk_reasons": [
-      "no aligned 15M BOS \u2014 pullback lacks a momentum confirmation",
-      "fib pocket not swept \u2014 no liquidity grab before the reaction"
-    ],
-    "risk_recommendation": "Standard structural stop is workable \u2014 the reasons above are worth keeping in mind while managing.",
-    "awaiting_confirmation_since": "2026-09-03T15:45:22.573209+00:00"
+    "risk_recommendation": "Standard structural stop is workable \u2014 the reasons above are worth keeping in mind while managing."
   }
 }

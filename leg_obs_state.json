@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BULLISH|1.35447|1.34943",
     "opened_at": "2026-09-07T09:27:19.601675+00:00",
-    "bars_open": 34,
-    "last_processed_candle": "2026-09-07T12:05:00+00:00",
+    "bars_open": 35,
+    "last_processed_candle": "2026-09-07T12:10:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -66,5 +66,5 @@
     "BULLISH|1.35498|1.34751"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-07T12:17:24.954919+00:00"
+  "_persisted_at": "2026-09-07T12:22:22.961053+00:00"
 }

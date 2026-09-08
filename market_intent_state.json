@@ -1,25 +1,30 @@
 {
   "open": {
-    "id": "084059de338e",
+    "id": "6ddeb56e705c",
     "methodology_version": 1,
-    "leg_id": "BULLISH|1.35447|1.34943",
-    "opened_at": "2026-09-07T09:05:22.076633+00:00",
-    "bars_open": 82,
-    "last_processed_candle": "2026-09-07T15:45:00+00:00",
+    "leg_id": "BULLISH|1.35536|1.34943",
+    "opened_at": "2026-09-08T09:05:15.237878+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-08T08:55:00+00:00",
     "macro_bias": "BULLISH",
-    "phase": "expansion",
+    "phase": "exhaustion",
     "watch_codes": [
-      "PULLBACK_TO_OB",
-      "PULLBACK_TO_FIB_POCKET"
+      "SWEEP_AND_RECLAIM",
+      "FRESH_DISPLACEMENT",
+      "FIVE_M_ALIGNMENT"
     ],
     "caution_codes": [
+      "CHASING_MID_RANGE",
+      "UNSWEPT_CHOCH",
       "ATR_INCOMPATIBLE"
     ],
     "reasons": [
       "HTF bias: BULLISH",
-      "Fresh 15M BOS aligned with bias",
-      "Order block confirmed, unmitigated",
-      "Low-ATR warning \u2014 4.1p, below the 6p floor"
+      "15M CHoCH confirming direction",
+      "1H volatility expanding",
+      "Order block already mitigated",
+      "Very-low-ATR warning \u2014 3.8p, below the 4p floor",
+      "4 breaks into this leg \u2014 getting old"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -27,15 +32,15 @@
     "leg_fate": null,
     "resolved_at": null,
     "tags": {
-      "phase": "expansion",
-      "atr_5m_pips": 4.119371236140449,
-      "break_count": 1,
+      "phase": "exhaustion",
+      "atr_5m_pips": 3.7625454201651403,
+      "break_count": 4,
       "campaign_continuation_count": 1,
-      "num_watch_codes": 2,
-      "num_caution_codes": 1,
-      "very_low_atr_warning": false
+      "num_watch_codes": 3,
+      "num_caution_codes": 3,
+      "very_low_atr_warning": true
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-07T15:55:23.800414+00:00"
+  "_persisted_at": "2026-09-08T09:05:17.034042+00:00"
 }

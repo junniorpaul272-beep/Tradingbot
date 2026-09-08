@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "120a0bbb509e",
+    "id": "15b3ed46eb2f",
     "methodology_version": 1,
     "leg_id": "BULLISH|1.35536|1.34943",
-    "opened_at": "2026-09-08T15:20:17.110237+00:00",
+    "opened_at": "2026-09-08T15:25:20.875237+00:00",
     "bars_open": 0,
-    "last_processed_candle": "2026-09-08T15:10:00+00:00",
+    "last_processed_candle": "2026-09-08T15:15:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -30,7 +30,7 @@
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 3.807421683992322,
+      "atr_5m_pips": 3.766430854142503,
       "break_count": null,
       "campaign_continuation_count": 48,
       "num_watch_codes": 3,
@@ -39,5 +39,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-08T15:20:19.645852+00:00"
+  "_persisted_at": "2026-09-08T15:25:22.484250+00:00"
 }

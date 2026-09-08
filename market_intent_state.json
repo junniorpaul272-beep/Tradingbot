@@ -1,50 +1,43 @@
 {
   "open": {
-    "id": "6ddeb56e705c",
+    "id": "9b484616237b",
     "methodology_version": 1,
     "leg_id": "BULLISH|1.35536|1.34943",
-    "opened_at": "2026-09-08T09:05:15.237878+00:00",
-    "bars_open": 47,
-    "last_processed_candle": "2026-09-08T12:50:00+00:00",
+    "opened_at": "2026-09-08T13:05:22.567312+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-08T12:55:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "exhaustion",
     "watch_codes": [
+      "PULLBACK_TO_FIB_POCKET",
       "SWEEP_AND_RECLAIM",
-      "FRESH_DISPLACEMENT",
-      "FIVE_M_ALIGNMENT"
+      "FRESH_DISPLACEMENT"
     ],
     "caution_codes": [
-      "CHASING_MID_RANGE",
-      "UNSWEPT_CHOCH",
+      "AGING_CAMPAIGN",
       "ATR_INCOMPATIBLE"
     ],
     "reasons": [
       "HTF bias: BULLISH",
-      "15M CHoCH confirming direction",
       "1H volatility expanding",
-      "Order block already mitigated",
-      "Very-low-ATR warning \u2014 3.8p, below the 4p floor",
-      "4 breaks into this leg \u2014 getting old"
+      "Bias marked stale \u2014 founding leg already invalidated",
+      "Low-ATR warning \u2014 4.1p, below the 6p floor"
     ],
-    "materialized_codes": [
-      "FIVE_M_ALIGNMENT"
-    ],
-    "materialized_at_bar": {
-      "FIVE_M_ALIGNMENT": 36
-    },
+    "materialized_codes": [],
+    "materialized_at_bar": {},
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 3.7625454201651403,
-      "break_count": 4,
-      "campaign_continuation_count": 1,
+      "atr_5m_pips": 4.133169040149694,
+      "break_count": null,
+      "campaign_continuation_count": 48,
       "num_watch_codes": 3,
-      "num_caution_codes": 3,
-      "very_low_atr_warning": true
+      "num_caution_codes": 2,
+      "very_low_atr_warning": false
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-08T13:00:24.948939+00:00"
+  "_persisted_at": "2026-09-08T13:05:27.150506+00:00"
 }

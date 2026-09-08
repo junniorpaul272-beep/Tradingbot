@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "d97435cf0325",
+    "id": "3ca9a59c50fa",
     "methodology_version": 1,
     "leg_id": "BULLISH|1.35536|1.34943",
-    "opened_at": "2026-09-08T13:40:17.589268+00:00",
+    "opened_at": "2026-09-08T13:45:38.646378+00:00",
     "bars_open": 0,
-    "last_processed_candle": "2026-09-08T13:30:00+00:00",
+    "last_processed_candle": "2026-09-08T13:35:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -21,7 +21,7 @@
       "HTF bias: BULLISH",
       "1H volatility expanding",
       "Bias marked stale \u2014 founding leg already invalidated",
-      "Low-ATR warning \u2014 4.1p, below the 6p floor"
+      "Low-ATR warning \u2014 4.2p, below the 6p floor"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -30,7 +30,7 @@
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 4.05308371403386,
+      "atr_5m_pips": 4.152672481797343,
       "break_count": null,
       "campaign_continuation_count": 48,
       "num_watch_codes": 3,
@@ -39,5 +39,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-08T13:40:21.254591+00:00"
+  "_persisted_at": "2026-09-08T13:45:40.789741+00:00"
 }

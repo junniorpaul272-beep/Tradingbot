@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BULLISH|1.35659|1.35223",
     "opened_at": "2026-09-09T12:05:20.069662+00:00",
-    "bars_open": 37,
-    "last_processed_candle": "2026-09-09T15:00:00+00:00",
+    "bars_open": 38,
+    "last_processed_candle": "2026-09-09T15:05:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "expansion",
     "watch_codes": [
@@ -23,8 +23,12 @@
       "Low-ATR warning \u2014 5.4p, below the 6p floor",
       "2.1 ATR from EMA_100 \u2014 extended"
     ],
-    "materialized_codes": [],
-    "materialized_at_bar": {},
+    "materialized_codes": [
+      "PULLBACK_TO_FIB_POCKET"
+    ],
+    "materialized_at_bar": {
+      "PULLBACK_TO_FIB_POCKET": 38
+    },
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
@@ -39,5 +43,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-09T15:10:19.892850+00:00"
+  "_persisted_at": "2026-09-09T15:15:24.090879+00:00"
 }

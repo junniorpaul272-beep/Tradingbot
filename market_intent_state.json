@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "73a13b1e4398",
+    "id": "07f513c21cb8",
     "methodology_version": 1,
-    "leg_id": "BULLISH|1.35612|1.34943",
-    "opened_at": "2026-09-09T07:00:21.230363+00:00",
-    "bars_open": 12,
-    "last_processed_candle": "2026-09-09T07:50:00+00:00",
+    "leg_id": "BULLISH|1.35682|1.34943",
+    "opened_at": "2026-09-09T08:05:18.974596+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-09T07:55:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -14,15 +14,16 @@
       "SWEEP_AND_RECLAIM"
     ],
     "caution_codes": [
+      "AGING_CAMPAIGN",
       "ATR_INCOMPATIBLE"
     ],
     "reasons": [
       "HTF bias: BULLISH",
       "Fresh 15M BOS aligned with bias",
       "Order block confirmed, unmitigated",
-      "Very-low-ATR warning \u2014 3.1p, below the 4p floor",
+      "Very-low-ATR warning \u2014 3.5p, below the 4p floor",
       "6 breaks into this leg \u2014 getting old",
-      "2.5 ATR from EMA_100 \u2014 extended"
+      "3.1 ATR from EMA_100 \u2014 extended"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -31,14 +32,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 3.0805701342847565,
+      "atr_5m_pips": 3.488067726935017,
       "break_count": 6,
-      "campaign_continuation_count": 1,
+      "campaign_continuation_count": 14,
       "num_watch_codes": 3,
-      "num_caution_codes": 1,
+      "num_caution_codes": 2,
       "very_low_atr_warning": true
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-09T08:00:27.319836+00:00"
+  "_persisted_at": "2026-09-09T08:05:23.292307+00:00"
 }

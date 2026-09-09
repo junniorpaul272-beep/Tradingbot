@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "cc0472f36af2",
+    "id": "c8494aa46876",
     "methodology_version": 1,
     "leg_id": "BULLISH|1.35682|1.34943",
-    "opened_at": "2026-09-09T10:45:22.672425+00:00",
+    "opened_at": "2026-09-09T10:50:21.701631+00:00",
     "bars_open": 0,
-    "last_processed_candle": "2026-09-09T10:35:00+00:00",
+    "last_processed_candle": "2026-09-09T10:40:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -21,7 +21,7 @@
     "reasons": [
       "HTF bias: BULLISH",
       "Bias marked stale \u2014 founding leg already invalidated",
-      "Very-low-ATR warning \u2014 3.8p, below the 4p floor"
+      "Very-low-ATR warning \u2014 3.6p, below the 4p floor"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -30,7 +30,7 @@
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 3.7629890536047976,
+      "atr_5m_pips": 3.6212575316162527,
       "break_count": null,
       "campaign_continuation_count": 25,
       "num_watch_codes": 4,
@@ -39,5 +39,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-09T10:45:24.486014+00:00"
+  "_persisted_at": "2026-09-09T10:50:22.860838+00:00"
 }

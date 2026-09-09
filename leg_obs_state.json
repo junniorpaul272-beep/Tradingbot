@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BULLISH|1.35612|1.34943",
     "opened_at": "2026-09-09T07:02:19.361181+00:00",
-    "bars_open": 6,
-    "last_processed_candle": "2026-09-09T07:20:00+00:00",
+    "bars_open": 7,
+    "last_processed_candle": "2026-09-09T07:25:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -41,9 +41,14 @@
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bullish (as continuation)"
+      },
+      {
+        "bar": 7,
+        "kind": "break",
+        "detail": "New 15M break \u2014 count now 6"
       }
     ],
-    "_tl_last_break_count": 5,
+    "_tl_last_break_count": 6,
     "_tl_choch_active": false,
     "_tl_last_phase": "exhaustion"
   },
@@ -52,5 +57,5 @@
     "BULLISH|1.35536|1.34943"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-09T07:32:21.540101+00:00"
+  "_persisted_at": "2026-09-09T07:37:21.140417+00:00"
 }

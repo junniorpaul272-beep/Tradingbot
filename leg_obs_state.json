@@ -1,54 +1,49 @@
 {
   "open": {
-    "id": "f5e2da34ace1",
+    "id": "4d60aa8ddc79",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.35659|1.35223",
-    "opened_at": "2026-09-09T12:07:17.332094+00:00",
-    "bars_open": 46,
-    "last_processed_candle": "2026-09-09T15:45:00+00:00",
+    "leg_id": "BEARISH|1.35682|1.35276",
+    "opened_at": "2026-09-10T12:12:27.927757+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-10T12:00:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": true,
-      "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 43.6,
-      "bos_15m_direction": "BULLISH",
-      "bos_15m_break_count": 1,
+      "macro_leg_direction": "BEARISH",
+      "macro_leg_length_pips": 40.6,
+      "bos_15m_direction": "BEARISH",
+      "bos_15m_break_count": 2,
       "bos_15m_was_choch": false,
-      "atr_pips": 5.39,
+      "atr_pips": 4.1,
       "atr_percentile_15m": 94.7,
       "market_phase": "expansion",
       "market_phase_age_bars": 0,
-      "measured_move_ratio": 0.59,
-      "measured_move_bucket": "UNDER_100",
+      "measured_move_ratio": null,
+      "measured_move_bucket": null,
       "transition_cause": "CHOCH",
-      "campaign_extension_multiple": 1.1,
-      "campaign_continuation_count": 26,
+      "campaign_extension_multiple": 1.0,
+      "campaign_continuation_count": 1,
       "atr_bucket": "high_vol",
       "session": "london_ny_overlap",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 4.15,
+      "trend_strength_atr_mult": 5.02,
       "volatility_state": "expanding",
-      "compression_ratio": 4.15,
-      "pullback_depth_pct": 12.8
+      "compression_ratio": 3.97,
+      "pullback_depth_pct": 0.6
     },
     "tier1_touched_bar": null,
-    "tier2_touched_bar": 38,
+    "tier2_touched_bar": null,
     "tier3_touched_bar": null,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
-        "detail": "Leg formed \u2014 Bullish (via CHoCH)"
-      },
-      {
-        "bar": 38,
-        "kind": "zone_touch",
-        "detail": "Tier 2 zone touched (Fib pocket)"
+        "detail": "Leg formed \u2014 Bearish (via CHoCH)"
       }
     ],
-    "_tl_last_break_count": 1,
+    "_tl_last_break_count": 2,
     "_tl_choch_active": false,
     "_tl_last_phase": "expansion"
   },
@@ -58,5 +53,5 @@
     "BULLISH|1.35682|1.34943"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-09T15:57:20.448883+00:00"
+  "_persisted_at": "2026-09-10T12:12:28.588043+00:00"
 }

@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.35682|1.34933",
     "opened_at": "2026-09-10T13:07:22.900971+00:00",
-    "bars_open": 13,
-    "last_processed_candle": "2026-09-10T14:00:00+00:00",
+    "bars_open": 15,
+    "last_processed_candle": "2026-09-10T14:10:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -43,7 +43,7 @@
         "detail": "Leg formed \u2014 Bearish (via CHoCH)"
       }
     ],
-    "_tl_last_break_count": 3,
+    "_tl_last_break_count": 2,
     "_tl_choch_active": false,
     "_tl_last_phase": "expansion"
   },
@@ -53,5 +53,5 @@
     "BULLISH|1.35682|1.34943"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-10T14:17:23.100388+00:00"
+  "_persisted_at": "2026-09-10T14:22:22.297174+00:00"
 }

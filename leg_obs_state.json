@@ -1,37 +1,37 @@
 {
   "open": {
-    "id": "4d60aa8ddc79",
+    "id": "d37f8c894b5b",
     "methodology_version": 3,
-    "leg_id": "BEARISH|1.35682|1.35276",
-    "opened_at": "2026-09-10T12:12:27.927757+00:00",
-    "bars_open": 10,
-    "last_processed_candle": "2026-09-10T12:50:00+00:00",
+    "leg_id": "BEARISH|1.35682|1.34933",
+    "opened_at": "2026-09-10T13:07:22.900971+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-10T12:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": true,
       "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 40.6,
+      "macro_leg_length_pips": 74.9,
       "bos_15m_direction": "BEARISH",
-      "bos_15m_break_count": 2,
+      "bos_15m_break_count": 3,
       "bos_15m_was_choch": false,
-      "atr_pips": 4.1,
-      "atr_percentile_15m": 94.7,
+      "atr_pips": 7.95,
+      "atr_percentile_15m": 98.2,
       "market_phase": "expansion",
-      "market_phase_age_bars": 0,
+      "market_phase_age_bars": 11,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "CHOCH",
-      "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
+      "campaign_extension_multiple": 1.84,
+      "campaign_continuation_count": 12,
       "atr_bucket": "high_vol",
       "session": "london_ny_overlap",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 5.02,
+      "trend_strength_atr_mult": 5.78,
       "volatility_state": "expanding",
-      "compression_ratio": 3.97,
-      "pullback_depth_pct": 0.6
+      "compression_ratio": 4.34,
+      "pullback_depth_pct": 21.4
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
@@ -41,11 +41,6 @@
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bearish (via CHoCH)"
-      },
-      {
-        "bar": 2,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 3"
       }
     ],
     "_tl_last_break_count": 3,
@@ -58,5 +53,5 @@
     "BULLISH|1.35682|1.34943"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-10T13:02:26.185088+00:00"
+  "_persisted_at": "2026-09-10T13:07:23.022439+00:00"
 }

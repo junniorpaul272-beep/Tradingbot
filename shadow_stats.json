@@ -78,7 +78,7 @@
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 872,
+    "logged": 873,
     "resolved": 849,
     "wins": 339,
     "losses": 510,
@@ -121,5 +121,5 @@
     "hit_2r": 4,
     "hit_3r": 3
   },
-  "_persisted_at": "2026-09-10T13:02:26.213747+00:00"
+  "_persisted_at": "2026-09-10T13:07:23.051131+00:00"
 }

@@ -1,7 +1,7 @@
 {
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
-    "logged": 216,
+    "logged": 217,
     "resolved": 194,
     "wins": 102,
     "losses": 92,
@@ -12,13 +12,13 @@
     "hit_3r": 5
   },
   "EXP2_FIB": {
-    "logged": 2690,
-    "resolved": 2576,
+    "logged": 2699,
+    "resolved": 2588,
     "wins": 684,
-    "losses": 1892,
+    "losses": 1904,
     "timed_out": 113,
-    "sum_r": -36.505044735581606,
-    "hit_1r": 1654,
+    "sum_r": -48.505044735581606,
+    "hit_1r": 1656,
     "hit_2r": 1154,
     "hit_3r": 844
   },
@@ -45,12 +45,12 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 449,
-    "resolved": 324,
+    "logged": 450,
+    "resolved": 327,
     "wins": 147,
-    "losses": 177,
-    "timed_out": 235,
-    "sum_r": 2.925537346133388,
+    "losses": 180,
+    "timed_out": 238,
+    "sum_r": 2.353529787398748,
     "hit_1r": 58,
     "hit_2r": 22,
     "hit_3r": 6
@@ -68,33 +68,33 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 107,
-    "resolved": 65,
-    "wins": 32,
+    "resolved": 66,
+    "wins": 33,
     "losses": 33,
-    "timed_out": 38,
-    "sum_r": 8.723091781037429,
+    "timed_out": 39,
+    "sum_r": 8.94223477997159,
     "hit_1r": 14,
     "hit_2r": 4,
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 877,
-    "resolved": 852,
-    "wins": 340,
+    "logged": 878,
+    "resolved": 854,
+    "wins": 342,
     "losses": 512,
-    "timed_out": 36,
-    "sum_r": 352.992058043152,
+    "timed_out": 38,
+    "sum_r": 353.8514076483281,
     "hit_1r": 647,
     "hit_2r": 568,
     "hit_3r": 510
   },
   "EXP8_CISD": {
     "logged": 95,
-    "resolved": 93,
+    "resolved": 95,
     "wins": 38,
-    "losses": 55,
-    "timed_out": 31,
-    "sum_r": 16.579025249569835,
+    "losses": 57,
+    "timed_out": 33,
+    "sum_r": 16.20794091222037,
     "hit_1r": 49,
     "hit_2r": 27,
     "hit_3r": 15
@@ -121,5 +121,5 @@
     "hit_2r": 4,
     "hit_3r": 3
   },
-  "_persisted_at": "2026-09-11T15:57:15.940895+00:00"
+  "_persisted_at": "2026-09-14T07:22:19.615441+00:00"
 }

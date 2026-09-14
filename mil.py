@@ -828,10 +828,26 @@ def maintain_thesis(understanding: MarketUnderstanding, thesis_evidence: list,
     display, not for reading aloud. FIXED 2026-09-08 — this call site
     was passing the label-style fields, which is why narration text was
     reading like a raw data dump instead of a sentence.
+
+    ISOLATION FIX (2026-09-13, per SYSTEM INTEGRITY AUDIT — same defect
+    class as reconcile()'s 2026-09-12 fix, found by sweeping every
+    MarketUnderstanding-in/MarketUnderstanding-out function for the same
+    mutation-in-place pattern). Previously this mutated `understanding`
+    directly (`understanding.supporting_evidence = ...`) and returned the
+    SAME object it was given. Not observably broken today only because
+    its one call site (scanner_live.py) immediately reassigns the result
+    to the same variable — but any future caller holding an earlier
+    reference (a before/after diff, a test harness) would silently see
+    it change out from under them, exactly like reconcile()'s bug. Fixed
+    by returning a genuinely new object via dataclasses.replace(); the
+    two list fields are also handed fresh list() copies, not aliases of
+    the caller's thesis_evidence/thesis_weaknesses arguments.
     """
-    understanding.supporting_evidence = list(thesis_evidence or [])
-    understanding.conflicting_evidence = list(thesis_weaknesses or [])
-    return understanding
+    return replace(
+        understanding,
+        supporting_evidence=list(thesis_evidence or []),
+        conflicting_evidence=list(thesis_weaknesses or []),
+    )
 
 
 # Cap on counter_candidate_history length — same pattern as
@@ -902,29 +918,51 @@ def track_counter_candidate(understanding: MarketUnderstanding, observed: Observ
     with primary_thesis direction) resolves any currently-tracked
     episode as "fizzled" and clears emerging_counter_case to None —
     never left stale from a scan that's no longer true.
+
+    ISOLATION FIX (2026-09-13, per SYSTEM INTEGRITY AUDIT — the sharpest
+    of the four mutation findings, since this one touched both a list
+    AND a nested dict). Previously mutated `understanding` throughout:
+    `.append()`'d directly onto counter_candidate_history, reassigned the
+    truncated slice back onto the same list attribute, and edited fields
+    *inside* the existing emerging_counter_case dict (`current["maturity"]
+    = ...`) rather than building a new one — every exit point returned
+    the SAME MarketUnderstanding object it was given. Not observably
+    broken today only because its one call site (scanner_live.py, which
+    must run this AFTER reconcile() per this function's own docstring)
+    reassigns the result to the same variable — but it's the identical
+    hazard class as reconcile()'s original bug, just spread across two
+    field types instead of one. Fixed: every branch below now builds a
+    new history list (concatenation, mirroring how reconcile() already
+    does `history=prev.history + [transition]`) and a new
+    emerging_counter_case dict where one changes, then returns via
+    dataclasses.replace() exactly once per branch. No in-place `.append()`
+    or nested-dict item assignment remains in this function.
     """
     candidate_direction = observed.macro_candidate_leg_direction or observed.leg15_direction
     primary_direction = understanding.primary_thesis.get("direction")
     current = understanding.emerging_counter_case
 
-    def _append_history(record: CounterCandidateRecord) -> None:
-        understanding.counter_candidate_history.append(record)
-        if len(understanding.counter_candidate_history) > COUNTER_CANDIDATE_HISTORY_MAX_LEN:
-            understanding.counter_candidate_history = (
-                understanding.counter_candidate_history[-COUNTER_CANDIDATE_HISTORY_MAX_LEN:]
-            )
+    def _history_with(record: CounterCandidateRecord) -> list:
+        """Returns a NEW counter_candidate_history list with `record`
+        appended and capped at COUNTER_CANDIDATE_HISTORY_MAX_LEN — never
+        mutates understanding.counter_candidate_history itself."""
+        new_history = understanding.counter_candidate_history + [record]
+        if len(new_history) > COUNTER_CANDIDATE_HISTORY_MAX_LEN:
+            new_history = new_history[-COUNTER_CANDIDATE_HISTORY_MAX_LEN:]
+        return new_history
 
     # ---- No live opposing candidate this scan -> resolve as fizzled.
     if candidate_direction is None or candidate_direction == primary_direction:
         if current is not None:
-            _append_history(CounterCandidateRecord(
+            new_history = _history_with(CounterCandidateRecord(
                 direction=current["direction"],
                 first_observed_at=current["first_observed_at"],
                 resolved_at=now_iso,
                 resolution="fizzled",
                 peak_maturity=current["peak_maturity"],
             ))
-            understanding.emerging_counter_case = None
+            return replace(understanding, counter_candidate_history=new_history,
+                            emerging_counter_case=None)
         return understanding
 
     # ---- reconcile() already promoted this exact candidate this scan
@@ -935,15 +973,15 @@ def track_counter_candidate(understanding: MarketUnderstanding, observed: Observ
             and understanding.counter_thesis.get("direction") == candidate_direction
             and understanding.counter_thesis.get("status") == "awaiting_confirmation"
             and current is not None and current["direction"] == candidate_direction):
-        _append_history(CounterCandidateRecord(
+        new_history = _history_with(CounterCandidateRecord(
             direction=current["direction"],
             first_observed_at=current["first_observed_at"],
             resolved_at=now_iso,
             resolution="promoted",
             peak_maturity="qualified_awaiting_promotion",
         ))
-        understanding.emerging_counter_case = None
-        return understanding
+        return replace(understanding, counter_candidate_history=new_history,
+                        emerging_counter_case=None)
 
     maturity = _counter_candidate_maturity(
         observed.macro_candidate_leg_atr_ok, observed.macro_candidate_leg_vs_prior_ok
@@ -953,7 +991,7 @@ def track_counter_candidate(understanding: MarketUnderstanding, observed: Observ
         # Fresh episode — either genuinely new, or the guard clauses
         # above already resolved whatever was tracked before this point
         # this same call, so there is nothing stale left to overwrite.
-        understanding.emerging_counter_case = {
+        new_case = {
             "direction": candidate_direction,
             "maturity": maturity,
             "atr_ok": bool(observed.macro_candidate_leg_atr_ok),
@@ -968,20 +1006,25 @@ def track_counter_candidate(understanding: MarketUnderstanding, observed: Observ
             "peak_maturity": maturity,
         }
     else:
-        current["maturity"] = maturity
-        current["atr_ok"] = bool(observed.macro_candidate_leg_atr_ok)
-        current["vs_prior_ok"] = bool(observed.macro_candidate_leg_vs_prior_ok)
-        current["range_pips"] = observed.macro_candidate_leg_range_pips
-        current["required_atr_pips"] = observed.macro_candidate_leg_required_atr_pips
-        current["required_prior_pips"] = observed.macro_candidate_leg_required_prior_pips
+        # Same episode continuing — build a NEW dict from the existing
+        # one rather than editing `current`'s fields in place.
+        new_case = dict(current)
+        new_case["maturity"] = maturity
+        new_case["atr_ok"] = bool(observed.macro_candidate_leg_atr_ok)
+        new_case["vs_prior_ok"] = bool(observed.macro_candidate_leg_vs_prior_ok)
+        new_case["range_pips"] = observed.macro_candidate_leg_range_pips
+        new_case["required_atr_pips"] = observed.macro_candidate_leg_required_atr_pips
+        new_case["required_prior_pips"] = observed.macro_candidate_leg_required_prior_pips
         # peak_maturity only ratchets forward — a candidate that reached
         # "building" then chopped back to "early" (atr_ok flips False
         # again) should still show it once reached "building" rather
         # than losing that fact to the most recent scan's read alone.
         if _COUNTER_MATURITY_ORDER.index(maturity) > _COUNTER_MATURITY_ORDER.index(current["peak_maturity"]):
-            current["peak_maturity"] = maturity
+            new_case["peak_maturity"] = maturity
+        # else: new_case already carries current["peak_maturity"] forward
+        # unchanged via the dict(current) copy above — nothing more to do.
 
-    return understanding
+    return replace(understanding, emerging_counter_case=new_case)
 
 
 def evaluate_scenarios(understanding: MarketUnderstanding,
@@ -997,13 +1040,27 @@ def evaluate_scenarios(understanding: MarketUnderstanding,
     MarketIntent quietly manufacture belief transitions reconcile()
     never earned. If no counter_thesis exists this scan, this is a
     no-op.
+
+    ISOLATION FIX (2026-09-13, per SYSTEM INTEGRITY AUDIT). Previously
+    mutated the NESTED counter_thesis dict in place
+    (`understanding.counter_thesis["watching_for"] = ...`) and returned
+    the same MarketUnderstanding — worse than a top-level mutation, since
+    dataclasses.replace() alone would not have isolated a shared nested
+    dict even if applied naively here. Fixed by copying counter_thesis
+    into a new dict before writing to it, then returning a new
+    MarketUnderstanding via replace(). The no-op path (no counter_thesis,
+    or no LOCATION entries) legitimately returns the same object
+    unchanged — nothing was mutated on that path, so there is nothing to
+    isolate.
     """
     if understanding.counter_thesis is None:
         return understanding
     location_entries = [w for w in (intent_watching_for or []) if w.get("role") == "LOCATION"]
-    if location_entries:
-        understanding.counter_thesis["watching_for"] = location_entries
-    return understanding
+    if not location_entries:
+        return understanding
+    new_counter_thesis = dict(understanding.counter_thesis)
+    new_counter_thesis["watching_for"] = location_entries
+    return replace(understanding, counter_thesis=new_counter_thesis)
 
 
 def generate_expectations(understanding: MarketUnderstanding,
@@ -1015,14 +1072,20 @@ def generate_expectations(understanding: MarketUnderstanding,
     evaluate_scenarios) — "what would confirm this" is always relevant
     context regardless of thesis_status, not contingent on a promotion
     event having occurred.
+
+    ISOLATION FIX (2026-09-13, per SYSTEM INTEGRITY AUDIT). Previously
+    mutated `understanding.expectations` in place and returned the same
+    object — same defect class as maintain_thesis()/evaluate_scenarios()
+    above. Fixed via dataclasses.replace(); `expectations` itself is a
+    freshly built list every call already, so no separate copy is needed
+    beyond the replace() call.
     """
     expectations = []
     if expected_next_event:
         expectations.append({"type": "expected_next_event", "text": expected_next_event})
     confirmation_entries = [w for w in (intent_watching_for or []) if w.get("role") == "CONFIRMATION"]
     expectations.extend({"type": "confirmation", **w} for w in confirmation_entries)
-    understanding.expectations = expectations
-    return understanding
+    return replace(understanding, expectations=expectations)
 
 
 def detect_material_change(prev: Optional[MarketUnderstanding], observed: dict) -> list:

@@ -1,26 +1,26 @@
 {
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
-    "logged": 225,
-    "resolved": 199,
+    "logged": 226,
+    "resolved": 203,
     "wins": 107,
-    "losses": 92,
-    "timed_out": 146,
-    "sum_r": 18.72428861591785,
-    "hit_1r": 31,
+    "losses": 96,
+    "timed_out": 150,
+    "sum_r": 17.02089288743941,
+    "hit_1r": 32,
     "hit_2r": 13,
     "hit_3r": 5
   },
   "EXP2_FIB": {
-    "logged": 2861,
-    "resolved": 2743,
-    "wins": 717,
-    "losses": 2026,
-    "timed_out": 113,
-    "sum_r": -71.5050447355816,
-    "hit_1r": 1745,
-    "hit_2r": 1204,
-    "hit_3r": 884
+    "logged": 2864,
+    "resolved": 2759,
+    "wins": 728,
+    "losses": 2031,
+    "timed_out": 117,
+    "sum_r": -50.74918504810253,
+    "hit_1r": 1760,
+    "hit_2r": 1214,
+    "hit_3r": 892
   },
   "EXP3_POI": {
     "logged": 0,
@@ -45,13 +45,13 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 460,
-    "resolved": 334,
+    "logged": 461,
+    "resolved": 338,
     "wins": 154,
-    "losses": 180,
-    "timed_out": 245,
-    "sum_r": 3.67150528974377,
-    "hit_1r": 58,
+    "losses": 184,
+    "timed_out": 249,
+    "sum_r": 1.9681095612653297,
+    "hit_1r": 59,
     "hit_2r": 22,
     "hit_3r": 6
   },
@@ -68,11 +68,11 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 111,
-    "resolved": 69,
+    "resolved": 70,
     "wins": 36,
-    "losses": 33,
+    "losses": 34,
     "timed_out": 42,
-    "sum_r": 10.293314617230687,
+    "sum_r": 9.293314617230687,
     "hit_1r": 14,
     "hit_2r": 4,
     "hit_3r": 2
@@ -90,13 +90,13 @@
   },
   "EXP8_CISD": {
     "logged": 99,
-    "resolved": 97,
-    "wins": 38,
+    "resolved": 99,
+    "wins": 40,
     "losses": 59,
-    "timed_out": 33,
-    "sum_r": 14.20794091222037,
-    "hit_1r": 49,
-    "hit_2r": 27,
+    "timed_out": 35,
+    "sum_r": 16.24397694825664,
+    "hit_1r": 51,
+    "hit_2r": 29,
     "hit_3r": 15
   },
   "EXP4_POLICY_LAB": {
@@ -112,14 +112,14 @@
   },
   "EXP3_SR": {
     "logged": 24,
-    "resolved": 22,
+    "resolved": 24,
     "wins": 4,
-    "losses": 18,
+    "losses": 20,
     "timed_out": 1,
-    "sum_r": -7.631672263127571,
-    "hit_1r": 10,
-    "hit_2r": 6,
+    "sum_r": -9.631672263127571,
+    "hit_1r": 12,
+    "hit_2r": 8,
     "hit_3r": 3
   },
-  "_persisted_at": "2026-09-14T15:57:20.745485+00:00"
+  "_persisted_at": "2026-09-15T07:02:21.311358+00:00"
 }

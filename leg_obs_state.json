@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.35340|1.34483",
     "opened_at": "2026-09-16T13:07:19.059876+00:00",
-    "bars_open": 23,
-    "last_processed_candle": "2026-09-16T14:50:00+00:00",
+    "bars_open": 24,
+    "last_processed_candle": "2026-09-16T14:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -49,7 +49,7 @@
       }
     ],
     "_tl_last_break_count": 3,
-    "_tl_choch_active": true,
+    "_tl_choch_active": false,
     "_tl_last_phase": "expansion"
   },
   "closed_ids": [
@@ -59,5 +59,5 @@
     "BEARISH|1.35344|1.34675"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-16T15:02:18.676411+00:00"
+  "_persisted_at": "2026-09-16T15:07:23.005814+00:00"
 }

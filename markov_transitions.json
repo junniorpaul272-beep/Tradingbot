@@ -18,7 +18,7 @@
       "BEARISH_FRESH": 2
     },
     "BEARISH_FRESH": {
-      "BEARISH_FRESH": 1078,
+      "BEARISH_FRESH": 1079,
       "CONSOLIDATION": 3,
       "BULLISH_FRESH": 1,
       "BEARISH_STALE": 1
@@ -31,36 +31,6 @@
     }
   },
   "calibration_predictions": [
-    {
-      "stated_prob": 0.9891,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0018,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0036,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0018,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0036,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
     {
       "stated_prob": 0.9891,
       "predicted_state": "BULLISH_FRESH",
@@ -59970,6 +59940,36 @@
       "predicted_state": "CONSOLIDATION",
       "actual_happened": false,
       "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0018,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0009,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0018,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_FRESH"
     },
     {
       "stated_prob": 0.0018,

@@ -1,5 +1,52 @@
 {
-  "open": null,
+  "open": {
+    "id": "53701f28f737",
+    "methodology_version": 3,
+    "leg_id": "BEARISH|1.35340|1.34553",
+    "opened_at": "2026-09-16T12:07:18.045942+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-16T11:55:00+00:00",
+    "fate": null,
+    "resolved_at": null,
+    "formation_state": {
+      "macro_was_choch": true,
+      "macro_leg_direction": "BEARISH",
+      "macro_leg_length_pips": 78.7,
+      "bos_15m_direction": "BEARISH",
+      "bos_15m_break_count": 1,
+      "bos_15m_was_choch": true,
+      "atr_pips": 3.57,
+      "atr_percentile_15m": 94.7,
+      "market_phase": "expansion",
+      "market_phase_age_bars": 0,
+      "measured_move_ratio": 1.113,
+      "measured_move_bucket": "EXT_100_150",
+      "transition_cause": "CHOCH",
+      "campaign_extension_multiple": 1.12,
+      "campaign_continuation_count": 50,
+      "atr_bucket": "high_vol",
+      "session": "london_ny_overlap",
+      "bias_state": "fresh",
+      "spike_state": "normal",
+      "trend_strength_atr_mult": 6.73,
+      "volatility_state": "expanding",
+      "compression_ratio": 3.1,
+      "pullback_depth_pct": 2.8
+    },
+    "tier1_touched_bar": null,
+    "tier2_touched_bar": null,
+    "tier3_touched_bar": null,
+    "timeline": [
+      {
+        "bar": 0,
+        "kind": "formed",
+        "detail": "Leg formed \u2014 Bearish (via CHoCH)"
+      }
+    ],
+    "_tl_last_break_count": 1,
+    "_tl_choch_active": true,
+    "_tl_last_phase": "expansion"
+  },
   "closed_ids": [
     "BULLISH|1.35498|1.34751",
     "BULLISH|1.35536|1.34943",
@@ -7,5 +54,5 @@
     "BEARISH|1.35344|1.34675"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-16T12:02:17.737676+00:00"
+  "_persisted_at": "2026-09-16T12:07:18.350582+00:00"
 }

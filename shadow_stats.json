@@ -2,25 +2,25 @@
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
     "logged": 237,
-    "resolved": 208,
-    "wins": 109,
+    "resolved": 215,
+    "wins": 116,
     "losses": 99,
-    "timed_out": 154,
-    "sum_r": 16.409177691491436,
-    "hit_1r": 33,
-    "hit_2r": 13,
+    "timed_out": 161,
+    "sum_r": 29.132927757840676,
+    "hit_1r": 40,
+    "hit_2r": 16,
     "hit_3r": 5
   },
   "EXP2_FIB": {
-    "logged": 3127,
-    "resolved": 3005,
-    "wins": 770,
+    "logged": 3131,
+    "resolved": 3025,
+    "wins": 790,
     "losses": 2235,
     "timed_out": 122,
-    "sum_r": -135.93172418081764,
-    "hit_1r": 1874,
-    "hit_2r": 1293,
-    "hit_3r": 950
+    "sum_r": -75.93172418081764,
+    "hit_1r": 1894,
+    "hit_2r": 1313,
+    "hit_3r": 970
   },
   "EXP3_POI": {
     "logged": 0,
@@ -45,14 +45,14 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 479,
-    "resolved": 349,
-    "wins": 158,
+    "logged": 480,
+    "resolved": 357,
+    "wins": 166,
     "losses": 191,
-    "timed_out": 258,
-    "sum_r": -0.14168023738158692,
-    "hit_1r": 62,
-    "hit_2r": 22,
+    "timed_out": 266,
+    "sum_r": 14.82003016891112,
+    "hit_1r": 70,
+    "hit_2r": 26,
     "hit_3r": 6
   },
   "EXP6_ALT_BIAS": {
@@ -68,25 +68,25 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 115,
-    "resolved": 72,
-    "wins": 38,
+    "resolved": 74,
+    "wins": 40,
     "losses": 34,
-    "timed_out": 44,
-    "sum_r": 10.5988571509386,
-    "hit_1r": 15,
+    "timed_out": 46,
+    "sum_r": 14.047295743126133,
+    "hit_1r": 17,
     "hit_2r": 4,
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 893,
-    "resolved": 866,
-    "wins": 346,
+    "logged": 894,
+    "resolved": 870,
+    "wins": 350,
     "losses": 520,
-    "timed_out": 40,
-    "sum_r": 352.7464889192407,
-    "hit_1r": 652,
-    "hit_2r": 570,
-    "hit_3r": 512
+    "timed_out": 42,
+    "sum_r": 362.1949275114282,
+    "hit_1r": 656,
+    "hit_2r": 572,
+    "hit_3r": 514
   },
   "EXP8_CISD": {
     "logged": 105,
@@ -121,5 +121,5 @@
     "hit_2r": 8,
     "hit_3r": 3
   },
-  "_persisted_at": "2026-09-16T15:57:18.328959+00:00"
+  "_persisted_at": "2026-09-17T07:02:21.650939+00:00"
 }

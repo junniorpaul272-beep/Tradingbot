@@ -291,22 +291,40 @@ def build_mechanism(event, understanding, mil_understanding):
 
 def build_market_story(understanding, mil_understanding=None, intent_hypothesis=None):
     """
-    Returns a dict with the friend's exact 8-field schema. Every value is
-    either a direct field from market_assessment (Brain's own synthesis)
-    or a plain restatement of a current_condition level — nothing here
-    is generated text, and nothing here is internal-diagnostic content
+    Returns a dict with every fact the narration library (narration_
+    library.py) needs to render any message this bot sends — the single
+    object both the light summary and the deep read draw from, so a
+    fact exists in exactly one place regardless of how many surfaces
+    show it. Every value is either a direct field from market_assessment
+    (Brain's own synthesis), a plain restatement of a current_condition
+    level, or a structured pass-through of a MIL field — nothing here is
+    generated text, and nothing here is internal-diagnostic content
     (weaknesses_prose is deliberately never read here — see
     build_mechanism()'s docstring above for why that bank is off-limits
     for anything human-facing).
 
+    EXTENDED (2026-09-16, per chat — the library redesign: "something is
+    grabbing from another file... to me it just feels messy"). Two
+    fields added so narration_library.py never has to reach into
+    mil_understanding itself: `counter_thesis` and `failure_condition`
+    are now carried here as STRUCTURED data (dicts, not pre-rendered
+    sentences) — this module's job is still only gathering and naming
+    facts, never composing prose; narration_library.py does the
+    rendering. Kept structured (not stringified) because the library
+    needs the raw numbers to decide HOW to phrase them, same reason
+    current_condition's levels are passed as floats, not as
+    what_price_has_done's already-formatted sentence would need to be
+    re-parsed to reuse.
+
     Never raises — any missing field is simply omitted (None), same
     "never fabricate, never crash" discipline as the rest of this
-    codebase. Callers (hfis.py) should treat a None field as "say
-    nothing for this part," never a placeholder.
+    codebase. Callers should treat a None field as "say nothing for
+    this part," never a placeholder.
     """
     try:
         cc = (understanding or {}).get("current_condition") or {}
         ma = (understanding or {}).get("market_assessment") or {}
+        mu = mil_understanding or {}
         origin, extreme = cc.get("macro_leg_origin"), cc.get("macro_leg_extreme")
 
         what_price_has_done = None
@@ -316,6 +334,44 @@ def build_market_story(understanding, mil_understanding=None, intent_hypothesis=
                 f"The current {direction_word} leg has run from {origin:.5f} to {extreme:.5f}."
                 if direction_word else f"The current leg has run from {origin:.5f} to {extreme:.5f}."
             )
+
+        # Structured pass-throughs — narration_library.py renders these,
+        # this function only names and gathers them. `None` when the
+        # underlying MIL field is empty/unpopulated (mil.py's own
+        # placeholders — a 0.0 failure-condition level, a None counter-
+        # case direction — are normalized to None here so the library
+        # never has to know MIL's specific placeholder conventions).
+        fc = mu.get("failure_condition") or {}
+        failure_condition = (
+            {"level": fc.get("origin_level"), "direction": fc.get("origin_direction")}
+            if fc.get("origin_level") else None
+        )
+
+        counter = mu.get("counter_thesis")
+        if counter and counter.get("direction"):
+            counter_thesis = {
+                "kind": "confirmed_candidate",
+                "direction": counter["direction"],
+                "status": counter.get("status") or "awaiting_confirmation",
+                "watching_for": counter.get("watching_for") or [],
+            }
+        else:
+            ecc = mu.get("emerging_counter_case")
+            if ecc and ecc.get("direction"):
+                fizzled_before = any(
+                    r.get("resolution") == "fizzled"
+                    and (r.get("direction") or "").lower() == ecc["direction"].lower()
+                    for r in (mu.get("counter_candidate_history") or [])[-5:]
+                )
+                counter_thesis = {
+                    "kind": "emerging",
+                    "direction": ecc["direction"],
+                    "maturity": ecc.get("maturity"),
+                    "range_pips": ecc.get("range_pips"),
+                    "fizzled_before": fizzled_before,
+                }
+            else:
+                counter_thesis = None
 
         return {
             "direction": cc.get("macro_bias"),
@@ -328,6 +384,8 @@ def build_market_story(understanding, mil_understanding=None, intent_hypothesis=
             "why_it_matters": ma.get("primary_threat"),
             "tension": ma.get("alternative"),
             "what_would_change_it": ma.get("next_watch") or ma.get("confirmation_needed"),
+            "counter_thesis": counter_thesis,
+            "failure_condition": failure_condition,
         }
     except Exception as e:
         print("[MARKET STORY BUILD ERROR] " + str(e))

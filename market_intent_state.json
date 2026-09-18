@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BEARISH|1.35340|1.33364",
     "opened_at": "2026-09-18T07:00:21.589127+00:00",
-    "bars_open": 57,
-    "last_processed_candle": "2026-09-18T11:35:00+00:00",
+    "bars_open": 58,
+    "last_processed_candle": "2026-09-18T11:40:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -23,8 +23,12 @@
       "9 breaks into this leg \u2014 getting old",
       "6.7 ATR from EMA_100 \u2014 extended"
     ],
-    "materialized_codes": [],
-    "materialized_at_bar": {},
+    "materialized_codes": [
+      "FRESH_DISPLACEMENT"
+    ],
+    "materialized_at_bar": {
+      "FRESH_DISPLACEMENT": 58
+    },
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
@@ -39,5 +43,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-18T11:45:18.028580+00:00"
+  "_persisted_at": "2026-09-18T11:50:18.330656+00:00"
 }

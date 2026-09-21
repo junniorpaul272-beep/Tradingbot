@@ -1,5 +1,5 @@
 {
-  "total_scans": 6125,
+  "total_scans": 6126,
   "consolidation_skip": 416,
   "atr_invalid": 0,
   "signals_very_low_atr": 2,
@@ -14,21 +14,21 @@
   "risk_gate_suppressed": 318,
   "signals_sent": 10,
   "wins": 2,
-  "losses": 6,
+  "losses": 7,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-09-21 12:10",
+  "last_scan": "2026-09-21 12:15",
   "last_update_id": 628997586,
   "result_logged_for_signal": null,
   "last_closed_trade": {
-    "direction": "BUY",
-    "entry": "1.35437",
-    "exit": "1.35299",
+    "direction": "SELL",
+    "entry": "1.33938",
+    "exit": "1.33982",
     "result": "LOSS",
     "hit": "SL",
-    "pips": -13.813390220891453,
-    "closed_at": "2026-09-10 12:05 UTC",
-    "closed_candle_time": "2026-09-10T11:55:00+00:00",
-    "opened_at_display": "2026-09-09 15:35 UTC"
+    "pips": -4.383999999999499,
+    "closed_at": "2026-09-21 12:15 UTC",
+    "closed_candle_time": "2026-09-21T12:00:00+00:00",
+    "opened_at_display": "2026-09-21 12:05 UTC"
   },
   "last_journal_signal": "SELL",
   "last_journal_entry": "1.33938",
@@ -168,6 +168,19 @@
       "tier_rating": "C",
       "target_r": 3.0,
       "realized_r": -1.0
+    },
+    {
+      "time": "2026-09-21 12:05 UTC",
+      "logged_at": "2026-09-21 12:15 UTC",
+      "result": "LOSS",
+      "note": "auto-closed (SL/TP hit)",
+      "signal": "SELL",
+      "entry": "1.33938",
+      "tier_label": "TIER_2_FIB",
+      "score": 60,
+      "tier_rating": "C",
+      "target_r": 3.0,
+      "realized_r": -1.0
     }
   ],
   "last_journal_structure": "BOS",
@@ -191,30 +204,5 @@
     "8-9p": 21,
     "9-10p": 12,
     "10p+": 7
-  },
-  "pending_confirmation": {
-    "direction": "SELL",
-    "entry": 1.33938,
-    "sl": 1.3398184,
-    "tp": 1.3380648000000002,
-    "score": 60,
-    "tier_rating": "C",
-    "tier_label": "TIER_2_FIB",
-    "opened_at": "2026-09-21T12:05:20.794459+00:00",
-    "opened_at_display": "2026-09-21 12:05 UTC",
-    "last_update_sent_at": null,
-    "last_checked_candle": "2026-09-21T11:55:00+00:00",
-    "band_label": null,
-    "target_r": 3.0,
-    "size_mult": 1.0,
-    "partial_r": null,
-    "breakeven_r": null,
-    "risk_band": "MEDIUM",
-    "risk_reasons": [
-      "no aligned 15M BOS \u2014 pullback lacks a momentum confirmation",
-      "fib pocket not swept \u2014 no liquidity grab before the reaction"
-    ],
-    "risk_recommendation": "Standard structural stop is workable \u2014 the reasons above are worth keeping in mind while managing.",
-    "awaiting_confirmation_since": "2026-09-21T12:05:20.794459+00:00"
   }
 }

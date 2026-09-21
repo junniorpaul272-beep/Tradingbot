@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.34077|1.33697",
     "opened_at": "2026-09-21T10:07:21.862037+00:00",
-    "bars_open": 20,
-    "last_processed_candle": "2026-09-21T11:35:00+00:00",
+    "bars_open": 21,
+    "last_processed_candle": "2026-09-21T11:40:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -46,10 +46,15 @@
         "bar": 18,
         "kind": "zone_touch",
         "detail": "Tier 2 zone touched (Fib pocket)"
+      },
+      {
+        "bar": 21,
+        "kind": "choch",
+        "detail": "15M CHoCH confirmed"
       }
     ],
-    "_tl_last_break_count": null,
-    "_tl_choch_active": false,
+    "_tl_last_break_count": 1,
+    "_tl_choch_active": true,
     "_tl_last_phase": "expansion"
   },
   "closed_ids": [
@@ -59,5 +64,5 @@
     "BEARISH|1.35344|1.34675"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-21T11:47:56.289609+00:00"
+  "_persisted_at": "2026-09-21T11:52:17.375471+00:00"
 }

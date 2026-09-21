@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "824e6a0ecc6c",
+    "id": "d29194659216",
     "methodology_version": 1,
     "leg_id": "BEARISH|1.34077|1.33697",
-    "opened_at": "2026-09-21T15:20:19.786664+00:00",
+    "opened_at": "2026-09-21T15:25:23.832755+00:00",
     "bars_open": 0,
-    "last_processed_candle": "2026-09-21T15:10:00+00:00",
+    "last_processed_candle": "2026-09-21T15:15:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -25,7 +25,7 @@
       "Order block confirmed, unmitigated",
       "1H volatility expanding",
       "Bias marked stale \u2014 founding leg already invalidated",
-      "Very-low-ATR warning \u2014 3.5p, below the 4p floor"
+      "Very-low-ATR warning \u2014 3.3p, below the 4p floor"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -34,7 +34,7 @@
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 3.512557175011654,
+      "atr_5m_pips": 3.270878652279459,
       "break_count": null,
       "campaign_continuation_count": 31,
       "num_watch_codes": 3,
@@ -43,5 +43,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-21T15:20:22.210675+00:00"
+  "_persisted_at": "2026-09-21T15:25:24.583182+00:00"
 }

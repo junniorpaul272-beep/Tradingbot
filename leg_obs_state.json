@@ -1,78 +1,12 @@
 {
-  "open": {
-    "id": "a615d4eca724",
-    "methodology_version": 3,
-    "leg_id": "BEARISH|1.34077|1.33697",
-    "opened_at": "2026-09-21T10:07:21.862037+00:00",
-    "bars_open": 49,
-    "last_processed_candle": "2026-09-21T14:00:00+00:00",
-    "fate": null,
-    "resolved_at": null,
-    "formation_state": {
-      "macro_was_choch": true,
-      "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 38.0,
-      "bos_15m_direction": null,
-      "bos_15m_break_count": null,
-      "bos_15m_was_choch": null,
-      "atr_pips": 2.98,
-      "atr_percentile_15m": 61.4,
-      "market_phase": "expansion",
-      "market_phase_age_bars": 0,
-      "measured_move_ratio": null,
-      "measured_move_bucket": null,
-      "transition_cause": "CHOCH",
-      "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
-      "atr_bucket": "normal_vol",
-      "session": "london_early",
-      "bias_state": "fresh",
-      "spike_state": "normal",
-      "trend_strength_atr_mult": null,
-      "volatility_state": "flat",
-      "compression_ratio": 2.59,
-      "pullback_depth_pct": null
-    },
-    "tier1_touched_bar": 45,
-    "tier2_touched_bar": 18,
-    "tier3_touched_bar": 45,
-    "timeline": [
-      {
-        "bar": 0,
-        "kind": "formed",
-        "detail": "Leg formed \u2014 Bearish (via CHoCH)"
-      },
-      {
-        "bar": 18,
-        "kind": "zone_touch",
-        "detail": "Tier 2 zone touched (Fib pocket)"
-      },
-      {
-        "bar": 21,
-        "kind": "choch",
-        "detail": "15M CHoCH confirmed"
-      },
-      {
-        "bar": 45,
-        "kind": "zone_touch",
-        "detail": "Tier 1 zone touched (Order Block)"
-      },
-      {
-        "bar": 45,
-        "kind": "zone_touch",
-        "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
-      }
-    ],
-    "_tl_last_break_count": 1,
-    "_tl_choch_active": true,
-    "_tl_last_phase": "expansion"
-  },
+  "open": null,
   "closed_ids": [
     "BULLISH|1.35498|1.34751",
     "BULLISH|1.35536|1.34943",
     "BULLISH|1.35682|1.34943",
-    "BEARISH|1.35344|1.34675"
+    "BEARISH|1.35344|1.34675",
+    "BEARISH|1.34077|1.33697"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-21T14:12:21.560215+00:00"
+  "_persisted_at": "2026-09-21T14:17:19.527307+00:00"
 }

@@ -68,13 +68,13 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 121,
-    "resolved": 79,
-    "wins": 41,
+    "resolved": 80,
+    "wins": 42,
     "losses": 38,
-    "timed_out": 47,
-    "sum_r": 11.070417130409393,
-    "hit_1r": 18,
-    "hit_2r": 4,
+    "timed_out": 48,
+    "sum_r": 13.647618893137246,
+    "hit_1r": 19,
+    "hit_2r": 5,
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
@@ -101,13 +101,13 @@
   },
   "EXP4_POLICY_LAB": {
     "logged": 16,
-    "resolved": 15,
-    "wins": 7,
+    "resolved": 16,
+    "wins": 8,
     "losses": 8,
-    "timed_out": 6,
-    "sum_r": 4.709507365895334,
-    "hit_1r": 9,
-    "hit_2r": 3,
+    "timed_out": 7,
+    "sum_r": 7.286709128623186,
+    "hit_1r": 10,
+    "hit_2r": 4,
     "hit_3r": 1
   },
   "EXP3_SR": {
@@ -121,5 +121,5 @@
     "hit_2r": 9,
     "hit_3r": 4
   },
-  "_persisted_at": "2026-09-22T15:12:27.193597+00:00"
+  "_persisted_at": "2026-09-22T15:17:22.777004+00:00"
 }

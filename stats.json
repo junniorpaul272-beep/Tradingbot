@@ -1,5 +1,5 @@
 {
-  "total_scans": 6274,
+  "total_scans": 6275,
   "consolidation_skip": 416,
   "atr_invalid": 0,
   "signals_very_low_atr": 3,
@@ -13,22 +13,22 @@
   "ownership_upgrades": 5,
   "risk_gate_suppressed": 318,
   "signals_sent": 12,
-  "wins": 3,
+  "wins": 4,
   "losses": 7,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-09-22 15:40",
+  "last_scan": "2026-09-22 15:43",
   "last_update_id": 628997586,
   "result_logged_for_signal": null,
   "last_closed_trade": {
     "direction": "SELL",
-    "entry": "1.33932",
-    "exit": "1.33782",
+    "entry": "1.33695",
+    "exit": "1.33364",
     "result": "WIN",
     "hit": "TP",
-    "pips": 14.951999999996968,
-    "closed_at": "2026-09-21 14:10 UTC",
-    "closed_candle_time": "2026-09-21T14:00:00+00:00",
-    "opened_at_display": "2026-09-21 12:35 UTC"
+    "pips": 33.059111332371934,
+    "closed_at": "2026-09-22 15:43 UTC",
+    "closed_candle_time": "2026-09-22T15:35:00+00:00",
+    "opened_at_display": "2026-09-22 10:15 UTC"
   },
   "last_journal_signal": "SELL",
   "last_journal_entry": "1.33695",
@@ -194,6 +194,19 @@
       "tier_rating": "C",
       "target_r": 3.0,
       "realized_r": 3.0
+    },
+    {
+      "time": "2026-09-22 10:15 UTC",
+      "logged_at": "2026-09-22 15:43 UTC",
+      "result": "WIN",
+      "note": "auto-closed (SL/TP hit)",
+      "signal": "SELL",
+      "entry": "1.33695",
+      "tier_label": "TIER_2_FIB",
+      "score": 60,
+      "tier_rating": "C",
+      "target_r": 3.0,
+      "realized_r": 3.0
     }
   ],
   "last_journal_structure": "BOS",
@@ -217,24 +230,5 @@
     "8-9p": 25,
     "9-10p": 15,
     "10p+": 7
-  },
-  "active_trade": {
-    "direction": "SELL",
-    "entry": 1.33695,
-    "sl": 1.3380519703777458,
-    "tp": 1.333644088866763,
-    "score": 60,
-    "tier_rating": "C",
-    "tier_label": "TIER_2_FIB",
-    "opened_at": "2026-09-22T10:15:21.146759+00:00",
-    "opened_at_display": "2026-09-22 10:15 UTC",
-    "last_update_sent_at": "2026-09-22T15:20:19.699750+00:00",
-    "last_checked_candle": "2026-09-22T15:30:00+00:00",
-    "band_label": null,
-    "target_r": 3.0,
-    "size_mult": 1.0,
-    "partial_r": null,
-    "breakeven_r": null,
-    "risk_recommendation": "Standard structural stop is workable \u2014 the reasons above are worth keeping in mind while managing."
   }
 }

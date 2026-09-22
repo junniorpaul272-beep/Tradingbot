@@ -1,5 +1,5 @@
 {
-  "total_scans": 6222,
+  "total_scans": 6223,
   "consolidation_skip": 416,
   "atr_invalid": 0,
   "signals_very_low_atr": 3,
@@ -16,7 +16,7 @@
   "wins": 3,
   "losses": 7,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-09-22 11:15",
+  "last_scan": "2026-09-22 11:20",
   "last_update_id": 628997586,
   "result_logged_for_signal": null,
   "last_closed_trade": {
@@ -229,7 +229,7 @@
     "opened_at": "2026-09-22T10:15:21.146759+00:00",
     "opened_at_display": "2026-09-22 10:15 UTC",
     "last_update_sent_at": "2026-09-22T11:00:54.271450+00:00",
-    "last_checked_candle": "2026-09-22T11:05:00+00:00",
+    "last_checked_candle": "2026-09-22T11:10:00+00:00",
     "band_label": null,
     "target_r": 3.0,
     "size_mult": 1.0,

@@ -1,12 +1,5 @@
 [
   {
-    "time": "2026-09-14 15:35 UTC",
-    "live_bias": "BEARISH",
-    "shadow_bias": "BEARISH",
-    "agree": true,
-    "price": 1.34834
-  },
-  {
     "time": "2026-09-14 15:40 UTC",
     "live_bias": "BEARISH",
     "shadow_bias": "BEARISH",
@@ -3498,5 +3491,12 @@
     "shadow_bias": "BEARISH",
     "agree": true,
     "price": 1.33553
+  },
+  {
+    "time": "2026-09-22 09:20 UTC",
+    "live_bias": "BEARISH",
+    "shadow_bias": "BEARISH",
+    "agree": true,
+    "price": 1.3356
   }
 ]

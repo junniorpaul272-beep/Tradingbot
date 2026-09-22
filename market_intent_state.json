@@ -1,5 +1,39 @@
 {
-  "open": null,
+  "open": {
+    "id": "d96920740172",
+    "methodology_version": 1,
+    "leg_id": "BEARISH|1.34000|1.33282",
+    "opened_at": "2026-09-22T09:20:21.035586+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-22T09:10:00+00:00",
+    "macro_bias": "BEARISH",
+    "phase": "expansion",
+    "watch_codes": [
+      "PULLBACK_TO_OB"
+    ],
+    "caution_codes": [],
+    "reasons": [
+      "HTF bias: BEARISH",
+      "Fresh 15M BOS aligned with bias",
+      "Order block confirmed, unmitigated",
+      "1H volatility expanding",
+      "1.9 ATR from EMA_100 \u2014 extended"
+    ],
+    "materialized_codes": [],
+    "materialized_at_bar": {},
+    "fate": null,
+    "leg_fate": null,
+    "resolved_at": null,
+    "tags": {
+      "phase": "expansion",
+      "atr_5m_pips": 8.036401446808055,
+      "break_count": 2,
+      "campaign_continuation_count": 29,
+      "num_watch_codes": 1,
+      "num_caution_codes": 0,
+      "very_low_atr_warning": false
+    }
+  },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-22T09:15:21.492931+00:00"
+  "_persisted_at": "2026-09-22T09:20:21.912344+00:00"
 }

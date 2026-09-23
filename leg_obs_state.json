@@ -1,37 +1,37 @@
 {
   "open": {
-    "id": "1bdf34b70384",
+    "id": "148f1245a333",
     "methodology_version": 3,
-    "leg_id": "BEARISH|1.34077|1.33016",
-    "opened_at": "2026-09-23T08:07:17.929444+00:00",
-    "bars_open": 11,
-    "last_processed_candle": "2026-09-23T08:50:00+00:00",
+    "leg_id": "BEARISH|1.34077|1.32938",
+    "opened_at": "2026-09-23T09:07:23.879952+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-23T08:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": false,
       "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 106.1,
+      "macro_leg_length_pips": 113.9,
       "bos_15m_direction": "BEARISH",
       "bos_15m_break_count": 3,
       "bos_15m_was_choch": false,
-      "atr_pips": 4.15,
-      "atr_percentile_15m": 78.9,
+      "atr_pips": 3.83,
+      "atr_percentile_15m": 94.7,
       "market_phase": "expansion",
-      "market_phase_age_bars": 13,
+      "market_phase_age_bars": 25,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "FRESH_BOS",
-      "campaign_extension_multiple": 1.1,
-      "campaign_continuation_count": 14,
+      "campaign_extension_multiple": 1.18,
+      "campaign_continuation_count": 26,
       "atr_bucket": "high_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 8.56,
+      "trend_strength_atr_mult": 8.74,
       "volatility_state": "expanding",
-      "compression_ratio": 3.83,
-      "pullback_depth_pct": 4.9
+      "compression_ratio": 4.6,
+      "pullback_depth_pct": 17.2
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
@@ -55,5 +55,5 @@
     "BEARISH|1.34077|1.33697"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-23T09:02:28.351986+00:00"
+  "_persisted_at": "2026-09-23T09:07:24.996544+00:00"
 }

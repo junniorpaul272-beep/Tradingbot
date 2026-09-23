@@ -1,37 +1,37 @@
 {
   "open": {
-    "id": "4e831501faa5",
+    "id": "d092f79d6db6",
     "methodology_version": 3,
-    "leg_id": "BEARISH|1.34077|1.32806",
-    "opened_at": "2026-09-23T10:07:23.177221+00:00",
-    "bars_open": 23,
-    "last_processed_candle": "2026-09-23T11:50:00+00:00",
+    "leg_id": "BEARISH|1.34077|1.32747",
+    "opened_at": "2026-09-23T12:07:18.651646+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-23T11:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": false,
       "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 127.1,
+      "macro_leg_length_pips": 133.0,
       "bos_15m_direction": "BEARISH",
       "bos_15m_break_count": 3,
       "bos_15m_was_choch": false,
-      "atr_pips": 3.26,
-      "atr_percentile_15m": 94.7,
+      "atr_pips": 4.54,
+      "atr_percentile_15m": 98.2,
       "market_phase": "expansion",
-      "market_phase_age_bars": 37,
+      "market_phase_age_bars": 61,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "FRESH_BOS",
-      "campaign_extension_multiple": 1.32,
-      "campaign_continuation_count": 38,
+      "campaign_extension_multiple": 1.38,
+      "campaign_continuation_count": 62,
       "atr_bucket": "high_vol",
-      "session": "london_early",
+      "session": "london_ny_overlap",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 10.01,
+      "trend_strength_atr_mult": 5.66,
       "volatility_state": "expanding",
-      "compression_ratio": 5.13,
-      "pullback_depth_pct": 2.1
+      "compression_ratio": 2.55,
+      "pullback_depth_pct": 12.6
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
@@ -41,11 +41,6 @@
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bearish (as continuation)"
-      },
-      {
-        "bar": 21,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 3"
       }
     ],
     "_tl_last_break_count": 3,
@@ -60,5 +55,5 @@
     "BEARISH|1.34077|1.33697"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-23T12:02:24.087555+00:00"
+  "_persisted_at": "2026-09-23T12:07:18.858510+00:00"
 }

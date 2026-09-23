@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "125fc4837bdd",
+    "id": "1dd0dc29ade0",
     "methodology_version": 1,
-    "leg_id": "BEARISH|1.34077|1.33113",
-    "opened_at": "2026-09-23T07:00:18.558556+00:00",
-    "bars_open": 12,
-    "last_processed_candle": "2026-09-23T07:50:00+00:00",
+    "leg_id": "BEARISH|1.34077|1.33016",
+    "opened_at": "2026-09-23T08:05:18.482893+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-23T07:55:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "expansion",
     "watch_codes": [
@@ -17,8 +17,8 @@
     "reasons": [
       "HTF bias: BEARISH",
       "Fresh 15M BOS aligned with bias",
-      "Very-low-ATR warning \u2014 2.9p, below the 4p floor",
-      "6.3 ATR from EMA_100 \u2014 extended"
+      "Low-ATR warning \u2014 4.2p, below the 6p floor",
+      "6.0 ATR from EMA_100 \u2014 extended"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -27,14 +27,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "expansion",
-      "atr_5m_pips": 2.9085719112876443,
+      "atr_5m_pips": 4.153431653370674,
       "break_count": 2,
-      "campaign_continuation_count": 1,
+      "campaign_continuation_count": 14,
       "num_watch_codes": 1,
       "num_caution_codes": 1,
-      "very_low_atr_warning": true
+      "very_low_atr_warning": false
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-23T08:00:23.254074+00:00"
+  "_persisted_at": "2026-09-23T08:05:21.505677+00:00"
 }

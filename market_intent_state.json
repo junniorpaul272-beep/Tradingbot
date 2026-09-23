@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BEARISH|1.34077|1.32938",
     "opened_at": "2026-09-23T09:05:22.404854+00:00",
-    "bars_open": 5,
-    "last_processed_candle": "2026-09-23T09:20:00+00:00",
+    "bars_open": 6,
+    "last_processed_candle": "2026-09-23T09:25:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "expansion",
     "watch_codes": [
@@ -37,5 +37,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-23T09:30:23.202499+00:00"
+  "_persisted_at": "2026-09-23T09:35:22.234741+00:00"
 }

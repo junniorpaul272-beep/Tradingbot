@@ -1,24 +1,28 @@
 {
   "open": {
-    "id": "1c5e8888f4b0",
+    "id": "7758e422e8c6",
     "methodology_version": 1,
-    "leg_id": "BEARISH|1.34077|1.32507",
-    "opened_at": "2026-09-23T14:05:19.876569+00:00",
-    "bars_open": 22,
-    "last_processed_candle": "2026-09-23T15:45:00+00:00",
+    "leg_id": "BEARISH|1.34000|1.32227",
+    "opened_at": "2026-09-24T07:00:22.580906+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-09-24T06:50:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "expansion",
     "watch_codes": [
-      "PULLBACK_TO_FIB_POCKET"
+      "PULLBACK_TO_FIB_POCKET",
+      "FIVE_M_ALIGNMENT"
     ],
-    "caution_codes": [],
+    "caution_codes": [
+      "UNSWEPT_CHOCH",
+      "ATR_INCOMPATIBLE"
+    ],
     "reasons": [
       "HTF bias: BEARISH",
-      "Fresh 15M BOS aligned with bias",
-      "1H volatility expanding",
-      "Order block already mitigated",
+      "15M CHoCH confirming direction",
+      "Order block confirmed, unmitigated",
+      "Low-ATR warning \u2014 4.3p, below the 6p floor",
       "3 breaks into this leg \u2014 getting old",
-      "5.4 ATR from EMA_100 \u2014 extended"
+      "6.9 ATR from EMA_100 \u2014 extended"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -27,14 +31,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "expansion",
-      "atr_5m_pips": 8.530442665232142,
+      "atr_5m_pips": 4.313590621427247,
       "break_count": 3,
-      "campaign_continuation_count": 86,
-      "num_watch_codes": 1,
-      "num_caution_codes": 0,
+      "campaign_continuation_count": 1,
+      "num_watch_codes": 2,
+      "num_caution_codes": 2,
       "very_low_atr_warning": false
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-23T15:55:23.711934+00:00"
+  "_persisted_at": "2026-09-24T07:00:25.618905+00:00"
 }

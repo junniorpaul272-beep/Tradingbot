@@ -46,13 +46,13 @@
   },
   "EXP5_ABLATION": {
     "logged": 553,
-    "resolved": 422,
-    "wins": 208,
+    "resolved": 423,
+    "wins": 209,
     "losses": 214,
-    "timed_out": 310,
-    "sum_r": 19.671811942868988,
-    "hit_1r": 83,
-    "hit_2r": 26,
+    "timed_out": 311,
+    "sum_r": 21.90538858520501,
+    "hit_1r": 84,
+    "hit_2r": 27,
     "hit_3r": 6
   },
   "EXP6_ALT_BIAS": {
@@ -121,5 +121,5 @@
     "hit_2r": 9,
     "hit_3r": 4
   },
-  "_persisted_at": "2026-09-25T11:57:19.935385+00:00"
+  "_persisted_at": "2026-09-25T12:02:20.403134+00:00"
 }

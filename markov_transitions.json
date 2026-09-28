@@ -25,43 +25,13 @@
       "BEARISH_STALE": 2
     },
     "BULLISH_FRESH": {
-      "BULLISH_FRESH": 1287,
+      "BULLISH_FRESH": 1288,
       "BEARISH_FRESH": 1,
       "CONSOLIDATION": 2,
       "BULLISH_STALE": 4
     }
   },
   "calibration_predictions": [
-    {
-      "stated_prob": 0.0053,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9786,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0107,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
     {
       "stated_prob": 0.0053,
       "predicted_state": "BULLISH_FRESH",
@@ -60010,6 +59980,36 @@
     },
     {
       "stated_prob": 0.0039,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9915,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
       "predicted_state": "BULLISH_STALE",
       "actual_happened": false,
       "from_state": "BULLISH_FRESH"

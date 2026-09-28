@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "c0a3db66ee5e",
+    "id": "09b3a632eb74",
     "methodology_version": 1,
     "leg_id": "BULLISH|1.32672|1.32238",
-    "opened_at": "2026-09-28T08:20:21.962280+00:00",
+    "opened_at": "2026-09-28T08:25:17.280532+00:00",
     "bars_open": 0,
-    "last_processed_candle": "2026-09-28T08:10:00+00:00",
+    "last_processed_candle": "2026-09-28T08:15:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -13,8 +13,7 @@
       "SWEEP_AND_RECLAIM"
     ],
     "caution_codes": [
-      "UNSWEPT_CHOCH",
-      "ATR_INCOMPATIBLE"
+      "UNSWEPT_CHOCH"
     ],
     "reasons": [
       "HTF bias: BULLISH",
@@ -22,8 +21,7 @@
       "15M CHoCH confirming direction",
       "1H volatility expanding",
       "Bias marked stale \u2014 founding leg already invalidated",
-      "Order block already mitigated",
-      "Low-ATR warning \u2014 6.0p, below the 6p floor"
+      "Order block already mitigated"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -32,14 +30,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 5.995126455034732,
+      "atr_5m_pips": 6.009105653918535,
       "break_count": null,
       "campaign_continuation_count": 1,
       "num_watch_codes": 2,
-      "num_caution_codes": 2,
+      "num_caution_codes": 1,
       "very_low_atr_warning": false
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-09-28T08:20:24.585987+00:00"
+  "_persisted_at": "2026-09-28T08:25:20.006354+00:00"
 }

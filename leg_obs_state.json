@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BULLISH|1.32742|1.32048",
     "opened_at": "2026-09-28T09:07:25.944183+00:00",
-    "bars_open": 71,
-    "last_processed_candle": "2026-09-28T14:50:00+00:00",
+    "bars_open": 72,
+    "last_processed_candle": "2026-09-28T14:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -34,8 +34,8 @@
       "pullback_depth_pct": 12.7
     },
     "tier1_touched_bar": 50,
-    "tier2_touched_bar": null,
-    "tier3_touched_bar": null,
+    "tier2_touched_bar": 72,
+    "tier3_touched_bar": 72,
     "timeline": [
       {
         "bar": 0,
@@ -56,10 +56,25 @@
         "bar": 63,
         "kind": "break",
         "detail": "New 15M break \u2014 count now 3"
+      },
+      {
+        "bar": 72,
+        "kind": "choch",
+        "detail": "15M CHoCH confirmed"
+      },
+      {
+        "bar": 72,
+        "kind": "zone_touch",
+        "detail": "Tier 2 zone touched (Fib pocket)"
+      },
+      {
+        "bar": 72,
+        "kind": "zone_touch",
+        "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
       }
     ],
-    "_tl_last_break_count": 3,
-    "_tl_choch_active": false,
+    "_tl_last_break_count": 1,
+    "_tl_choch_active": true,
     "_tl_last_phase": "expansion"
   },
   "closed_ids": [
@@ -71,5 +86,5 @@
     "BULLISH|1.32672|1.32238"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-28T15:02:23.717858+00:00"
+  "_persisted_at": "2026-09-28T15:07:21.238823+00:00"
 }

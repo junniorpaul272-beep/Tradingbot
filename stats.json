@@ -1,22 +1,22 @@
 {
-  "total_scans": 6645,
+  "total_scans": 6646,
   "consolidation_skip": 416,
   "atr_invalid": 0,
-  "signals_very_low_atr": 3,
+  "signals_very_low_atr": 4,
   "signals_low_atr": 2,
   "regime_shift_skip": 40,
   "session_skip": 2,
   "no_leg_owner": 2414,
-  "tier1_signals": 2,
+  "tier1_signals": 3,
   "tier2_signals": 5,
   "tier3_signals": 0,
   "ownership_upgrades": 5,
   "risk_gate_suppressed": 371,
-  "signals_sent": 12,
+  "signals_sent": 13,
   "wins": 4,
   "losses": 7,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-09-28 10:30",
+  "last_scan": "2026-09-28 10:35",
   "last_update_id": 628997637,
   "result_logged_for_signal": null,
   "last_closed_trade": {
@@ -30,17 +30,15 @@
     "closed_candle_time": "2026-09-22T15:35:00+00:00",
     "opened_at_display": "2026-09-22 10:15 UTC"
   },
-  "last_journal_signal": "SELL",
-  "last_journal_entry": "1.33695",
-  "last_journal_tier_label": "TIER_2_FIB",
-  "last_journal_score": 60,
-  "last_journal_tier_rating": "C",
-  "last_journal_time": "2026-09-22 10:15 UTC",
+  "last_journal_signal": "BUY",
+  "last_journal_entry": "1.32541",
+  "last_journal_tier_label": "TIER_1_POI",
+  "last_journal_score": 70,
+  "last_journal_tier_rating": "B",
+  "last_journal_time": "2026-09-28 10:35 UTC",
   "last_journal_timeline": {
-    "choch_bos_at": "2026-09-22T09:30:25.873296+00:00",
-    "choch_bos_label": "BOS",
-    "fib_entered_at": "2026-09-22T09:30:25.873296+00:00",
-    "rejection_at": "2026-09-22T10:15:21.146759+00:00"
+    "choch_bos_at": "2026-09-28T09:05:18.202628+00:00",
+    "choch_bos_label": "BOS"
   },
   "_pending_trade_query": false,
   "atr_too_low": 1621,
@@ -222,7 +220,7 @@
   "atr_histogram": {
     "1-2p": 19,
     "2-3p": 530,
-    "3-4p": 1065,
+    "3-4p": 1066,
     "4-5p": 784,
     "5-6p": 291,
     "6-7p": 109,
@@ -230,5 +228,29 @@
     "8-9p": 33,
     "9-10p": 15,
     "10p+": 7
+  },
+  "pending_confirmation": {
+    "direction": "BUY",
+    "entry": 1.32541,
+    "sl": 1.3243834621514257,
+    "tp": 1.328489613545723,
+    "score": 70,
+    "tier_rating": "B",
+    "tier_label": "TIER_1_POI",
+    "opened_at": "2026-09-28T10:35:18.402853+00:00",
+    "opened_at_display": "2026-09-28 10:35 UTC",
+    "last_update_sent_at": null,
+    "last_checked_candle": "2026-09-28T10:25:00+00:00",
+    "band_label": null,
+    "target_r": 3.0,
+    "size_mult": 1.0,
+    "partial_r": null,
+    "breakeven_r": null,
+    "risk_band": "HIGH",
+    "risk_reasons": [
+      "no CHoCH \u2014 continuation OB, not a flip-driven reaction"
+    ],
+    "risk_recommendation": "Standard structural stop still applies, but the reasons above describe real invalidation risk \u2014 consider whether your own risk tolerance wants extra room or a smaller size.",
+    "awaiting_confirmation_since": "2026-09-28T10:35:18.402853+00:00"
   }
 }

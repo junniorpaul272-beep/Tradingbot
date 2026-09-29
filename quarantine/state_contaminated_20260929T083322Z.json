@@ -1,0 +1,87 @@
+{
+  "replaced_values": {
+    "prior_continuation_leg_origin": 1.32565,
+    "prior_continuation_leg_extreme": 1.32293,
+    "macro_leg_extreme": 1.32293,
+    "campaign_current_extreme": 1.32293,
+    "campaign_initial_impulse_pips": 50.9,
+    "mil_understanding": {
+      "thesis_status": "SUPPORTED",
+      "primary_thesis": {
+        "direction": "BEARISH"
+      },
+      "supporting_evidence": [
+        "the higher-timeframe bias is bearish",
+        "a fresh 15-minute break of structure lines up with that bias",
+        "there's a confirmed, still-unmitigated order block backing it"
+      ],
+      "conflicting_evidence": [
+        "volatility is running low, at 4.5 pips against a 6p floor"
+      ],
+      "failure_condition": {
+        "origin_level": 0.0,
+        "origin_direction": "above",
+        "retrace_level": 0.0
+      },
+      "expectations": [
+        {
+          "type": "expected_next_event",
+          "text": "Follow-through BOS confirming the new direction"
+        }
+      ],
+      "confidence": "Research only",
+      "counter_thesis": null,
+      "unresolved_questions": [],
+      "history": [
+        {
+          "from_state": "UNKNOWN",
+          "to_state": "SUPPORTED",
+          "at": "2026-09-29T07:45:22.725627+00:00",
+          "transition_cause": "UNKNOWN",
+          "invalidation_fired": false,
+          "invalidation_mechanism": null,
+          "superseding_evidence": [],
+          "reconciliation": "Bootstrap \u2014 no prior MarketUnderstanding to reconcile against."
+        },
+        {
+          "from_state": "SUPPORTED",
+          "to_state": "TRANSITIONING",
+          "at": "2026-09-29T08:05:18.477614+00:00",
+          "transition_cause": "CHOCH_REVERSAL",
+          "invalidation_fired": false,
+          "invalidation_mechanism": null,
+          "superseding_evidence": [
+            "choch_reversal"
+          ],
+          "reconciliation": "A confirmed 1H CHoCH reversed the held direction \u2014 compute_macro_bias()'s own flip gate, the system's highest-authority direction-determining event."
+        },
+        {
+          "from_state": "TRANSITIONING",
+          "to_state": "SUPPORTED",
+          "at": "2026-09-29T08:10:21.116835+00:00",
+          "transition_cause": "CHOCH_REVERSAL",
+          "invalidation_fired": false,
+          "invalidation_mechanism": null,
+          "superseding_evidence": [
+            "choch_reversal"
+          ],
+          "reconciliation": "A confirmed 1H CHoCH reversed the held direction \u2014 compute_macro_bias()'s own flip gate, the system's highest-authority direction-determining event."
+        }
+      ],
+      "last_reconciled_at": "2026-09-29T08:30:20.310728+00:00",
+      "worldstate_version": null,
+      "emerging_counter_case": null,
+      "counter_candidate_history": []
+    },
+    "campaign_origin_time": "2026-09-28T16:00:00+00:00",
+    "campaign_continuation_count": 6,
+    "macro_leg_origin": 1.32802,
+    "macro_swing_confirmed_at": "2026-09-29T08:30:23.258752+00:00",
+    "campaign_origin": 1.32802,
+    "macro_swing_low": 1.32293,
+    "macro_leg_origin_time": "2026-09-28T16:00:00+00:00",
+    "macro_leg_was_choch": true,
+    "macro_leg_latest_swing_origin": 1.32565,
+    "macro_swing_high": 1.32802
+  }
+}

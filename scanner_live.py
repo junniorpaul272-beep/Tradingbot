@@ -85,7 +85,7 @@ from scanner_common import (
     MARKET_EVENT_PENDING_MAX,
 )
 from scanner_observation import (
-    compute_macro_bias, compute_macro_bias_shadow_old_rule, campaign_status,
+    compute_macro_bias, compute_macro_bias_shadow_old_rule,
     compute_macro_bias_min_leg_gate,
     compute_market_phase, capture_prior_leg_snapshot,
     capture_prior_continuation_snapshot, compute_measured_move_extension,
@@ -3760,13 +3760,6 @@ def _scan_once():
     macro_bias, bias_updates = compute_macro_bias(df_1h, df_15m, state)
     apply_state_updates(state, bias_updates)
     bias_stale = state.get("macro_bias_stale", False)
-    # Descriptive campaign context (2026-09-28): persisted so state.json
-    # and the per-scan digest show whether the bot actually HAS a campaign
-    # to reason from. Read by the promotion gate via campaign_status();
-    # nothing else consumes it yet.
-    _camp_status, _camp_status_reason = campaign_status(state)
-    apply_state_updates(state, {"campaign_status": _camp_status,
-                                "campaign_status_reason": _camp_status_reason})
 
     # ── MIL: reconcile belief against this scan's authoritative bias ──
     # Per chat (physiology work) — call site 1 of 2, traced against this
@@ -3898,31 +3891,13 @@ def _scan_once():
     # transition counts, not just race on the file write. min_scanner.py only
     # ever reads markov_state.json read-only (see its run_min_pass()). ─────
     try:
-        if _camp_status == "CONTAMINATED":
-            # Quarantined campaign (2026-09-28): a transition observed while
-            # the held direction rests on a contaminated interpretation is
-            # not market evidence - do not teach the matrix from it.
-            print("  [MARKOV] skipped - campaign CONTAMINATED")
-        else:
-            current_bias_state = classify_bias_state(macro_bias, bias_stale)
-            markov_data = load_markov_data()
-            record_markov_transition(state, markov_data, current_bias_state)
-            save_markov_data(markov_data)
-            save_state(state)  # persist the just-updated markov_last_state too
+        current_bias_state = classify_bias_state(macro_bias, bias_stale)
+        markov_data = load_markov_data()
+        record_markov_transition(state, markov_data, current_bias_state)
+        save_markov_data(markov_data)
+        save_state(state)  # persist the just-updated markov_last_state too
     except Exception as e:
         print("[MARKOV ERROR] " + str(e))
-
-    if _camp_status == "CONTAMINATED":
-        # Hold: no tier evaluation, no signals, no digest/evidence rows while
-        # the campaign is quarantined. Same early-return shape as the
-        # CONSOLIDATION block below. Cleared by the recovery tool.
-        save_stats(stats)
-        diag_set(diag, "macro_bias", False, "CAMPAIGN CONTAMINATED -- quarantined, awaiting recovery")
-        print("  Campaign CONTAMINATED -- no tier is evaluated, no signal can fire.")
-        if diag is not None:
-            print(build_diagnostic_report(diag))
-        _answer_deferred_reports(deferred_report_cmds, state, _stage1_market_read, _mil_call_site_1_ok)
-        return
 
     if macro_bias == "CONSOLIDATION":
         stats["consolidation_skip"] += 1
@@ -4009,13 +3984,6 @@ def _scan_once():
         digest["regime"] = {
             "macro_bias": macro_bias,
             "macro_bias_stale": bias_stale,
-            # Additive (2026-09-28): permanent per-scan evidence of the
-            # promotion decision, so the gate can be calibrated from data.
-            # Only meaningful while stale (the flags linger in state until
-            # the next leg is born), so None otherwise.
-            "campaign_status": state.get("campaign_status"),
-            "promotion_confirmed": state.get("macro_leg_promotion_confirmed") if bias_stale else None,
-            "promotion_reason": state.get("macro_leg_promotion_reason") if bias_stale else None,
         }
         apply_state_updates(state, {"structure_digest": digest})
         save_state(state)

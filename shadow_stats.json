@@ -1,7 +1,7 @@
 {
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
-    "logged": 297,
+    "logged": 298,
     "resolved": 270,
     "wins": 159,
     "losses": 111,
@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 578,
+    "logged": 579,
     "resolved": 451,
     "wins": 219,
     "losses": 232,
@@ -121,5 +121,5 @@
     "hit_2r": 9,
     "hit_3r": 4
   },
-  "_persisted_at": "2026-09-29T15:32:24.523102+00:00"
+  "_persisted_at": "2026-09-29T15:37:23.246779+00:00"
 }

@@ -2,9 +2,9 @@
   "transitions": {
     "BULLISH_STALE": {
       "CONSOLIDATION": 2,
-      "BULLISH_STALE": 221,
+      "BULLISH_STALE": 231,
       "BEARISH_FRESH": 1,
-      "BULLISH_FRESH": 7
+      "BULLISH_FRESH": 8
     },
     "CONSOLIDATION": {
       "CONSOLIDATION": 196,
@@ -13,9 +13,10 @@
       "BEARISH_FRESH": 2
     },
     "BEARISH_STALE": {
-      "BEARISH_STALE": 160,
+      "BEARISH_STALE": 172,
       "CONSOLIDATION": 2,
-      "BEARISH_FRESH": 2
+      "BEARISH_FRESH": 2,
+      "BULLISH_FRESH": 1
     },
     "BEARISH_FRESH": {
       "BEARISH_FRESH": 1723,
@@ -24,2293 +25,13 @@
       "BEARISH_STALE": 2
     },
     "BULLISH_FRESH": {
-      "BULLISH_FRESH": 1286,
+      "BULLISH_FRESH": 1337,
       "BEARISH_FRESH": 1,
       "CONSOLIDATION": 2,
-      "BULLISH_STALE": 3
+      "BULLISH_STALE": 4
     }
   },
   "calibration_predictions": [
-    {
-      "stated_prob": 0.0057,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0029,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.977,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0029,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0115,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0057,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0029,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9771,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0029,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0115,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0057,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0029,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9771,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0029,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0114,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0057,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9772,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0114,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0057,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9773,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0114,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0057,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9773,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0113,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0056,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9774,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0113,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0056,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9775,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0113,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0056,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9775,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0112,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0056,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9776,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0112,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0056,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9777,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0112,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0056,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9777,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0111,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0056,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9778,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0111,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0055,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9778,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0111,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0055,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9779,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.011,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0055,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.978,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0028,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.011,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0055,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.978,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.011,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0055,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9781,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.011,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0055,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9781,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0109,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0054,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9782,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0109,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0054,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9783,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0109,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0054,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9783,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0108,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0054,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9784,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0108,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0054,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9784,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0108,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0054,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9785,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0108,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0054,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9786,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0107,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0053,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9786,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0107,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0053,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9787,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0107,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0053,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9787,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0106,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0053,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9788,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0106,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0053,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9788,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0106,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0053,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9789,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0106,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0053,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9789,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0105,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0052,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.979,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0105,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0052,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9791,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0105,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0052,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9791,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0104,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0052,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9792,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0104,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0052,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9792,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0104,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0052,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9793,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0104,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0052,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9793,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0103,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0052,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9794,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0103,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0051,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9794,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0103,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0051,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9795,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0103,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0051,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9795,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0102,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0051,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9796,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0102,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0051,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9796,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0102,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0051,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9797,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0102,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0051,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9797,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0101,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0051,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9798,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0101,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.005,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9798,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0101,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.005,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9799,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0101,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.005,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9799,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.01,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.005,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.98,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.01,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.005,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.98,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.01,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.005,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9801,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.01,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.005,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9801,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0099,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.005,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9802,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0099,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0049,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9802,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0099,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0049,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9803,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0099,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0049,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9803,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0098,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0049,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9804,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0098,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0049,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9804,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0098,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0049,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9805,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0098,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0049,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9805,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0097,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0049,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9806,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0097,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0048,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9806,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0097,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0048,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9807,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0097,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0048,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9807,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0096,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0048,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9808,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0096,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0048,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9808,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0096,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0048,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9809,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0096,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0048,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9809,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0095,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0048,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.981,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0095,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0048,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.981,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0095,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0047,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.981,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0095,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0047,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9811,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0024,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0095,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
     {
       "stated_prob": 0.0047,
       "predicted_state": "BULLISH_FRESH",
@@ -60030,6 +57751,2286 @@
       "predicted_state": "CONSOLIDATION",
       "actual_happened": false,
       "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0059,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0059,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0178,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9527,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0178,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0059,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0059,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0176,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9529,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0176,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0058,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0058,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0175,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9532,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0175,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0058,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0058,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0174,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9535,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0174,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0058,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0058,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0173,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9538,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0173,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0057,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0057,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0172,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.954,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0172,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0057,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0057,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0171,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9543,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0171,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0057,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0057,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.017,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9545,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.017,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0056,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0056,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0169,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9548,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0169,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0056,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0056,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0169,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9551,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0169,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0056,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0056,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0168,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9553,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0168,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0056,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0056,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0167,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9556,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0167,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0055,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0055,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0166,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9558,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0166,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9923,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0031,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0339,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9407,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0085,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0042,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0127,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0338,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9409,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0084,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0042,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0127,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0336,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9412,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0084,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0042,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0126,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0335,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9414,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0084,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0042,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0126,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0333,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9417,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0083,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0042,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0125,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0332,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9419,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0083,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0041,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0124,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0331,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9421,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0083,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0041,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0124,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0329,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9424,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0082,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0041,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0123,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0328,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9426,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0082,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0041,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0123,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0327,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9429,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0082,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0041,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0122,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0325,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9431,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0081,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0041,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0122,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9915,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0039,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9915,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9915,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9915,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9916,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9917,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0038,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9918,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0037,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0007,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0022,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
     }
   ]
 }

@@ -24,43 +24,13 @@
       "BEARISH_STALE": 2
     },
     "BULLISH_FRESH": {
-      "BULLISH_FRESH": 1293,
+      "BULLISH_FRESH": 1294,
       "BEARISH_FRESH": 1,
       "CONSOLIDATION": 2,
       "BULLISH_STALE": 3
     }
   },
   "calibration_predictions": [
-    {
-      "stated_prob": 0.0045,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0023,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9819,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0023,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.009,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
     {
       "stated_prob": 0.0045,
       "predicted_state": "BULLISH_FRESH",
@@ -59820,6 +59790,36 @@
       "predicted_state": "CONSOLIDATION",
       "actual_happened": false,
       "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9923,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0031,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0015,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0008,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0023,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
     },
     {
       "stated_prob": 0.9923,

@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BULLISH|1.32784|1.31990",
     "opened_at": "2026-09-30T08:07:20.200672+00:00",
-    "bars_open": 5,
-    "last_processed_candle": "2026-09-30T08:20:00+00:00",
+    "bars_open": 6,
+    "last_processed_candle": "2026-09-30T08:25:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -49,7 +49,7 @@
       }
     ],
     "_tl_last_break_count": 1,
-    "_tl_choch_active": true,
+    "_tl_choch_active": false,
     "_tl_last_phase": "expansion"
   },
   "closed_ids": [
@@ -61,5 +61,5 @@
     "BULLISH|1.32672|1.32238"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-09-30T08:32:21.644638+00:00"
+  "_persisted_at": "2026-09-30T08:37:24.413007+00:00"
 }

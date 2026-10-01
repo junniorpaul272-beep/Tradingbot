@@ -1,29 +1,29 @@
 {
   "open": {
-    "id": "030c2a03014d",
+    "id": "7070a4a29bb6",
     "methodology_version": 3,
-    "leg_id": "BEARISH|1.32678|1.32037",
-    "opened_at": "2026-10-01T10:07:20.095219+00:00",
+    "leg_id": "BEARISH|1.33093|1.32037",
+    "opened_at": "2026-10-01T10:12:18.557010+00:00",
     "bars_open": 0,
-    "last_processed_candle": "2026-10-01T09:55:00+00:00",
+    "last_processed_candle": "2026-10-01T10:00:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": false,
       "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 64.1,
+      "macro_leg_length_pips": 105.6,
       "bos_15m_direction": "BEARISH",
       "bos_15m_break_count": 2,
       "bos_15m_was_choch": true,
-      "atr_pips": 5.79,
+      "atr_pips": 6.56,
       "atr_percentile_15m": 87.7,
       "market_phase": "expansion",
-      "market_phase_age_bars": 0,
-      "measured_move_ratio": null,
-      "measured_move_bucket": null,
+      "market_phase_age_bars": 1,
+      "measured_move_ratio": 1.647,
+      "measured_move_bucket": "EXT_150_200",
       "transition_cause": "FRESH_BOS",
       "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
+      "campaign_continuation_count": 2,
       "atr_bucket": "high_vol",
       "session": "london_early",
       "bias_state": "fresh",
@@ -56,5 +56,5 @@
     "BULLISH|1.32672|1.32238"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-01T10:07:20.582210+00:00"
+  "_persisted_at": "2026-10-01T10:12:18.827171+00:00"
 }

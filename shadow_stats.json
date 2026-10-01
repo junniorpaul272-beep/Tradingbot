@@ -68,22 +68,22 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 135,
-    "resolved": 92,
+    "resolved": 93,
     "wins": 49,
-    "losses": 43,
-    "timed_out": 58,
-    "sum_r": 14.65485579069448,
+    "losses": 44,
+    "timed_out": 59,
+    "sum_r": 14.463561994247032,
     "hit_1r": 22,
     "hit_2r": 7,
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
     "logged": 959,
-    "resolved": 934,
+    "resolved": 935,
     "wins": 378,
-    "losses": 556,
-    "timed_out": 56,
-    "sum_r": 389.5060192376398,
+    "losses": 557,
+    "timed_out": 57,
+    "sum_r": 389.31472544119237,
     "hit_1r": 689,
     "hit_2r": 595,
     "hit_3r": 532
@@ -121,5 +121,5 @@
     "hit_2r": 9,
     "hit_3r": 4
   },
-  "_persisted_at": "2026-10-01T15:07:21.764534+00:00"
+  "_persisted_at": "2026-10-01T15:12:23.415851+00:00"
 }

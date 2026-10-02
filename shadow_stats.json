@@ -67,7 +67,7 @@
     "hit_3r": 0
   },
   "EXP7_TIER_ATR": {
-    "logged": 136,
+    "logged": 137,
     "resolved": 95,
     "wins": 50,
     "losses": 45,
@@ -121,5 +121,5 @@
     "hit_2r": 9,
     "hit_3r": 4
   },
-  "_persisted_at": "2026-10-02T13:07:18.530251+00:00"
+  "_persisted_at": "2026-10-02T13:12:20.417170+00:00"
 }

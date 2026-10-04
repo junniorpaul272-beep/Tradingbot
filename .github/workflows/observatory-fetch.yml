@@ -1,0 +1,121 @@
+name: Observatory — Fetch GBPUSD candles (manual, free-plan safe)
+
+# MANUAL ONLY. Pulls FULL-DAY GBP/USD 5M/15M/1H candles from Twelve Data into
+# observatory_data/raw/ (independent of the live scanner's schedule and logs).
+#
+# FREE PLAN (8 credits/min, 800/day) SHARES ONE API KEY WITH THE LIVE SCANNER, which uses
+# ~3 credits per run, 108 runs/day (07:00-15:55 UTC Mon-Fri). So:
+#   * fetch.py REFUSES to run inside that window unless allow_live_window is ticked.
+#     Run it after 16:00 UTC (17:00 Lagos) or on a weekend.
+#   * paced 1 request / 20 s, hard credit budget per run (default 100, ceiling 300),
+#     stops at the first rate-limit error.
+#
+# Only this workflow writes observatory_data/raw/ (single committer for that folder).
+# It never touches state.json or any live-bot file.
+# SECRET NAME ASSUMED: TWELVE_DATA_KEY (same as the env var scanner_live.py reads).
+# If your repo secret has a different name, change the one line marked <<<.
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'Start date UTC, YYYY-MM-DD (e.g. 2025-10-03 for ~12 months)'
+        required: true
+        type: string
+      end_datetime:
+        description: 'End UTC, YYYY-MM-DD HH:MM (blank = now)'
+        required: false
+        default: ''
+        type: string
+      tfs:
+        description: 'Timeframes'
+        required: false
+        default: '5m,15m,1h'
+        type: string
+      max_credits:
+        description: 'Credit budget for this run (ceiling 300)'
+        required: false
+        default: '100'
+        type: string
+      allow_live_window:
+        description: 'Allow running inside the live scanner window (NOT recommended)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: observatory-fetch
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check the observatory folder is in the repo root
+        run: |
+          echo "Repo root contains:"; ls
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py observatory/fetch.py; do
+            [ -f "$f" ] || { echo "::error::$f is missing. The folder must be named 'observatory' (lowercase) in the repo root, with these 5 files inside."; exit 1; }
+          done
+
+      - name: Self-test the fetcher (mock provider, no network)
+        run: python -m observatory.fetch --selftest
+
+      - name: Fetch candles
+        shell: bash
+        env:
+          TWELVE_DATA_KEY: ${{ secrets.TWELVE_DATA_KEY }}   # <<<
+          IN_START: ${{ github.event.inputs.start_date }}
+          IN_END: ${{ github.event.inputs.end_datetime }}
+          IN_TFS: ${{ github.event.inputs.tfs }}
+          IN_MAX: ${{ github.event.inputs.max_credits }}
+          IN_LIVE: ${{ github.event.inputs.allow_live_window }}
+        run: |
+          mkdir -p observatory_run
+          args=(--start "$IN_START" --tfs "$IN_TFS" --max-credits "$IN_MAX")
+          if [ -n "$IN_END" ]; then args+=(--end "$IN_END"); fi
+          if [ "$IN_LIVE" = "true" ]; then args+=(--allow-live-window); fi
+          python -m observatory.fetch "${args[@]}" | tee observatory_run/fetch_summary.json
+
+      - name: Commit raw candles (single committer for observatory_data/raw)
+        if: always()
+        run: |
+          if [ ! -d observatory_data/raw ]; then
+            echo "No observatory_data/raw folder (nothing was fetched). Nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add observatory_data/raw
+          if git diff --cached --quiet; then echo "Nothing new to commit."; exit 0; fi
+          git commit -m "chore: observatory raw candles update [skip ci]"
+          for i in 1 2 3 4; do
+            git pull --rebase origin main && git push && exit 0
+            echo "push attempt $i failed; retrying"; sleep 6
+          done
+          echo "::error::could not push after 4 attempts"; exit 1
+
+      - name: Upload fetch summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-fetch-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

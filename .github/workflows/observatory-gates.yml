@@ -1,0 +1,115 @@
+name: Observatory — Gates (manual, read-only)
+
+# MANUAL ONLY. No schedule, no cron-job.org hook, no push trigger.
+# READ-ONLY: never commits, pushes, or touches state.json. No API calls, no secrets.
+# Reads observatory_data/raw/ (or, if you choose, the live scanner's ohlc_*_log.jsonl
+# files as a development sample). Output = a numbered artifact kept 90 days.
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Raw data source'
+        required: true
+        default: 'observatory'
+        type: choice
+        options:
+          - observatory
+          - live-logs
+      selftest_only:
+        description: 'Run only A1-A4 on synthetic data'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: observatory-gates
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Confirm observatory package exists
+        run: |
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py; do
+            [ -f "$f" ] || { echo "::error::$f missing"; exit 1; }
+          done
+
+      - name: Write run manifest
+        run: |
+          mkdir -p observatory_run
+          python - <<'PY'
+          import glob, hashlib, json, os, sys, datetime
+          def sha(p):
+              h = hashlib.sha256()
+              with open(p, "rb") as f:
+                  for c in iter(lambda: f.read(1 << 20), b""):
+                      h.update(c)
+              return h.hexdigest()
+          src = os.environ.get("SOURCE", "observatory")
+          raw = sorted(glob.glob("observatory_data/raw/GBPUSD_*.jsonl")) if src == "observatory" \
+              else sorted(glob.glob("ohlc_*_log.jsonl"))
+          manifest = {
+              "run_id": os.environ.get("GITHUB_RUN_ID"),
+              "run_number": os.environ.get("GITHUB_RUN_NUMBER"),
+              "run_timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "git_commit": os.environ.get("GITHUB_SHA"),
+              "python": sys.version.split()[0],
+              "instrument": "GBPUSD",
+              "source": src,
+              "raw_files": {p: {"sha256": sha(p), "lines": sum(1 for _ in open(p, "rb"))} for p in raw},
+              "code": {p: sha(p) for p in sorted(glob.glob("observatory/*.py"))},
+              "selftest_only": os.environ.get("SELFTEST") == "true",
+          }
+          json.dump(manifest, open("observatory_run/run_manifest.json", "w"), indent=2)
+          print(json.dumps(manifest, indent=2))
+          PY
+        env:
+          SOURCE: ${{ github.event.inputs.source }}
+          SELFTEST: ${{ github.event.inputs.selftest_only }}
+
+      - name: Run gates A1-A7
+        shell: bash
+        env:
+          IN_SOURCE: ${{ github.event.inputs.source }}
+          IN_SELFTEST: ${{ github.event.inputs.selftest_only }}
+        run: |
+          if [ "$IN_SOURCE" = "live-logs" ]; then
+            args=(--source live-logs --raw-dir .)
+          else
+            args=(--source observatory --raw-dir observatory_data/raw)
+          fi
+          if [ "$IN_SELFTEST" = "true" ]; then args+=(--selftest-only); fi
+          python -m observatory.gates "${args[@]}" --out observatory_run/data | tee observatory_run/console_report.txt
+
+      - name: Confirm no raw data changed
+        run: |
+          git diff --quiet -- observatory_data/raw ohlc_5m_log.jsonl ohlc_15m_log.jsonl ohlc_1h_log.jsonl \
+            || { echo "::error::a raw data file changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-gates-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

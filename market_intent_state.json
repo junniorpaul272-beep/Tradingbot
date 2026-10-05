@@ -1,49 +1,43 @@
 {
   "open": {
-    "id": "cb0cd0688a14",
+    "id": "c20682724f4c",
     "methodology_version": 1,
-    "leg_id": "BEARISH|1.33093|1.31814",
-    "opened_at": "2026-10-05T07:00:20.042237+00:00",
-    "bars_open": 24,
-    "last_processed_candle": "2026-10-05T08:50:00+00:00",
+    "leg_id": "BEARISH|1.32737|1.31912",
+    "opened_at": "2026-10-05T09:05:18.783155+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-10-05T08:55:00+00:00",
     "macro_bias": "BEARISH",
-    "phase": "exhaustion",
+    "phase": "expansion",
     "watch_codes": [
       "PULLBACK_TO_OB",
-      "PULLBACK_TO_FIB_POCKET",
-      "SWEEP_AND_RECLAIM",
       "FIVE_M_ALIGNMENT"
     ],
     "caution_codes": [
+      "UNSWEPT_CHOCH",
       "ATR_INCOMPATIBLE"
     ],
     "reasons": [
       "HTF bias: BEARISH",
-      "Fresh 15M BOS aligned with bias",
+      "15M CHoCH confirming direction",
       "Order block confirmed, unmitigated",
-      "Low-ATR warning \u2014 4.5p, below the 6p floor",
-      "5 breaks into this leg \u2014 getting old",
-      "1.9 ATR from EMA_100 \u2014 extended"
+      "1H volatility expanding",
+      "Low-ATR warning \u2014 5.4p, below the 6p floor"
     ],
-    "materialized_codes": [
-      "PULLBACK_TO_OB"
-    ],
-    "materialized_at_bar": {
-      "PULLBACK_TO_OB": 10
-    },
+    "materialized_codes": [],
+    "materialized_at_bar": {},
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
     "tags": {
-      "phase": "exhaustion",
-      "atr_5m_pips": 4.480844937211863,
-      "break_count": 5,
-      "campaign_continuation_count": 1,
-      "num_watch_codes": 4,
-      "num_caution_codes": 1,
+      "phase": "expansion",
+      "atr_5m_pips": 5.442154662009071,
+      "break_count": 1,
+      "campaign_continuation_count": 26,
+      "num_watch_codes": 2,
+      "num_caution_codes": 2,
       "very_low_atr_warning": false
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-10-05T09:00:22.604671+00:00"
+  "_persisted_at": "2026-10-05T09:05:21.749153+00:00"
 }

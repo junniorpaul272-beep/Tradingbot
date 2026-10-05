@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.32737|1.31912",
     "opened_at": "2026-10-05T09:07:24.285767+00:00",
-    "bars_open": 8,
-    "last_processed_candle": "2026-10-05T09:35:00+00:00",
+    "bars_open": 9,
+    "last_processed_candle": "2026-10-05T09:40:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -33,7 +33,7 @@
       "compression_ratio": 3.96,
       "pullback_depth_pct": 19.7
     },
-    "tier1_touched_bar": null,
+    "tier1_touched_bar": 9,
     "tier2_touched_bar": 1,
     "tier3_touched_bar": null,
     "timeline": [
@@ -46,6 +46,11 @@
         "bar": 1,
         "kind": "zone_touch",
         "detail": "Tier 2 zone touched (Fib pocket)"
+      },
+      {
+        "bar": 9,
+        "kind": "zone_touch",
+        "detail": "Tier 1 zone touched (Order Block)"
       }
     ],
     "_tl_last_break_count": 1,
@@ -61,5 +66,5 @@
     "BULLISH|1.32672|1.32238"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-05T09:47:19.829946+00:00"
+  "_persisted_at": "2026-10-05T09:52:47.609402+00:00"
 }

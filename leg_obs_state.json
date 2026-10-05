@@ -1,39 +1,39 @@
 {
   "open": {
-    "id": "94b5c1741297",
+    "id": "a66e23a2322d",
     "methodology_version": 3,
-    "leg_id": "BEARISH|1.33093|1.31814",
-    "opened_at": "2026-10-05T07:02:23.605634+00:00",
-    "bars_open": 24,
-    "last_processed_candle": "2026-10-05T08:50:00+00:00",
+    "leg_id": "BEARISH|1.32737|1.31912",
+    "opened_at": "2026-10-05T09:07:24.285767+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-10-05T08:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": false,
       "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 127.9,
-      "bos_15m_direction": "BEARISH",
-      "bos_15m_break_count": 2,
-      "bos_15m_was_choch": false,
-      "atr_pips": 4.48,
-      "atr_percentile_15m": 42.1,
-      "market_phase": "exhaustion",
+      "macro_leg_length_pips": 82.5,
+      "bos_15m_direction": "BULLISH",
+      "bos_15m_break_count": 1,
+      "bos_15m_was_choch": true,
+      "atr_pips": 5.44,
+      "atr_percentile_15m": 66.7,
+      "market_phase": "expansion",
       "market_phase_age_bars": 0,
-      "measured_move_ratio": null,
-      "measured_move_bucket": null,
-      "transition_cause": "EMA_EXHAUSTION",
+      "measured_move_ratio": 0.645,
+      "measured_move_bucket": "UNDER_100",
+      "transition_cause": "FRESH_BOS",
       "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
+      "campaign_continuation_count": 26,
       "atr_bucket": "normal_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 7.75,
-      "volatility_state": "flat",
-      "compression_ratio": 3.55,
-      "pullback_depth_pct": 39.4
+      "trend_strength_atr_mult": 5.57,
+      "volatility_state": "expanding",
+      "compression_ratio": 3.96,
+      "pullback_depth_pct": 19.7
     },
-    "tier1_touched_bar": 10,
+    "tier1_touched_bar": null,
     "tier2_touched_bar": null,
     "tier3_touched_bar": null,
     "timeline": [
@@ -41,21 +41,11 @@
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bearish (as continuation)"
-      },
-      {
-        "bar": 10,
-        "kind": "choch",
-        "detail": "15M CHoCH confirmed"
-      },
-      {
-        "bar": 10,
-        "kind": "zone_touch",
-        "detail": "Tier 1 zone touched (Order Block)"
       }
     ],
     "_tl_last_break_count": 1,
     "_tl_choch_active": true,
-    "_tl_last_phase": "exhaustion"
+    "_tl_last_phase": "expansion"
   },
   "closed_ids": [
     "BULLISH|1.35498|1.34751",
@@ -66,5 +56,5 @@
     "BULLISH|1.32672|1.32238"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-05T09:02:20.625588+00:00"
+  "_persisted_at": "2026-10-05T09:07:24.939768+00:00"
 }

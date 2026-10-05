@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BEARISH|1.32737|1.31912",
     "opened_at": "2026-10-05T09:05:18.783155+00:00",
-    "bars_open": 32,
-    "last_processed_candle": "2026-10-05T11:35:00+00:00",
+    "bars_open": 33,
+    "last_processed_candle": "2026-10-05T11:40:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "expansion",
     "watch_codes": [
@@ -24,10 +24,12 @@
       "Low-ATR warning \u2014 5.4p, below the 6p floor"
     ],
     "materialized_codes": [
-      "PULLBACK_TO_OB"
+      "PULLBACK_TO_OB",
+      "FIVE_M_ALIGNMENT"
     ],
     "materialized_at_bar": {
-      "PULLBACK_TO_OB": 9
+      "PULLBACK_TO_OB": 9,
+      "FIVE_M_ALIGNMENT": 33
     },
     "fate": null,
     "leg_fate": null,
@@ -43,5 +45,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-10-05T11:45:22.853810+00:00"
+  "_persisted_at": "2026-10-05T11:50:24.917333+00:00"
 }

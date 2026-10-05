@@ -1,0 +1,69 @@
+name: Observatory — Wave 3 experiments, timeframe combinations (manual, read-only)
+
+# MANUAL ONLY. Tests whether higher-timeframe direction (close vs its EMA50, closed bars only) changes how a
+# displacement continues: T4 (15m events, 1h context), T5 (5m events, 15m), T6 (5m events, 1h), T7 (5m events,
+# 1h and 15m agreeing). Ordinary bars are split the same way as the control.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot.
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+# Results appear on the run's Summary page and as a downloadable artifact.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-wave3
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  wave3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/wave3.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "All required files present."
+
+      - name: Self-test (closed-bar alignment, lookahead, T7 rule, random-walk null)
+        run: python -m observatory.wave3 --selftest
+
+      - name: Run Wave 3
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.wave3 --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/wave3_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-wave3-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

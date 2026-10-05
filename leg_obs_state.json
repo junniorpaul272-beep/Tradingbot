@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.33093|1.31814",
     "opened_at": "2026-10-05T07:02:23.605634+00:00",
-    "bars_open": 9,
-    "last_processed_candle": "2026-10-05T07:35:00+00:00",
+    "bars_open": 10,
+    "last_processed_candle": "2026-10-05T07:40:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -33,7 +33,7 @@
       "compression_ratio": 3.55,
       "pullback_depth_pct": 39.4
     },
-    "tier1_touched_bar": null,
+    "tier1_touched_bar": 10,
     "tier2_touched_bar": null,
     "tier3_touched_bar": null,
     "timeline": [
@@ -41,10 +41,20 @@
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bearish (as continuation)"
+      },
+      {
+        "bar": 10,
+        "kind": "choch",
+        "detail": "15M CHoCH confirmed"
+      },
+      {
+        "bar": 10,
+        "kind": "zone_touch",
+        "detail": "Tier 1 zone touched (Order Block)"
       }
     ],
-    "_tl_last_break_count": 2,
-    "_tl_choch_active": false,
+    "_tl_last_break_count": 1,
+    "_tl_choch_active": true,
     "_tl_last_phase": "exhaustion"
   },
   "closed_ids": [
@@ -56,5 +66,5 @@
     "BULLISH|1.32672|1.32238"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-05T07:47:21.058911+00:00"
+  "_persisted_at": "2026-10-05T07:52:20.784002+00:00"
 }

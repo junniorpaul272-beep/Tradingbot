@@ -67,7 +67,7 @@
     "hit_3r": 0
   },
   "EXP7_TIER_ATR": {
-    "logged": 142,
+    "logged": 143,
     "resolved": 100,
     "wins": 52,
     "losses": 48,
@@ -78,7 +78,7 @@
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 971,
+    "logged": 972,
     "resolved": 945,
     "wins": 382,
     "losses": 563,
@@ -89,7 +89,7 @@
     "hit_3r": 533
   },
   "EXP8_CISD": {
-    "logged": 138,
+    "logged": 141,
     "resolved": 138,
     "wins": 45,
     "losses": 93,
@@ -121,5 +121,5 @@
     "hit_2r": 9,
     "hit_3r": 4
   },
-  "_persisted_at": "2026-10-06T11:02:24.294442+00:00"
+  "_persisted_at": "2026-10-06T11:07:17.108214+00:00"
 }

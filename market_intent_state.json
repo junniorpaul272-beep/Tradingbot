@@ -1,19 +1,22 @@
 {
   "open": {
-    "id": "0211d496d6f5",
+    "id": "5f2a564bfdc3",
     "methodology_version": 1,
-    "leg_id": "BULLISH|1.32392|1.31912",
-    "opened_at": "2026-10-06T08:05:55.774115+00:00",
-    "bars_open": 11,
-    "last_processed_candle": "2026-10-06T08:50:00+00:00",
+    "leg_id": "BULLISH|1.32449|1.31912",
+    "opened_at": "2026-10-06T09:05:19.536232+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-10-06T08:55:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "expansion",
     "watch_codes": [
       "PULLBACK_TO_FIB_POCKET"
     ],
-    "caution_codes": [],
+    "caution_codes": [
+      "ATR_INCOMPATIBLE"
+    ],
     "reasons": [
-      "HTF bias: BULLISH"
+      "HTF bias: BULLISH",
+      "Low-ATR warning \u2014 5.1p, below the 6p floor"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -22,14 +25,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "expansion",
-      "atr_5m_pips": 6.0430747791005,
+      "atr_5m_pips": 5.054391519402273,
       "break_count": 1,
-      "campaign_continuation_count": 1,
+      "campaign_continuation_count": 13,
       "num_watch_codes": 1,
-      "num_caution_codes": 0,
+      "num_caution_codes": 1,
       "very_low_atr_warning": false
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-10-06T09:00:21.146158+00:00"
+  "_persisted_at": "2026-10-06T09:05:22.221059+00:00"
 }

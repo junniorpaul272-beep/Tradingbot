@@ -1,0 +1,1 @@
+{"queued_at": "2026-10-06T11:50:20.798751+00:00", "leg_id": "BUY|1.32488|1.31912|TIER_1_POI", "side": "BUY", "entry": 1.3281, "sl_raw": 1.324576610586602, "atr_pips": 5.755929422653544, "note": "Live risk gate suppressed this trade \u2014 35.2p > 17.3p ATR cap (3.0x)", "tags": {"_blocked_by_risk_gate_width": true, "tier_label": "TIER_1_POI", "risk_pips": 35.2, "atr_ratio": 6.12}}

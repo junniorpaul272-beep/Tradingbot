@@ -25,42 +25,12 @@
     },
     "BULLISH_FRESH": {
       "BULLISH_FRESH": 1554,
-      "BEARISH_FRESH": 1,
+      "BEARISH_FRESH": 2,
       "CONSOLIDATION": 2,
       "BULLISH_STALE": 3
     }
   },
   "calibration_predictions": [
-    {
-      "stated_prob": 0.993,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0017,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0017,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0009,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0026,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
     {
       "stated_prob": 0.993,
       "predicted_state": "BULLISH_FRESH",
@@ -60017,6 +59987,36 @@
       "stated_prob": 0.0013,
       "predicted_state": "BEARISH_FRESH",
       "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0006,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0019,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9936,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0026,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0013,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": true,
       "from_state": "BULLISH_FRESH"
     },
     {

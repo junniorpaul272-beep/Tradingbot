@@ -1,0 +1,77 @@
+name: Observatory — Study A, market persistence (manual, read-only)
+
+# MANUAL ONLY. Study A asks what "trending" means statistically in GBPUSD:
+#   A.1  continuation profile: does the sign of the past block predict the next block? nine horizons 5m...24h (family 1)
+#   A.3  does trendiness (path efficiency) persist? 1h, 4h, 12h (family 1)
+#   A.2  does the past state (efficiency, expansion) change the continuation? (family 2, EXPLORATORY)
+# plus baselines (random-walk efficiency, volatility clustering) and the net-of-cost view of following or fading each horizon.
+# The pre-declared reading is printed at the top of the report.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot. Independent of wave4 / crt2 / crt3.
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+# The readiness step counts holdout PAIRS only (structure, no outcome) and computes power from DEVELOPMENT estimates.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-studya
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  studya:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/studya.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "All required files present."
+
+      - name: Self-test (block validity, no lookahead, costs, planted persistence, random-walk and GARCH nulls)
+        run: python -m observatory.studya --selftest
+
+      - name: Run Study A
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.studya --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/studya_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Holdout readiness (counts pairs only; outcomes stay sealed)
+        run: |
+          python -m observatory.studya --raw-dir observatory_data/raw --readiness | tee observatory_run/studya_readiness.json
+          { echo; echo '## Holdout readiness (pair counts and power only, no holdout outcome read)'; echo '```'; cat observatory_run/studya_readiness.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-studya-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

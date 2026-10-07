@@ -1,0 +1,76 @@
+name: Observatory — Wave 5 experiments, extension (manual, read-only)
+
+# MANUAL ONLY. One question: does stretch away from the 1h EMA50 predict whether the next move continues
+# (ordinary bars, displacements, and displacements after allowing for size)? 5m and 15m, 6 primary tests.
+# EXPLORATORY: any finding is a hypothesis for one future holdout test.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot.
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+# The readiness step counts holdout EVENTS only (no outcomes are read) for the frozen H-EXT-5M hypothesis.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-wave5
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  wave5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/wave5.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          # wave5 needs the NEWER wave1.py (it adds cluster_slope_test). Fail early with a clear message if it is the old one.
+          grep -q "def cluster_slope_test" observatory/wave1.py || { echo "::error::observatory/wave1.py is the OLD version (no cluster_slope_test). Replace it with the latest wave1.py."; exit 1; }
+          echo "All required files present."
+
+      - name: Self-test (closed-bar extension, no lookahead, trend tests, random-walk null)
+        run: python -m observatory.wave5 --selftest
+
+      - name: Run Wave 5 (includes a 40-series random-walk calibration; takes a few minutes)
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.wave5 --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/wave5_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: H-EXT-5M holdout readiness (counts events only; outcomes stay sealed)
+        run: |
+          python -m observatory.wave5 --raw-dir observatory_data/raw --readiness | tee observatory_run/ext_readiness.json
+          { echo; echo '## H-EXT-5M holdout readiness (event counts and power only, no outcomes read)'; echo '```'; cat observatory_run/ext_readiness.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-wave5-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

@@ -12,14 +12,14 @@
     "hit_3r": 5
   },
   "EXP2_FIB": {
-    "logged": 5074,
-    "resolved": 4959,
+    "logged": 5076,
+    "resolved": 4960,
     "wins": 1357,
-    "losses": 3602,
+    "losses": 3603,
     "timed_out": 241,
-    "sum_r": 119.80348284512323,
-    "hit_1r": 3039,
-    "hit_2r": 2133,
+    "sum_r": 118.80348284512323,
+    "hit_1r": 3040,
+    "hit_2r": 2134,
     "hit_3r": 1600
   },
   "EXP3_POI": {
@@ -89,7 +89,7 @@
     "hit_3r": 535
   },
   "EXP8_CISD": {
-    "logged": 149,
+    "logged": 150,
     "resolved": 149,
     "wins": 46,
     "losses": 103,
@@ -121,5 +121,5 @@
     "hit_2r": 9,
     "hit_3r": 4
   },
-  "_persisted_at": "2026-10-07T14:32:28.571701+00:00"
+  "_persisted_at": "2026-10-07T14:37:21.707638+00:00"
 }

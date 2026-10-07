@@ -1,60 +1,14 @@
 {
-  "open": {
-    "id": "612c97d018ec",
-    "methodology_version": 3,
-    "leg_id": "BEARISH|1.32633|1.32045",
-    "opened_at": "2026-10-07T12:07:25.112823+00:00",
-    "bars_open": 0,
-    "last_processed_candle": "2026-10-07T11:55:00+00:00",
-    "fate": null,
-    "resolved_at": null,
-    "formation_state": {
-      "macro_was_choch": false,
-      "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 58.8,
-      "bos_15m_direction": "BEARISH",
-      "bos_15m_break_count": 4,
-      "bos_15m_was_choch": false,
-      "atr_pips": 4.79,
-      "atr_percentile_15m": 86.0,
-      "market_phase": "transition",
-      "market_phase_age_bars": 0,
-      "measured_move_ratio": 0.621,
-      "measured_move_bucket": "UNDER_100",
-      "transition_cause": "BIAS_FLIP",
-      "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 1,
-      "atr_bucket": "high_vol",
-      "session": "london_ny_overlap",
-      "bias_state": "fresh",
-      "spike_state": "normal",
-      "trend_strength_atr_mult": 7.74,
-      "volatility_state": "flat",
-      "compression_ratio": 3.86,
-      "pullback_depth_pct": 10.5
-    },
-    "tier1_touched_bar": null,
-    "tier2_touched_bar": null,
-    "tier3_touched_bar": null,
-    "timeline": [
-      {
-        "bar": 0,
-        "kind": "formed",
-        "detail": "Leg formed \u2014 Bearish (as continuation)"
-      }
-    ],
-    "_tl_last_break_count": 4,
-    "_tl_choch_active": false,
-    "_tl_last_phase": "transition"
-  },
+  "open": null,
   "closed_ids": [
     "BULLISH|1.35498|1.34751",
     "BULLISH|1.35536|1.34943",
     "BULLISH|1.35682|1.34943",
     "BEARISH|1.35344|1.34675",
     "BEARISH|1.34077|1.33697",
-    "BULLISH|1.32672|1.32238"
+    "BULLISH|1.32672|1.32238",
+    "BEARISH|1.32633|1.32045"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-07T12:07:25.599766+00:00"
+  "_persisted_at": "2026-10-07T12:12:20.797741+00:00"
 }

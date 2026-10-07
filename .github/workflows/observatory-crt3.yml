@@ -1,0 +1,78 @@
+name: Observatory — CRT-3, does crossing the level add anything? (manual, read-only)
+
+# MANUAL ONLY. CRT-3 asks three separate questions about the drift toward a swept level:
+#   Layer 1 phenomenon:   S1 / S2 / P  (reclaim vs matched "approach" events; approach alone)
+#   Layer 2 magnitude:    effect sizes in ATR and pips, stability by half and by side
+#   Layer 3 tradeability: R1 (6h hold toward the level, net of a flat 1 pip cost), fixed-stop variants, trades per month
+# plus a missingness audit. Pre-declared reading of S1 is printed at the top of the report.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot.
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+# The readiness step counts holdout EVENTS only (no outcome is read) and computes power from DEVELOPMENT estimates.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-crt3
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  crt3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/wave4.py observatory/crt3.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          # crt3 needs the v2.1 wave4.py (defines `locate`). The old v1 file does not. Fail early with a clear message.
+          grep -q "^def locate" observatory/wave4.py || { echo "::error::observatory/wave4.py is the OLD version (no locate). Replace it with the v2.1 wave4.py."; exit 1; }
+          echo "All required files present."
+
+      - name: Self-test (approach events, 6h window rules, no lookahead, planted effect, random-walk null)
+        run: python -m observatory.crt3 --selftest
+
+      - name: Run CRT-3
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.crt3 --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/crt3_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Holdout readiness (counts events only; outcomes stay sealed)
+        run: |
+          python -m observatory.crt3 --raw-dir observatory_data/raw --readiness | tee observatory_run/crt3_readiness.json
+          { echo; echo '## Holdout readiness (event counts and power only, no holdout outcome read)'; echo '```'; cat observatory_run/crt3_readiness.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-crt3-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

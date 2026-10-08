@@ -1,0 +1,80 @@
+name: Observatory — Study B, structure break and pullback penetration (manual, read-only)
+
+# MANUAL ONLY. Study B asks whether the DEPTH of a pullback after a break of a swing high (BOS), relative to the broken high, carries information:
+#   B.1  does a close beyond a swing high continue (+1 ATR before -1 ATR) more than at placebo times? (family 1)
+#   B.2  pullback depth profile: new high before the structural low, at 5 depths below the broken high, vs a placebo with the same geometry, clock and recent move (family 1)
+#   B.4  what changes the excess at depth 0 (impulse size, wait, age, 4h efficiency, side, session)? (family 2, EXPLORATORY)
+# Pivots are causal (known only after 3 confirming 1h bars). The pre-declared reading is printed at the top of the report.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot. Needs studya.py (shared statistics); independent of wave4 / crt2 / crt3.
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+# The readiness step counts holdout EVENTS only (structure, no outcome) and computes power from DEVELOPMENT estimates.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-studyb
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  studyb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/studya.py observatory/studyb.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "All required files present."
+
+      - name: Self-test (hand-built structure, no lookahead, mirror symmetry, placebo rules, random-walk and GARCH nulls, planted effect)
+        run: python -m observatory.studyb --selftest
+
+      - name: Structure counts (events per gate and depth; no outcome is computed)
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.studyb --raw-dir observatory_data/raw --counts | tee observatory_run/studyb_counts.json
+
+      - name: Run Study B
+        run: |
+          python -m observatory.studyb --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/studyb_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Holdout readiness (counts events only; outcomes stay sealed)
+        run: |
+          python -m observatory.studyb --raw-dir observatory_data/raw --readiness | tee observatory_run/studyb_readiness.json
+          { echo; echo '## Holdout readiness (event counts and power only, no holdout outcome read)'; echo '```'; cat observatory_run/studyb_readiness.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-studyb-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

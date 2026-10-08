@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 659,
+    "logged": 660,
     "resolved": 534,
     "wins": 249,
     "losses": 285,
@@ -67,7 +67,7 @@
     "hit_3r": 0
   },
   "EXP7_TIER_ATR": {
-    "logged": 150,
+    "logged": 151,
     "resolved": 109,
     "wins": 55,
     "losses": 54,
@@ -100,7 +100,7 @@
     "hit_3r": 16
   },
   "EXP4_POLICY_LAB": {
-    "logged": 25,
+    "logged": 27,
     "resolved": 25,
     "wins": 10,
     "losses": 15,
@@ -121,5 +121,5 @@
     "hit_2r": 9,
     "hit_3r": 4
   },
-  "_persisted_at": "2026-10-08T14:47:22.373235+00:00"
+  "_persisted_at": "2026-10-08T14:52:24.912680+00:00"
 }

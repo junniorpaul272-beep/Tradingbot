@@ -1,0 +1,83 @@
+name: Observatory — Study D, the original Study D ladder (manual, read-only)
+
+# MANUAL ONLY. Study D tests the ingredients of the 261.8% reversal strategy one by one (the original Study D list, never run before):
+#   D.F  Fibonacci extension: price reaches C + k*(B-A), k = 1.272 / 1.618 / 2.618 (+ nearby non-Fibonacci levels): reversal?
+#   D.E  wave geometry: confirmed 5-leg advance obeying the hard Elliott rules (E.1) and the declining-momentum / extended-final-leg version (E.2): reversal?
+#   D.L  historical level: first approach to an old, unapproached swing high: reversal?
+#   D.P  polarity switch: retest of a broken old swing high: bounce?
+#   D.C  confluence: counts only, and only run later if two ingredients survive on their own.
+# Everything is measured against a placebo with the same barriers, weekday, hour and recent move. Pivots are causal (known 45 min later). Errors are clustered by 2-day block.
+# The pre-declared reading is printed at the top of the report.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot. Needs studya.py, studyb.py and studyc.py (shared code).
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+# The readiness step counts holdout EVENTS only (structure, no outcome) and computes power from DEVELOPMENT estimates.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-studyd
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  studyd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/studya.py observatory/studyb.py observatory/studyc.py observatory/studyd.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "All required files present."
+
+      - name: Self-test (hand-built F/E/L/P cases, no lookahead, mirror, random-walk and GARCH nulls, planted reversal)
+        run: python -m observatory.studyd --selftest
+
+      - name: Structure counts (events per gate; no outcome is computed)
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.studyd --raw-dir observatory_data/raw --counts | tee observatory_run/studyd_counts.json
+
+      - name: Run Study D
+        run: |
+          python -m observatory.studyd --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/studyd_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Holdout readiness (counts events only; outcomes stay sealed)
+        run: |
+          python -m observatory.studyd --raw-dir observatory_data/raw --readiness | tee observatory_run/studyd_readiness.json
+          { echo; echo '## Holdout readiness (event counts and power only, no holdout outcome read)'; echo '```'; cat observatory_run/studyd_readiness.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-studyd-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

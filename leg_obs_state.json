@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.32859|1.31855",
     "opened_at": "2026-10-08T10:07:24.190261+00:00",
-    "bars_open": 70,
-    "last_processed_candle": "2026-10-08T15:45:00+00:00",
+    "bars_open": 169,
+    "last_processed_candle": "2026-10-09T06:50:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -56,10 +56,15 @@
         "bar": 54,
         "kind": "zone_touch",
         "detail": "Tier 2 zone touched (Fib pocket)"
+      },
+      {
+        "bar": 169,
+        "kind": "break",
+        "detail": "New 15M break \u2014 count now 5"
       }
     ],
-    "_tl_last_break_count": 1,
-    "_tl_choch_active": true,
+    "_tl_last_break_count": 5,
+    "_tl_choch_active": false,
     "_tl_last_phase": "expansion"
   },
   "closed_ids": [
@@ -72,5 +77,5 @@
     "BEARISH|1.32633|1.32045"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-08T15:57:17.241469+00:00"
+  "_persisted_at": "2026-10-09T07:02:29.262623+00:00"
 }

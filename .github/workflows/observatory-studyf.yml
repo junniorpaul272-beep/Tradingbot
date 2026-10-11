@@ -1,0 +1,87 @@
+name: Observatory — Study F, the previous-day box (manual, read-only)
+
+# MANUAL ONLY. Study F tests the objective parts of the previous-day-box idea (the previous trading day's high and low; Monday uses Friday):
+#   F.1 approach to the boundary (touch / within 10% / within 20% of the box width): does price fade (reverse) or break (push through)? Same events answer both. Control: mid-box level.
+#   F.2 1h bias filter: the SAME events split by 1h close vs EMA50; filtered compared with unfiltered, not with a baseline of zero.
+#   F.3 break and retest of the boundary: bounce? Control: a level 0.75 ATR above the high.
+# Not tested: trend lines and supply/demand zones (no objective measure exists), sweep-and-reclaim.
+# Outcome = +-1 ATR first passage within 24h minus a placebo (same weekday, hour and recent move). Two-sided, 2-day-block clustered. Raw 24h path (rise/fall in ATR) reported with no stop or target.
+# Also: a power simulation (synthetic data) with the real event structure, because the number of boxes is small.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot. Needs studya.py, studyb.py, studyc.py and studyd.py (shared code).
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+# The readiness step counts holdout EVENTS only (structure, no outcome) and computes power from DEVELOPMENT estimates.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-studyf
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  studyf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/studya.py observatory/studyb.py observatory/studyc.py observatory/studyd.py observatory/studyf.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "All required files present."
+
+      - name: Self-test (hand-built boxes/approach/retest, weekend rule, no lookahead, mirror, holdout sealing, null calibration, planted fade)
+        run: python -m observatory.studyf --selftest
+
+      - name: Structure counts (boxes and events; no outcome is computed)
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.studyf --raw-dir observatory_data/raw --counts | tee observatory_run/studyf_counts.json
+
+      - name: Run Study F
+        run: |
+          python -m observatory.studyf --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/studyf_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Holdout readiness (counts events only; outcomes stay sealed)
+        run: |
+          python -m observatory.studyf --raw-dir observatory_data/raw --readiness | tee observatory_run/studyf_readiness.json
+          { echo; echo '## Holdout readiness (event counts and power only, no holdout outcome read)'; echo '```'; cat observatory_run/studyf_readiness.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Power simulation (synthetic data only; what size of fade is detectable with this event count)
+        run: |
+          python -m observatory.studyf --power --power-reps 12 --out observatory_run | tee observatory_run/studyf_power_console.txt
+          { echo; echo '## Power simulation (synthetic)'; echo '```'; cat observatory_run/studyf_power_console.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-studyf-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

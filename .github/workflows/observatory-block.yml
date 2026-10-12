@@ -1,7 +1,7 @@
 name: Observatory — run one study on one block of the history (manual, read-only)
 
 # MANUAL ONLY. Runs ONE existing study (A-F) on ONE date window of the data, e.g. the older replication block fetched before 2024-10-03:
-#     study  = studya | studyb | studyc | studyd | studye | studyf | studyg
+#     study  = studya | studyb | studyc | studyd | studye | studyf | studyg | studyh
 #     window = START/END in UTC dates, start inclusive, end exclusive, END REQUIRED and not later than 2026-06-18  (example: 2020-01-01/2024-10-03)
 # The study code is unchanged: observatory/clean.py reads the OBS_WINDOW variable and only REMOVES bars outside the window after cleaning. The sealed holdout (>= 2026-06-18)
 # cannot be selected: this workflow refuses a window that ends after it.
@@ -15,7 +15,7 @@ on:
         description: "Study module to run"
         required: true
         type: choice
-        options: [studya, studyb, studyc, studyd, studye, studyf, studyg]
+        options: [studya, studyb, studyc, studyd, studye, studyf, studyg, studyh]
       window:
         description: "UTC window START/END (end exclusive, end <= 2026-06-18), e.g. 2020-01-01/2024-10-03"
         required: true
@@ -64,7 +64,7 @@ jobs:
         run: |
           missing=0
           for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py observatory/wave1.py \
-                   observatory/studya.py observatory/studyb.py observatory/studyc.py observatory/studyd.py observatory/studye.py observatory/studyf.py observatory/studyg.py \
+                   observatory/studya.py observatory/studyb.py observatory/studyc.py observatory/studyd.py observatory/studye.py observatory/studyf.py observatory/studyg.py observatory/studyh.py \
                    observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
             if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
           done

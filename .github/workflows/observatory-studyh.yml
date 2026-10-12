@@ -1,0 +1,81 @@
+name: Observatory — Study H, buy low / sell high range definitions (manual, read-only)
+
+# MANUAL ONLY. Study H tests "buy low, sell high": does price in the upper part of a range fall (lower part rise)? Four range definitions (previous day, 24h, 5 days, latest confirmed 1h swings),
+# two zones (>= 0.5 and >= 0.8 of the range) and distance from a rolling mean (>= 1.5 ATR), on a 4-hour observation grid, price inside the range.
+#   H.1 premium/discount   H.2 deep zone   H.3 rolling-mean deviation   Control: the middle of the same range.
+# Outcome = +-1 ATR first passage within 24h minus a placebo (same weekday, hour, recent move). Two-sided, 2-day-block clustered. Family 1: 10 tests. Family 2: zone minus mid-range control (8).
+# Not tested: order blocks, fair-value gaps, liquidity pools, other zone thresholds / grids (fixed, not tuned). No planted-effect power simulation (overlapping events make it misleading);
+# the report gives the smallest detectable effect from the real standard errors instead.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot. Needs studya.py ... studyh.py (shared code).
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+# The readiness step counts holdout EVENTS only (structure, no outcome) and computes power from DEVELOPMENT estimates.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-studyh
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  studyh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/studya.py observatory/studyb.py observatory/studyc.py observatory/studyd.py observatory/studyf.py observatory/studyg.py observatory/studyh.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "All required files present."
+
+      - name: Self-test (pandas re-derivation of the ranges, hand-built swings, no lookahead, mirror, holdout sealing, null calibration, planted mean-reversion and trend worlds)
+        run: python -m observatory.studyh --selftest
+
+      - name: Structure counts (range observations and events; no outcome is computed)
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.studyh --raw-dir observatory_data/raw --counts | tee observatory_run/studyh_counts.json
+
+      - name: Run Study H
+        run: |
+          python -m observatory.studyh --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/studyh_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Holdout readiness (counts events only; outcomes stay sealed)
+        run: |
+          python -m observatory.studyh --raw-dir observatory_data/raw --readiness | tee observatory_run/studyh_readiness.json
+          { echo; echo '## Holdout readiness (event counts and power only, no holdout outcome read)'; echo '```'; cat observatory_run/studyh_readiness.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-studyh-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

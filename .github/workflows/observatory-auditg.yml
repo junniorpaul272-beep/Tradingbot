@@ -1,0 +1,69 @@
+name: Observatory — Audit of the extended history and Study G (manual, read-only)
+
+# MANUAL ONLY. Audit of the extended history and Study G: (1) data quality (cleaning counts, coverage by year, extreme bars, hour-of-day profile per year, 5m-vs-15m/1h cross-check),
+# (2) why Study G drops events at the outcome-window gate, (3) exact block comparison of G (split at --boundary, default 2024-10-03), (4) overlap of G events with Study F events.
+# Descriptive: changes no Study G verdict, tunes nothing.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot. Needs studya.py ... studyg.py (shared code).
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+# The readiness step counts holdout EVENTS only (structure, no outcome) and computes power from DEVELOPMENT estimates.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-auditg
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  auditg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/studya.py observatory/studyb.py observatory/studyc.py observatory/studyd.py observatory/studyf.py observatory/studyg.py observatory/auditg.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "All required files present."
+
+      - name: Self-test (corrupted-bar detection, weekend-closure loss classification reconciled with Study G's gate counters, block split arithmetic, overlap bounds)
+        run: python -m observatory.auditg --selftest
+
+      - name: Run the audit
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.auditg --raw-dir observatory_data/raw --out observatory_run --boundary 2024-10-03 > observatory_run/console.txt
+          cat observatory_run/auditg_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-auditg-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

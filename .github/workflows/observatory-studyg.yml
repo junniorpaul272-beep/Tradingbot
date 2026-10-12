@@ -1,0 +1,85 @@
+name: Observatory — Study G, session highs and lows (manual, read-only)
+
+# MANUAL ONLY. Study G tests session highs and lows (Asian 00-07 UTC, events 07-16; London 07-12 UTC, events 12-21). The FIRST push 0.05 ATR beyond a final session level is classified:
+#   G.1 REJECTED (closes back at/below the level; claim reversal)   G.2 ACCEPTED (holds above for 15 minutes; claim continuation)   else 'neither' (counted, unused).
+# Outcome = +-1 ATR first passage within 24h minus a placebo (same weekday, hour, recent move). Separate descriptive expansion (24h range) and raw path. Two-sided, 2-day-block clustered.
+# Family 2: level-specificity vs a mid-range control, Asian vs London, early vs late. Not tested: stop-hunt/order-flow mechanisms (OHLC only), other session clocks.
+# Also: a power simulation (synthetic data) with the real event structure, because the event counts are small.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot. Needs studya.py, studyb.py, studyc.py and studyd.py (shared code).
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+# The readiness step counts holdout EVENTS only (structure, no outcome) and computes power from DEVELOPMENT estimates.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-studyg
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  studyg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/studya.py observatory/studyb.py observatory/studyc.py observatory/studyd.py observatory/studyf.py observatory/studyg.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "All required files present."
+
+      - name: Self-test (hand-built sessions and first-push classification, no lookahead, mirror, holdout sealing, null calibration, planted reversal and continuation)
+        run: python -m observatory.studyg --selftest
+
+      - name: Structure counts (session levels and events; no outcome is computed)
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.studyg --raw-dir observatory_data/raw --counts | tee observatory_run/studyg_counts.json
+
+      - name: Run Study G
+        run: |
+          python -m observatory.studyg --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/studyg_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Holdout readiness (counts events only; outcomes stay sealed)
+        run: |
+          python -m observatory.studyg --raw-dir observatory_data/raw --readiness | tee observatory_run/studyg_readiness.json
+          { echo; echo '## Holdout readiness (event counts and power only, no holdout outcome read)'; echo '```'; cat observatory_run/studyg_readiness.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Power simulation (synthetic data only; what size of reversal / continuation is detectable with this event count)
+        run: |
+          python -m observatory.studyg --power --power-reps 12 --out observatory_run | tee observatory_run/studyg_power_console.txt
+          { echo; echo '## Power simulation (synthetic)'; echo '```'; cat observatory_run/studyg_power_console.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-studyg-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

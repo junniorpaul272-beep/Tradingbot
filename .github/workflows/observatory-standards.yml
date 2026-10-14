@@ -1,0 +1,68 @@
+name: Observatory — Program standards check on Studies G and H (manual, read-only)
+
+# MANUAL ONLY. Applies the program standards (observatory/standards.py) to the finished studies G and H: (1) EXACT recent-vs-older split of every Study H test (replaces the approximate numbers),
+# declared family of 10 for H and 4 for G, (2) spike-bar flags and every test's exposure and estimate without exposed events, (3) overlap with Study F events in the PAST 24h only,
+# (4) duplicate-event check, weekday coverage, and detectable effect from counts. Descriptive: changes no verdict, tunes nothing.
+# READ-ONLY: no commits, no API calls, no secrets, never touches the live bot. Needs studya.py ... studyh.py (shared code).
+# The holdout (everything from 2026-06-18 UTC onward) stays SEALED: this workflow cannot open it.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-standards
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  standards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/studya.py observatory/studyb.py observatory/studyc.py observatory/studyd.py observatory/studye.py observatory/studyf.py observatory/studyg.py observatory/studyh.py observatory/standards.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "All required files present."
+
+      - name: Self-test (spike detection, past-only rule, loss ledger, feasibility tiers, registry, pre-registration refusals, unique events, block split arithmetic)
+        run: python -m observatory.standards --selftest
+
+      - name: Run the standards check
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.standards --raw-dir observatory_data/raw --out observatory_run --boundary 2024-10-03 > observatory_run/console.txt
+          cat observatory_run/standards_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-standards-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

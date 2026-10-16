@@ -13,11 +13,11 @@
   },
   "EXP2_FIB": {
     "logged": 5833,
-    "resolved": 5713,
+    "resolved": 5716,
     "wins": 1598,
-    "losses": 4115,
+    "losses": 4118,
     "timed_out": 284,
-    "sum_r": 276.5454952264199,
+    "sum_r": 273.5454952264199,
     "hit_1r": 3479,
     "hit_2r": 2438,
     "hit_3r": 1849
@@ -68,23 +68,23 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 162,
-    "resolved": 115,
-    "wins": 57,
+    "resolved": 116,
+    "wins": 58,
     "losses": 58,
-    "timed_out": 76,
-    "sum_r": 11.469711967983573,
-    "hit_1r": 26,
+    "timed_out": 77,
+    "sum_r": 12.306430445689607,
+    "hit_1r": 27,
     "hit_2r": 9,
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
     "logged": 1006,
-    "resolved": 977,
-    "wins": 394,
+    "resolved": 978,
+    "wins": 395,
     "losses": 583,
-    "timed_out": 69,
-    "sum_r": 395.41333583361427,
-    "hit_1r": 706,
+    "timed_out": 70,
+    "sum_r": 396.2500543113203,
+    "hit_1r": 707,
     "hit_2r": 606,
     "hit_3r": 539
   },
@@ -121,5 +121,5 @@
     "hit_2r": 10,
     "hit_3r": 5
   },
-  "_persisted_at": "2026-10-16T13:12:21.182319+00:00"
+  "_persisted_at": "2026-10-16T13:17:22.997836+00:00"
 }

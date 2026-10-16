@@ -2,3 +2,4 @@
 {"update_id": 628997645, "chat_id": "8320813752", "text": "/now", "received_at": "2026-10-14T10:30:19.711495+00:00"}
 {"update_id": 628997646, "chat_id": "8320813752", "text": "/logtrade", "received_at": "2026-10-16T13:50:20.801315+00:00"}
 {"update_id": 628997647, "chat_id": "8320813752", "text": "/logtrade GBPUSD buy 1.33483 sl 1.33387 tp 1\n33675", "received_at": "2026-10-16T13:55:22.737106+00:00"}
+{"update_id": 628997649, "chat_id": "8320813752", "text": "/logtrade GBPUSD buy 1.33483 sl 1.33387 tp 1.33675", "received_at": "2026-10-16T14:10:21.829837+00:00"}

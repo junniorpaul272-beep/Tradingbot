@@ -1,14 +1,15 @@
 {
   "open": {
-    "id": "b39210e8e774",
+    "id": "3d864ed5540d",
     "methodology_version": 1,
-    "leg_id": "BULLISH|1.33590|1.31382",
-    "opened_at": "2026-10-16T14:05:21.043380+00:00",
-    "bars_open": 11,
-    "last_processed_candle": "2026-10-16T14:50:00+00:00",
+    "leg_id": "BULLISH|1.33722|1.31382",
+    "opened_at": "2026-10-16T15:05:17.061372+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-10-16T14:55:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "expansion",
     "watch_codes": [
+      "PULLBACK_TO_OB",
       "PULLBACK_TO_FIB_POCKET"
     ],
     "caution_codes": [
@@ -17,10 +18,11 @@
     "reasons": [
       "HTF bias: BULLISH",
       "Fresh 15M BOS aligned with bias",
+      "Order block confirmed, unmitigated",
       "1H volatility expanding",
-      "Low-ATR warning \u2014 5.0p, below the 6p floor",
+      "Low-ATR warning \u2014 5.1p, below the 6p floor",
       "3 breaks into this leg \u2014 getting old",
-      "6.1 ATR from EMA_100 \u2014 extended"
+      "5.6 ATR from EMA_100 \u2014 extended"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -29,14 +31,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "expansion",
-      "atr_5m_pips": 4.962847526587856,
+      "atr_5m_pips": 5.119406332406474,
       "break_count": 3,
-      "campaign_continuation_count": 86,
-      "num_watch_codes": 1,
+      "campaign_continuation_count": 98,
+      "num_watch_codes": 2,
       "num_caution_codes": 1,
       "very_low_atr_warning": false
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-10-16T15:00:20.200560+00:00"
+  "_persisted_at": "2026-10-16T15:05:21.094539+00:00"
 }

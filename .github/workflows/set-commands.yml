@@ -1,0 +1,25 @@
+name: Set Telegram menu
+
+# One click: Actions -> "Set Telegram menu" -> Run workflow. Updates the "/" menu in your private chat with the bot
+# (the menu lives on Telegram's side, so changing the code alone never changes it). Touches nothing else: no commits,
+# no ledger, and not the group's menu. Place at .github/workflows/set-commands.yml. Run it after any commit that adds
+# or renames a command.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  menu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Set the menu
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        run: python comms/set_bot_commands.py

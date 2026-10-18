@@ -1,0 +1,73 @@
+name: Observatory — Study J stage 2, the frozen ladder test (manual, read-only, runs ONCE)
+
+# MANUAL ONLY. STAGE 2 of Study J: the frozen ladder test (pre-registration study_j_prereg.json; the rule is in studyj_run.py). The selftests always run. The OUTCOME runs only when the input
+# `confirm` is exactly J-FROZEN. Run it once; no variant is added after the result is seen. READ-ONLY: no commits, no API calls, no secrets. The holdout (2026-06-18 UTC onward) stays SEALED.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type J-FROZEN to run the outcome (leave empty to run the selftest only)'
+        required: false
+        default: ''
+
+concurrency:
+  group: observatory-studyj-run
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  studyj_run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/gates.py \
+                   observatory/wave1.py observatory/studya.py observatory/studyb.py observatory/studyc.py observatory/studyd.py observatory/studye.py observatory/studyf.py observatory/studyg.py observatory/studyh.py observatory/standards.py observatory/studyi.py observatory/studyi_run.py observatory/studyj.py observatory/studyj_run.py \
+                   observatory_data/raw/GBPUSD_5m.jsonl observatory_data/raw/GBPUSD_15m.jsonl observatory_data/raw/GBPUSD_1h.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || exit 1
+          echo "All required files present."
+
+      - name: Self-test (verdict table, orientation, cluster SE under in-block dependence) and the counts-stage self-test
+        run: |
+          python -m observatory.studyj_run --selftest
+          python -m observatory.studyj --selftest
+
+      - name: Run the frozen primary test (only with the confirm word)
+        if: ${{ github.event.inputs.confirm == 'J-FROZEN' }}
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.studyj_run --run --confirm J-FROZEN --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/studyj_outcome.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-studyj-run-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

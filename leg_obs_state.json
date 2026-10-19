@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BULLISH|1.33722|1.32303",
     "opened_at": "2026-10-19T12:07:24.852652+00:00",
-    "bars_open": 6,
-    "last_processed_candle": "2026-10-19T12:25:00+00:00",
+    "bars_open": 7,
+    "last_processed_candle": "2026-10-19T12:30:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -33,7 +33,7 @@
       "compression_ratio": 2.93,
       "pullback_depth_pct": 16.1
     },
-    "tier1_touched_bar": null,
+    "tier1_touched_bar": 7,
     "tier2_touched_bar": null,
     "tier3_touched_bar": 1,
     "timeline": [
@@ -46,6 +46,11 @@
         "bar": 1,
         "kind": "zone_touch",
         "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
+      },
+      {
+        "bar": 7,
+        "kind": "zone_touch",
+        "detail": "Tier 1 zone touched (Order Block)"
       }
     ],
     "_tl_last_break_count": 1,
@@ -63,5 +68,5 @@
     "BULLISH|1.32614|1.31853"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-19T12:37:21.210836+00:00"
+  "_persisted_at": "2026-10-19T12:42:22.968163+00:00"
 }

@@ -1,0 +1,70 @@
+name: Tests (layer rules, MIL, catalog, BUS, inspector)
+
+# Runs the test suites on every change to a .py file (the live scan only commits data files, so it never
+# triggers this) and on demand. READ-ONLY: no secrets, no network, no commits. Place at .github/workflows/tests.yml.
+# A failing suite here means the code changed in a way a guard was written to catch — read the failing test's
+# docstring first; each one says what it protects.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**.py'
+      - 'fixture_real_state.json'
+      - '.github/workflows/tests.yml'
+
+concurrency:
+  group: tests
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TELEGRAM_TOKEN: dummy
+      TELEGRAM_CHAT_ID: '1'
+      TWELVE_DATA_KEY: dummy
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Layer boundaries
+        run: python check_layer_imports.py .
+
+      - name: Claim matrix is current
+        shell: bash
+        run: |
+          m=CLAIM_MATRIX.md; [ -f "$m" ] || m=comms/CLAIM_MATRIX.md       # the matrix may sit in the root or in comms/
+          [ -f "$m" ] || { echo "::error::CLAIM_MATRIX.md not found in the repo root or comms/. Generate it: python comms/bus_adapters.py --matrix > CLAIM_MATRIX.md"; exit 1; }
+          python comms/bus_adapters.py --matrix > /tmp/claim_matrix_now.md
+          diff -u "$m" /tmp/claim_matrix_now.md && echo "$m is current"
+
+      - name: Comms integrity inspector (read-only)
+        run: python comms/comms_inspector.py . --full-checkout --json comms_inspector_report.json
+
+      - name: Run every suite
+        shell: bash
+        run: |
+          fail=0
+          for t in test_ledger_catalog test_research_objects test_signal_outcomes test_bus_contract \
+                   test_bus_adapters test_bus test_bus_runner test_mil_fixes test_inspector test_leg_age test_state_history test_macro_bias_lifecycle test_bus_signals test_momentum_read test_bus_quiet test_bus_taken test_bus_investigate test_bus_know test_bus_questions test_case_reconstruct test_bot_menu test_bus_review_fresh test_converse test_comms_inspector; do
+            f="$t.py"; [ -f "$f" ] || f="comms/$t.py"       # the communication layer's tests live in comms/
+            [ -f "$f" ] || { echo "::warning::$t.py missing, skipped"; continue; }
+            echo "=== $t"
+            python -W error::ResourceWarning "$f" 2>&1 | tail -4 || fail=1
+            python "$f" > /dev/null 2>&1 || { echo "::error::$t FAILED"; fail=1; }
+          done
+          exit $fail

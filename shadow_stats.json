@@ -79,12 +79,12 @@
   },
   "EXPE_REJECTED_LIVE": {
     "logged": 1013,
-    "resolved": 987,
+    "resolved": 988,
     "wins": 399,
-    "losses": 588,
+    "losses": 589,
     "timed_out": 74,
-    "sum_r": 396.2995760744144,
-    "hit_1r": 710,
+    "sum_r": 395.2995760744144,
+    "hit_1r": 711,
     "hit_2r": 607,
     "hit_3r": 540
   },
@@ -121,5 +121,5 @@
     "hit_2r": 10,
     "hit_3r": 5
   },
-  "_persisted_at": "2026-10-19T14:22:17.498959+00:00"
+  "_persisted_at": "2026-10-19T14:27:22.824909+00:00"
 }

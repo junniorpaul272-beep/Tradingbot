@@ -1,51 +1,46 @@
 {
   "open": {
-    "id": "f3c50ee84c63",
+    "id": "8bf6e8ae04bf",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.33776|1.32676",
-    "opened_at": "2026-10-20T13:02:23.452715+00:00",
-    "bars_open": 11,
-    "last_processed_candle": "2026-10-20T13:50:00+00:00",
+    "leg_id": "BULLISH|1.33960|1.32676",
+    "opened_at": "2026-10-20T14:07:18.069841+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-10-20T14:00:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": false,
       "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 110.0,
+      "macro_leg_length_pips": 128.4,
       "bos_15m_direction": "BULLISH",
       "bos_15m_break_count": 1,
       "bos_15m_was_choch": true,
-      "atr_pips": 6.35,
-      "atr_percentile_15m": 98.2,
+      "atr_pips": 5.21,
+      "atr_percentile_15m": 96.5,
       "market_phase": "exhaustion",
-      "market_phase_age_bars": 73,
-      "measured_move_ratio": 0.775,
+      "market_phase_age_bars": 86,
+      "measured_move_ratio": 0.905,
       "measured_move_bucket": "UNDER_100",
       "transition_cause": "EMA_EXHAUSTION",
-      "campaign_extension_multiple": 1.04,
-      "campaign_continuation_count": 74,
+      "campaign_extension_multiple": 1.17,
+      "campaign_continuation_count": 87,
       "atr_bucket": "high_vol",
       "session": "london_ny_overlap",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 4.38,
+      "trend_strength_atr_mult": 6.18,
       "volatility_state": "expanding",
-      "compression_ratio": 4.38,
-      "pullback_depth_pct": 20.6
+      "compression_ratio": 5.9,
+      "pullback_depth_pct": 6.8
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
-    "tier3_touched_bar": 1,
+    "tier3_touched_bar": null,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bullish (as continuation)"
-      },
-      {
-        "bar": 1,
-        "kind": "zone_touch",
-        "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
       }
     ],
     "_tl_last_break_count": 1,
@@ -63,5 +58,5 @@
     "BULLISH|1.32614|1.31853"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-20T14:02:19.068781+00:00"
+  "_persisted_at": "2026-10-20T14:07:18.392531+00:00"
 }

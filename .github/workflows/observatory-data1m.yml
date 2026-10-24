@@ -1,0 +1,66 @@
+name: Observatory — 1-minute data audit (manual, read-only, counts only)
+
+# MANUAL ONLY. Audits the 1-minute shards (observatory_data/raw/GBPUSD_1m_YYYY-MM.jsonl written by observatory-fetch with tfs=1m): loss ledger, coverage by month, gaps,
+# agreement of the 1m bars with the 5m file of the same feed, size of a 1m bar against the 1-pip cost, break-even win rates. No trading concept, no outcome.
+# READ-ONLY: no commits, no API calls, no secrets. The holdout (2026-06-18 UTC onward) stays SEALED (1m bars at or after it are never loaded).
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: observatory-data1m
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  data1m:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check required files
+        run: |
+          missing=0
+          for f in observatory/__init__.py observatory/clean.py observatory/measure.py observatory/data1m.py observatory_data/raw/GBPUSD_5m.jsonl; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING: $f"; missing=1; fi
+          done
+          n=$(ls observatory_data/raw/GBPUSD_1m_*.jsonl 2>/dev/null | wc -l)
+          echo "1m shards found: $n"
+          [ "$n" -gt 0 ] || { echo "::error::no 1m shards: run observatory-fetch with tfs=1m first"; missing=1; }
+          [ "$missing" = "0" ] || exit 1
+
+      - name: Self-test (loader, closed window, gaps, holdout lock, 1m-vs-5m agreement)
+        run: python -m observatory.data1m --selftest
+
+      - name: Audit
+        run: |
+          mkdir -p observatory_run
+          python -m observatory.data1m --audit --raw-dir observatory_data/raw --out observatory_run > observatory_run/console.txt
+          cat observatory_run/data1m_audit.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm raw data unchanged
+        run: |
+          git diff --quiet -- observatory_data/raw || { echo "::error::raw data changed during the run"; exit 1; }
+          echo "Raw data unchanged."
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-data1m-${{ github.run_number }}
+          path: observatory_run/
+          if-no-files-found: ignore
+          retention-days: 90

@@ -1,45 +1,44 @@
 {
   "open": {
-    "id": "74532470b885",
+    "id": "131398fbd274",
     "methodology_version": 1,
-    "leg_id": "BEARISH|1.34198|1.33676",
-    "opened_at": "2026-10-23T12:10:27.352476+00:00",
-    "bars_open": 45,
-    "last_processed_candle": "2026-10-23T15:45:00+00:00",
+    "leg_id": "BEARISH|1.34198|1.33431",
+    "opened_at": "2026-10-26T09:05:31.484381+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-10-26T08:55:00+00:00",
     "macro_bias": "BEARISH",
-    "phase": "expansion",
+    "phase": "exhaustion",
     "watch_codes": [
-      "PULLBACK_TO_OB",
-      "PULLBACK_TO_FIB_POCKET"
+      "PULLBACK_TO_FIB_POCKET",
+      "SWEEP_AND_RECLAIM"
     ],
     "caution_codes": [
+      "UNSWEPT_CHOCH",
       "ATR_INCOMPATIBLE"
     ],
     "reasons": [
       "HTF bias: BEARISH",
       "Fresh 15M BOS aligned with bias",
-      "Order block confirmed, unmitigated",
-      "Very-low-ATR warning \u2014 3.6p, below the 4p floor"
+      "15M CHoCH confirming direction",
+      "Low-ATR warning \u2014 4.3p, below the 6p floor",
+      "9 breaks into this leg \u2014 getting old",
+      "2.6 ATR from EMA_100 \u2014 extended"
     ],
-    "materialized_codes": [
-      "PULLBACK_TO_FIB_POCKET"
-    ],
-    "materialized_at_bar": {
-      "PULLBACK_TO_FIB_POCKET": 10
-    },
+    "materialized_codes": [],
+    "materialized_at_bar": {},
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
     "tags": {
-      "phase": "expansion",
-      "atr_5m_pips": 3.5624606114507174,
-      "break_count": 1,
-      "campaign_continuation_count": 2,
+      "phase": "exhaustion",
+      "atr_5m_pips": 4.27015585624302,
+      "break_count": 9,
+      "campaign_continuation_count": 1,
       "num_watch_codes": 2,
-      "num_caution_codes": 1,
-      "very_low_atr_warning": true
+      "num_caution_codes": 2,
+      "very_low_atr_warning": false
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-10-23T15:55:35.832765+00:00"
+  "_persisted_at": "2026-10-26T09:05:34.254297+00:00"
 }

@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "f1f73abd8ae8",
+    "id": "c09067df4928",
     "methodology_version": 1,
     "leg_id": "BEARISH|1.34198|1.33310",
-    "opened_at": "2026-10-26T15:30:34.494420+00:00",
+    "opened_at": "2026-10-26T15:35:35.582487+00:00",
     "bars_open": 0,
-    "last_processed_candle": "2026-10-26T15:20:00+00:00",
+    "last_processed_candle": "2026-10-26T15:25:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -21,7 +21,7 @@
       "Fresh 15M BOS aligned with bias",
       "1H volatility expanding",
       "Bias marked stale \u2014 founding leg already invalidated",
-      "Low-ATR warning \u2014 4.0p, below the 6p floor"
+      "Very-low-ATR warning \u2014 3.9p, below the 4p floor"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -30,14 +30,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 4.031566874587984,
+      "atr_5m_pips": 3.8540258912144836,
       "break_count": null,
       "campaign_continuation_count": 69,
       "num_watch_codes": 2,
       "num_caution_codes": 2,
-      "very_low_atr_warning": false
+      "very_low_atr_warning": true
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-10-26T15:30:37.160186+00:00"
+  "_persisted_at": "2026-10-26T15:35:38.854341+00:00"
 }

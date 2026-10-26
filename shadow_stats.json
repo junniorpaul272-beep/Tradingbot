@@ -68,12 +68,12 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 180,
-    "resolved": 137,
-    "wins": 65,
+    "resolved": 138,
+    "wins": 66,
     "losses": 72,
-    "timed_out": 93,
-    "sum_r": 6.558532744040128,
-    "hit_1r": 29,
+    "timed_out": 94,
+    "sum_r": 7.276643282066855,
+    "hit_1r": 30,
     "hit_2r": 10,
     "hit_3r": 2
   },
@@ -101,12 +101,12 @@
   },
   "EXP4_POLICY_LAB": {
     "logged": 33,
-    "resolved": 31,
-    "wins": 10,
+    "resolved": 33,
+    "wins": 12,
     "losses": 21,
-    "timed_out": 11,
-    "sum_r": -3.222863037244518,
-    "hit_1r": 18,
+    "timed_out": 13,
+    "sum_r": -1.786641961191063,
+    "hit_1r": 20,
     "hit_2r": 8,
     "hit_3r": 1
   },
@@ -121,5 +121,5 @@
     "hit_2r": 11,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-10-26T14:32:24.335301+00:00"
+  "_persisted_at": "2026-10-26T14:37:25.528015+00:00"
 }

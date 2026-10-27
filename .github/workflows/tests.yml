@@ -52,7 +52,7 @@ jobs:
         run: |
           fail=0
           for t in test_ledger_catalog test_research_objects test_signal_outcomes test_bus_contract \
-                   test_bus_adapters test_bus test_bus_runner test_mil_fixes test_inspector test_leg_age test_state_history test_macro_bias_lifecycle test_bus_signals test_momentum_read test_bus_quiet test_bus_taken test_bus_investigate test_bus_know test_bus_questions test_case_reconstruct test_bot_menu test_bus_review_fresh test_converse test_comms_inspector test_fast_gate test_plainwords test_stress_fixes test_chat_isolation test_idea; do
+                   test_bus_adapters test_bus test_bus_runner test_mil_fixes test_inspector test_leg_age test_state_history test_macro_bias_lifecycle test_bus_signals test_momentum_read test_bus_quiet test_bus_taken test_bus_investigate test_bus_know test_bus_questions test_case_reconstruct test_bot_menu test_bus_review_fresh test_converse test_comms_inspector test_fast_gate test_plainwords test_stress_fixes test_chat_isolation test_idea test_bias_window test_leg_survival test_consolidation_gate; do
             f="$t.py"; [ -f "$f" ] || f="comms/$t.py"       # the communication layer's tests live in comms/
             [ -f "$f" ] || { echo "::warning::$t.py missing, skipped"; continue; }
             echo "=== $t"

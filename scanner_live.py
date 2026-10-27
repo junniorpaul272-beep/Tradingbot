@@ -1,4 +1,5 @@
 """
+i love leonor more than anything 🤩 
 scanner_live.py
 ================
 THE LIVE DECISION CORE. This is the only process that: calls Twelve

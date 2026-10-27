@@ -1,60 +1,50 @@
 {
   "open": {
-    "id": "1d8023a67bb9",
+    "id": "134205d1dc5f",
     "methodology_version": 3,
-    "leg_id": "BEARISH|1.33959|1.33160",
-    "opened_at": "2026-10-27T08:07:23.565688+00:00",
-    "bars_open": 23,
-    "last_processed_candle": "2026-10-27T09:50:00+00:00",
+    "leg_id": "BEARISH|1.33959|1.33073",
+    "opened_at": "2026-10-27T10:07:20.472792+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-10-27T09:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": true,
       "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 79.9,
+      "macro_leg_length_pips": 88.6,
       "bos_15m_direction": "BEARISH",
-      "bos_15m_break_count": 2,
-      "bos_15m_was_choch": true,
-      "atr_pips": 4.23,
-      "atr_percentile_15m": 96.5,
+      "bos_15m_break_count": 3,
+      "bos_15m_was_choch": false,
+      "atr_pips": 3.99,
+      "atr_percentile_15m": 98.2,
       "market_phase": "expansion",
-      "market_phase_age_bars": 12,
+      "market_phase_age_bars": 36,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "FRESH_BOS",
-      "campaign_extension_multiple": 1.14,
-      "campaign_continuation_count": 13,
+      "campaign_extension_multiple": 1.26,
+      "campaign_continuation_count": 37,
       "atr_bucket": "high_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 5.84,
+      "trend_strength_atr_mult": 6.23,
       "volatility_state": "expanding",
-      "compression_ratio": 3.44,
-      "pullback_depth_pct": 25.5
+      "compression_ratio": 3.41,
+      "pullback_depth_pct": 21.0
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
-    "tier3_touched_bar": 1,
+    "tier3_touched_bar": null,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bearish (via CHoCH)"
-      },
-      {
-        "bar": 1,
-        "kind": "zone_touch",
-        "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
-      },
-      {
-        "bar": 3,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 3"
       }
     ],
-    "_tl_last_break_count": 1,
-    "_tl_choch_active": true,
+    "_tl_last_break_count": 3,
+    "_tl_choch_active": false,
     "_tl_last_phase": "expansion"
   },
   "closed_ids": [
@@ -69,5 +59,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-27T10:02:29.413013+00:00"
+  "_persisted_at": "2026-10-27T10:07:23.926990+00:00"
 }

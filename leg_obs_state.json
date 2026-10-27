@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.33959|1.33073",
     "opened_at": "2026-10-27T10:07:20.472792+00:00",
-    "bars_open": 47,
-    "last_processed_candle": "2026-10-27T13:50:00+00:00",
+    "bars_open": 48,
+    "last_processed_candle": "2026-10-27T13:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -79,5 +79,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-27T13:57:19.578158+00:00"
+  "_persisted_at": "2026-10-27T14:02:19.243915+00:00"
 }

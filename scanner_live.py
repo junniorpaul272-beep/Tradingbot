@@ -1,5 +1,4 @@
 """
-i love leonor more than anything 🤩 
 scanner_live.py
 ================
 THE LIVE DECISION CORE. This is the only process that: calls Twelve
@@ -67,7 +66,7 @@ from scanner_common import (
     load_bias_ab_log, save_bias_ab_log,
     load_bias_minleg_log, save_bias_minleg_log,
     load_markov_data, save_markov_data,
-    HTF_BIAS_MIN_BARS, ATR_WARN_PIPS, SWING_LOOKBACK_15, ATR_MIN_PIPS,
+    HTF_BIAS_MIN_BARS, HTF_STRUCTURE_FETCH_BARS, ATR_WARN_PIPS, SWING_LOOKBACK_15, ATR_MIN_PIPS,
     SCAN_LOCK_FILE, SCAN_LOCK_MAX_AGE_SEC,
     atr_histogram_bucket,
     BRAIN_LOG_FILE, BRIEFING_LOG_FILE,
@@ -3183,7 +3182,10 @@ def _scan_once():
     # ── Fetch data — the ONLY place in the whole split that calls Twelve Data ─
     df_5m  = fetch_ohlc("5min",  outputsize=outputsize_5m)
     df_15m = fetch_ohlc("15min", outputsize=SWING_LOOKBACK_15 + 10)
-    df_1h  = fetch_ohlc("1h",    outputsize=HTF_BIAS_MIN_BARS + 20)
+    # Bias structure is shown a longer 1H history (HTF_STRUCTURE_FETCH_BARS);
+    # everything else keeps the original HTF_BIAS_MIN_BARS + 20 candles.
+    df_1h_long = fetch_ohlc("1h", outputsize=HTF_STRUCTURE_FETCH_BARS)
+    df_1h = df_1h_long.tail(HTF_BIAS_MIN_BARS + 20) if df_1h_long is not None else None
 
     if df_5m is None or df_15m is None or df_1h is None:
         print("Data fetch failed. Exiting.")
@@ -3306,7 +3308,7 @@ def _scan_once():
         print("[MOMENTUM ERROR] " + str(e))
 
     # ── MACRO BIAS (pure) ─────────────────────────────────────────────────
-    macro_bias, bias_updates = compute_macro_bias(df_1h, df_15m, state)
+    macro_bias, bias_updates = compute_macro_bias(df_1h_long, df_15m, state)
     apply_state_updates(state, bias_updates)
     bias_stale = state.get("macro_bias_stale", False)
 
@@ -3383,7 +3385,7 @@ def _scan_once():
         apply_state_updates(state, capture_prior_continuation_snapshot(
             _prev_leg_direction, _prev_leg_latest_swing_origin, _prev_leg_extreme))
 
-    shadow_bias, shadow_updates = compute_macro_bias_shadow_old_rule(df_1h, state)
+    shadow_bias, shadow_updates = compute_macro_bias_shadow_old_rule(df_1h_long, state)
     apply_state_updates(state, shadow_updates)
     bias_agree = (shadow_bias == macro_bias)
     if not bias_agree:
@@ -3410,7 +3412,7 @@ def _scan_once():
     # file (bias_minleg_log.json), NOT merged into bias_ab_log.json — that
     # file's schema is already owned by the old-rule A/B test above.
     # Read-only instrumentation: never touches macro_bias/tier gating.
-    minleg_bias, minleg_updates = compute_macro_bias_min_leg_gate(df_1h, df_15m, state)
+    minleg_bias, minleg_updates = compute_macro_bias_min_leg_gate(df_1h_long, df_15m, state)
     apply_state_updates(state, minleg_updates)
     minleg_agree = (minleg_bias == macro_bias)
     if not minleg_agree:

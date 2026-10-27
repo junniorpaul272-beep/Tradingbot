@@ -1,5 +1,5 @@
 """
-i love you scanner_common.py
+scanner_common.py
 ==================
 Shared config constants, math primitives, and persistence helpers used
 by BOTH scanner_live.py and min_scanner.py. Import *, no side effects,
@@ -173,6 +173,14 @@ DATA_SPIKE_BLOCK_BARS         = 14
 
 # ---- MACRO BIAS (1H — the ONE authority for direction) --------------------
 HTF_BIAS_MIN_BARS          = 100
+# EXPERIMENT (26 Oct 2026, per Nelly + friend review): how many 1H candles
+# the BIAS decision is shown. Replay of the logged candles proved the leg
+# origin (= the invalidation level) slid upward as old candles left a
+# 120-candle window (1.31382 -> 1.32303 -> 1.32676 -> 1.32995 with no
+# market change). Only compute_macro_bias and its two shadow twins get
+# this longer history; every other consumer keeps the old 120 candles.
+# 500 is NOT proven correct, only a controlled experiment (REPORT_INVALIDATION.md).
+HTF_STRUCTURE_FETCH_BARS   = 500
 HTF_EMA_SLOPE_BARS         = 10
 HTF_CONSOLIDATION_ATR_MULT = 0.5
 HTF_EMA_FLAT_THRESHOLD     = 0.15

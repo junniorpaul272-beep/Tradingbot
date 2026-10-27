@@ -130,16 +130,27 @@ def check_leg_anchor_survival(state, prefix, window_df, invalidation_retrace=INV
     window_low  = observed["Low"].min()
     window_high = observed["High"].max()
 
+    # PROPOSED FIX (27 Oct 2026, REPORT_INVALIDATION.md): the retrace must be
+    # measured from the extreme to the deepest pullback AFTER the extreme.
+    # It used to use the lowest low (bullish) / highest high (bearish) anywhere
+    # after the origin, which is by definition right next to the origin, so any
+    # healthy leg looked ~100% retraced and was declared dead whenever this
+    # check ran (e.g. 23 Oct 12:05, 26 Oct 07:00). The origin test still uses
+    # the whole window: any touch of the origin kills the leg.
     if anchor_dir == "BULLISH":
         new_extreme      = max(anchor_extreme, window_high)
         leg_range        = new_extreme - anchor_origin
         origin_violated  = window_low <= anchor_origin
-        retrace_violated = leg_range > 0 and (new_extreme - window_low) / leg_range >= invalidation_retrace
+        ext_ts           = (observed["High"] - new_extreme).abs().idxmin()
+        pullback_low     = observed.loc[observed.index >= ext_ts, "Low"].min()
+        retrace_violated = leg_range > 0 and (new_extreme - pullback_low) / leg_range >= invalidation_retrace
     else:
         new_extreme      = min(anchor_extreme, window_low)
         leg_range        = anchor_origin - new_extreme
         origin_violated  = window_high >= anchor_origin
-        retrace_violated = leg_range > 0 and (window_high - new_extreme) / leg_range >= invalidation_retrace
+        ext_ts           = (observed["Low"] - new_extreme).abs().idxmin()
+        pullback_high    = observed.loc[observed.index >= ext_ts, "High"].max()
+        retrace_violated = leg_range > 0 and (pullback_high - new_extreme) / leg_range >= invalidation_retrace
 
     if origin_violated or retrace_violated:
         # Per chat (MIL design) — this used to be computed and discarded.
@@ -372,7 +383,16 @@ def compute_macro_bias(df_1h, df_15m, state):
     # a fresh per-scan reading").
     _challenge_evidence = None
     _candidate_episode_written = False
-    if bos_1h is not None and confirmed in ("BULLISH", "BEARISH") and bos_1h["direction"] != confirmed:
+    # PROPOSED FIX (27 Oct 2026): passing through CONSOLIDATION must not
+    # remove the reversal gate. The flat-EMA rule overwrites
+    # macro_bias_confirmed with "CONSOLIDATION" but leaves the standing leg
+    # (macro_leg_*) in state; that leg is still the structure a new break
+    # would be superseding, so the gate compares against it. If no standing
+    # leg exists there is nothing to supersede and no gate applies.
+    _held_dir = confirmed
+    if confirmed == "CONSOLIDATION" and state.get("macro_leg_direction") in ("BULLISH", "BEARISH"):
+        _held_dir = state.get("macro_leg_direction")
+    if bos_1h is not None and _held_dir in ("BULLISH", "BEARISH") and bos_1h["direction"] != _held_dir:
         leg_range = abs(bos_1h["impulse_end"] - bos_1h["impulse_start"])
         atr_ok = (
             not (pd.isna(atr_now) or atr_now == 0) and
@@ -450,7 +470,7 @@ def compute_macro_bias(df_1h, df_15m, state):
                 "macro_candidate_leg_required_prior_pips": required_prior_pips,
                 "macro_candidate_leg_atr_ok":         atr_ok,
                 "macro_candidate_leg_vs_prior_ok":    vs_prior_ok,
-                "macro_candidate_leg_vs_confirmed":   confirmed,
+                "macro_candidate_leg_vs_confirmed":   _held_dir,
                 # Structural Challenge evidence (per chat) — telemetry only.
                 "macro_candidate_leg_bar_span":                    _challenge_evidence["bar_span"],
                 "macro_candidate_leg_campaign_direction":          _challenge_evidence["campaign_direction"],
@@ -458,7 +478,7 @@ def compute_macro_bias(df_1h, df_15m, state):
             })
             _candidate_episode_written = True
             print(f"  [BIAS] candidate reversal {bos_1h['direction']} ({leg_range / PIP_SIZE:.1f}p) "
-                  f"did not qualify to supersede held {confirmed} "
+                  f"did not qualify to supersede held {_held_dir} "
                   f"[atr_ok={atr_ok} (need {required_atr_pips}p) | "
                   f"vs_prior_ok={vs_prior_ok} (need {required_prior_pips}p) | "
                   f"was_choch={_challenge_evidence['was_choch']} | bar_span={_challenge_evidence['bar_span']} | "

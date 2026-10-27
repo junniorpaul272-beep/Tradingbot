@@ -1,5 +1,5 @@
 """
-scanner_common.py
+i love you scanner_common.py
 ==================
 Shared config constants, math primitives, and persistence helpers used
 by BOTH scanner_live.py and min_scanner.py. Import *, no side effects,

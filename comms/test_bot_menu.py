@@ -33,14 +33,14 @@ class Menu(unittest.TestCase):
             self.assertRegex(c, r"^[a-z0-9_]{1,32}$"); self.assertTrue(3 <= len(d) <= 256, c)
         p = sbc.payload(); self.assertEqual(p["scope"], {"type": "all_private_chats"})   # the group's menu is not touched
 
-    def test_the_menu_no_longer_offers_commands_that_were_retired_or_confusing(self):
+    def test_the_menu_does_not_offer_commands_that_were_retired(self):
         names = {c for c, _ in sbc.MENU}
-        for gone in ("marketintent", "confirm", "undo", "win", "loss", "biasab"):
+        for gone in ("marketintent",):
             self.assertNotIn(gone, names)
 
     def test_the_menu_includes_the_new_commands(self):
         names = {c for c, _ in sbc.MENU}
-        for new in ("taken", "skip", "know", "ask", "investigate", "reconstruct", "quiet", "loud", "help"):
+        for new in ("taken", "skip", "win", "loss", "undo", "confirm", "trade", "shadow", "bank", "accounts", "last", "know", "ask", "investigate", "reconstruct", "quiet", "loud", "help"):
             self.assertIn(new, names)
 
     def test_the_script_never_prints_the_token(self):

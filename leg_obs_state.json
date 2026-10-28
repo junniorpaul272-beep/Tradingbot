@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.33959|1.32720",
     "opened_at": "2026-10-28T08:07:23.857604+00:00",
-    "bars_open": 20,
-    "last_processed_candle": "2026-10-28T09:35:00+00:00",
+    "bars_open": 21,
+    "last_processed_candle": "2026-10-28T09:40:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -46,9 +46,14 @@
         "bar": 1,
         "kind": "zone_touch",
         "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
+      },
+      {
+        "bar": 21,
+        "kind": "break",
+        "detail": "New 15M break \u2014 count now 3"
       }
     ],
-    "_tl_last_break_count": 2,
+    "_tl_last_break_count": 3,
     "_tl_choch_active": true,
     "_tl_last_phase": "exhaustion"
   },
@@ -64,5 +69,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-28T09:47:22.177139+00:00"
+  "_persisted_at": "2026-10-28T09:52:31.595458+00:00"
 }

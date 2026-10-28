@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.33959|1.32720",
     "opened_at": "2026-10-28T08:07:23.857604+00:00",
-    "bars_open": 23,
-    "last_processed_candle": "2026-10-28T09:50:00+00:00",
+    "bars_open": 24,
+    "last_processed_candle": "2026-10-28T09:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -51,11 +51,16 @@
         "bar": 21,
         "kind": "break",
         "detail": "New 15M break \u2014 count now 3"
+      },
+      {
+        "bar": 24,
+        "kind": "phase_change",
+        "detail": "Phase changed: exhaustion \u2192 expansion"
       }
     ],
     "_tl_last_break_count": 3,
     "_tl_choch_active": true,
-    "_tl_last_phase": "exhaustion"
+    "_tl_last_phase": "expansion"
   },
   "closed_ids": [
     "BULLISH|1.35498|1.34751",
@@ -69,5 +74,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-28T10:02:28.373641+00:00"
+  "_persisted_at": "2026-10-28T10:07:21.230622+00:00"
 }

@@ -1,80 +1,50 @@
 {
   "open": {
-    "id": "134205d1dc5f",
+    "id": "d1ce1a95664c",
     "methodology_version": 3,
-    "leg_id": "BEARISH|1.33959|1.33073",
-    "opened_at": "2026-10-27T10:07:20.472792+00:00",
-    "bars_open": 70,
-    "last_processed_candle": "2026-10-27T15:45:00+00:00",
+    "leg_id": "BEARISH|1.33959|1.32885",
+    "opened_at": "2026-10-28T07:02:27.158352+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-10-28T06:50:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": true,
       "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 88.6,
+      "macro_leg_length_pips": 107.4,
       "bos_15m_direction": "BEARISH",
       "bos_15m_break_count": 3,
       "bos_15m_was_choch": false,
-      "atr_pips": 3.99,
-      "atr_percentile_15m": 98.2,
-      "market_phase": "expansion",
-      "market_phase_age_bars": 36,
+      "atr_pips": 2.97,
+      "atr_percentile_15m": 45.6,
+      "market_phase": "exhaustion",
+      "market_phase_age_bars": 0,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
-      "transition_cause": "FRESH_BOS",
-      "campaign_extension_multiple": 1.26,
-      "campaign_continuation_count": 37,
-      "atr_bucket": "high_vol",
+      "transition_cause": "EMA_EXHAUSTION",
+      "campaign_extension_multiple": 1.0,
+      "campaign_continuation_count": 1,
+      "atr_bucket": "normal_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 6.23,
-      "volatility_state": "expanding",
-      "compression_ratio": 3.41,
-      "pullback_depth_pct": 21.0
+      "trend_strength_atr_mult": 9.33,
+      "volatility_state": "flat",
+      "compression_ratio": 4.11,
+      "pullback_depth_pct": 0.5
     },
-    "tier1_touched_bar": 39,
+    "tier1_touched_bar": null,
     "tier2_touched_bar": null,
-    "tier3_touched_bar": 69,
+    "tier3_touched_bar": null,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bearish (via CHoCH)"
-      },
-      {
-        "bar": 9,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 4"
-      },
-      {
-        "bar": 24,
-        "kind": "phase_change",
-        "detail": "Phase changed: expansion \u2192 exhaustion"
-      },
-      {
-        "bar": 27,
-        "kind": "choch",
-        "detail": "15M CHoCH confirmed"
-      },
-      {
-        "bar": 39,
-        "kind": "zone_touch",
-        "detail": "Tier 1 zone touched (Order Block)"
-      },
-      {
-        "bar": 63,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 2"
-      },
-      {
-        "bar": 69,
-        "kind": "zone_touch",
-        "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
       }
     ],
-    "_tl_last_break_count": 1,
-    "_tl_choch_active": true,
+    "_tl_last_break_count": 3,
+    "_tl_choch_active": false,
     "_tl_last_phase": "exhaustion"
   },
   "closed_ids": [
@@ -89,5 +59,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-27T15:57:31.450640+00:00"
+  "_persisted_at": "2026-10-28T07:02:37.001114+00:00"
 }

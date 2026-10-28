@@ -1,26 +1,26 @@
 {
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
-    "logged": 415,
-    "resolved": 391,
-    "wins": 206,
+    "logged": 416,
+    "resolved": 393,
+    "wins": 208,
     "losses": 185,
-    "timed_out": 320,
-    "sum_r": 32.73510981710704,
+    "timed_out": 322,
+    "sum_r": 33.76491485053487,
     "hit_1r": 55,
     "hit_2r": 16,
     "hit_3r": 5
   },
   "EXP2_FIB": {
-    "logged": 6796,
-    "resolved": 6674,
-    "wins": 1827,
+    "logged": 6802,
+    "resolved": 6694,
+    "wins": 1847,
     "losses": 4847,
-    "timed_out": 342,
-    "sum_r": 152.3199268107522,
-    "hit_1r": 4024,
-    "hit_2r": 2780,
-    "hit_3r": 2090
+    "timed_out": 356,
+    "sum_r": 188.44538305328783,
+    "hit_1r": 4044,
+    "hit_2r": 2793,
+    "hit_3r": 2096
   },
   "EXP3_POI": {
     "logged": 0,
@@ -45,12 +45,12 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 800,
-    "resolved": 672,
-    "wins": 315,
-    "losses": 357,
-    "timed_out": 528,
-    "sum_r": -0.9219525930184793,
+    "logged": 801,
+    "resolved": 678,
+    "wins": 319,
+    "losses": 359,
+    "timed_out": 532,
+    "sum_r": -0.7239232605252625,
     "hit_1r": 105,
     "hit_2r": 28,
     "hit_3r": 6
@@ -68,22 +68,22 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 184,
-    "resolved": 142,
-    "wins": 68,
+    "resolved": 143,
+    "wins": 69,
     "losses": 74,
-    "timed_out": 97,
-    "sum_r": 6.522999236439838,
+    "timed_out": 98,
+    "sum_r": 6.967689149921124,
     "hit_1r": 30,
     "hit_2r": 10,
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 1044,
-    "resolved": 1020,
-    "wins": 407,
+    "logged": 1045,
+    "resolved": 1021,
+    "wins": 408,
     "losses": 613,
-    "timed_out": 84,
-    "sum_r": 384.02940005907055,
+    "timed_out": 85,
+    "sum_r": 384.47408997255184,
     "hit_1r": 721,
     "hit_2r": 613,
     "hit_3r": 543
@@ -112,14 +112,14 @@
   },
   "EXP3_SR": {
     "logged": 45,
-    "resolved": 44,
-    "wins": 7,
+    "resolved": 45,
+    "wins": 8,
     "losses": 37,
-    "timed_out": 2,
-    "sum_r": -17.309069554883955,
-    "hit_1r": 18,
-    "hit_2r": 11,
+    "timed_out": 3,
+    "sum_r": -15.791550492707131,
+    "hit_1r": 19,
+    "hit_2r": 12,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-10-27T15:57:31.942284+00:00"
+  "_persisted_at": "2026-10-28T07:02:37.029806+00:00"
 }

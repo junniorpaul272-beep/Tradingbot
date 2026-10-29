@@ -78,7 +78,7 @@
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 1052,
+    "logged": 1053,
     "resolved": 1028,
     "wins": 409,
     "losses": 619,
@@ -89,7 +89,7 @@
     "hit_3r": 544
   },
   "EXP8_CISD": {
-    "logged": 186,
+    "logged": 188,
     "resolved": 186,
     "wins": 54,
     "losses": 132,
@@ -121,5 +121,5 @@
     "hit_2r": 12,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-10-29T15:37:22.047301+00:00"
+  "_persisted_at": "2026-10-29T15:42:26.652761+00:00"
 }

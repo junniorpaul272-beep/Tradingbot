@@ -10,7 +10,7 @@
       "CONSOLIDATION": 262,
       "BEARISH_STALE": 1,
       "BULLISH_STALE": 3,
-      "BEARISH_FRESH": 5
+      "BEARISH_FRESH": 6
     },
     "BEARISH_STALE": {
       "BEARISH_STALE": 274,
@@ -31,36 +31,6 @@
     }
   },
   "calibration_predictions": [
-    {
-      "stated_prob": 0.0011,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0005,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.9936,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0016,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0032,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BEARISH_FRESH"
-    },
     {
       "stated_prob": 0.0011,
       "predicted_state": "BULLISH_FRESH",
@@ -60029,6 +59999,36 @@
       "stated_prob": 0.9527,
       "predicted_state": "CONSOLIDATION",
       "actual_happened": true,
+      "from_state": "CONSOLIDATION"
+    },
+    {
+      "stated_prob": 0.0036,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "CONSOLIDATION"
+    },
+    {
+      "stated_prob": 0.0145,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "CONSOLIDATION"
+    },
+    {
+      "stated_prob": 0.0217,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": true,
+      "from_state": "CONSOLIDATION"
+    },
+    {
+      "stated_prob": 0.0072,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "CONSOLIDATION"
+    },
+    {
+      "stated_prob": 0.9529,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
       "from_state": "CONSOLIDATION"
     }
   ]

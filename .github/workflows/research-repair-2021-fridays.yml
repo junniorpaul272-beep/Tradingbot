@@ -1,0 +1,51 @@
+name: Research - 2021 Friday repair attempt (isolated, nothing committed)
+
+# ONE-OFF, MANUAL. Tries to re-fetch ONLY 1h GBPUSD for 9 Jul - 2 Oct 2021 (the 13 Fridays whose data stops at 13:59 UTC).
+# Safety:
+#   * writes to a SEPARATE fresh folder (observatory_repair/raw) - the original observatory_data/raw is never touched
+#   * does NOT commit or push anything; results are only uploaded as a downloadable run artifact
+#   * 1h only, hard budget 10 credits, stops at the first rate-limit error (existing fetch.py behaviour)
+#   * refuses to run inside the live scanner window (07:00-15:55 UTC Mon-Fri) - run it in the evening or at a weekend
+#   * then compares the result with the original and reports recovered hours, remaining gaps and conflicting prices
+# If nothing is recovered, record the gap as unresolved and do NOT run it again.
+# Needs the market_awareness/ package (with __init__.py) in the repo root, next to observatory/.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Self-test the fetcher and the comparison (no network)
+        run: |
+          python -m observatory.fetch --selftest
+          python -m unittest market_awareness.test_compare_repair
+      - name: Fetch 1h for the 2021 gap into an isolated folder
+        env:
+          TWELVE_DATA_KEY: ${{ secrets.TWELVE_DATA_KEY }}
+        run: |
+          mkdir -p observatory_repair_out
+          python -m observatory.fetch --start 2021-07-09 --end "2021-10-02 00:00" --tfs 1h --max-credits 10 --raw-dir observatory_repair/raw | tee observatory_repair_out/fetch_summary.json
+      - name: Compare with the original (read-only)
+        run: |
+          python -m market_awareness.compare_repair observatory_data/raw/GBPUSD_1h.jsonl observatory_repair/raw/GBPUSD_1h.jsonl 2021-07-09 2021-10-02 observatory_repair_out/comparison.json | tee observatory_repair_out/comparison.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-repair-2021-${{ github.run_number }}
+          path: |
+            observatory_repair_out/
+            observatory_repair/
+          if-no-files-found: ignore
+          retention-days: 90

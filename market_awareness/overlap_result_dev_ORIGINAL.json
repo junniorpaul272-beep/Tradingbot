@@ -1,0 +1,189 @@
+{
+ "input": {
+  "file": "GBPUSD_1h.jsonl",
+  "file_sha256": "c1659eb3c7f8a414",
+  "period": [
+   "2020-01-01",
+   "2022-12-31"
+  ],
+  "definition_version": "awareness-v0.1-provisional",
+  "friday_floor_hour": 19,
+  "expected_bars_mon_thu": 24
+ },
+ "dataset": {
+  "rows_in_period": 18396,
+  "candles_kept": 17726,
+  "trading_days": 732,
+  "first": "2020-01-31",
+  "last": "2022-12-30",
+  "weekend_dropped": 670,
+  "duplicates": 0,
+  "conflicting_duplicates": 0,
+  "blocked_days": 29,
+  "blocked_by_reason": {
+   "incomplete": 29
+  },
+  "blocked_by_weekday": {
+   "Wed": 3,
+   "Mon": 5,
+   "Tue": 3,
+   "Fri": 16,
+   "Thu": 2
+  },
+  "blocked_by_year": {
+   "2020": 5,
+   "2021": 19,
+   "2022": 5
+  }
+ },
+ "coverage": {
+  "10": {
+   "insufficient_history": 9,
+   "valid": 559,
+   "unavailable_blocked_day": 164,
+   "end_dates": 732
+  },
+  "20": {
+   "insufficient_history": 19,
+   "valid": 440,
+   "unavailable_blocked_day": 273,
+   "end_dates": 732
+  },
+  "40": {
+   "insufficient_history": 39,
+   "unavailable_blocked_day": 394,
+   "valid": 299,
+   "end_dates": 732
+  }
+ },
+ "comparability": {
+  "end_date_states (V=valid U=unavailable H=not enough history)": {
+   "10:H/20:H/40:H": 9,
+   "10:V/20:H/40:H": 10,
+   "10:V/20:V/40:H": 14,
+   "10:U/20:U/40:H": 6,
+   "10:U/20:U/40:U": 158,
+   "10:V/20:U/40:U": 109,
+   "10:V/20:V/40:U": 127,
+   "10:V/20:V/40:V": 299
+  },
+  "windows_with_hidden_missing_weekday": 0,
+  "windows_whose_dates_do_not_match_their_end_date": 0,
+  "end_dates_where_all_windows_valid": 299,
+  "end_dates_where_windows_disagree_on_availability": 236
+ },
+ "overlap_between_windows": {
+  "10": {
+   "valid_windows": 559,
+   "share_of_days_reused_by_next_end_date": 0.9,
+   "max_non_overlapping_windows": 62,
+   "effective_independent_fraction": 0.111
+  },
+  "20": {
+   "valid_windows": 440,
+   "share_of_days_reused_by_next_end_date": 0.95,
+   "max_non_overlapping_windows": 27,
+   "effective_independent_fraction": 0.061
+  },
+  "40": {
+   "valid_windows": 299,
+   "share_of_days_reused_by_next_end_date": 0.975,
+   "max_non_overlapping_windows": 9,
+   "effective_independent_fraction": 0.03
+  }
+ },
+ "measure_similarity_spearman_descriptive_only": {
+  "10": {
+   "n": 559,
+   "spearman": {
+    "net_pips ~ net_in_mean_daily_ranges": 0.986,
+    "net_pips ~ path_efficiency": -0.049,
+    "net_pips ~ range_width_pips": -0.08,
+    "net_pips ~ range_position": 0.839,
+    "net_pips ~ up_day_share": 0.789,
+    "net_in_mean_daily_ranges ~ path_efficiency": -0.045,
+    "net_in_mean_daily_ranges ~ range_width_pips": -0.087,
+    "net_in_mean_daily_ranges ~ range_position": 0.854,
+    "net_in_mean_daily_ranges ~ up_day_share": 0.803,
+    "path_efficiency ~ range_width_pips": 0.365,
+    "path_efficiency ~ range_position": -0.03,
+    "path_efficiency ~ up_day_share": -0.063,
+    "range_width_pips ~ range_position": -0.024,
+    "range_width_pips ~ up_day_share": -0.004,
+    "range_position ~ up_day_share": 0.683
+   }
+  },
+  "20": {
+   "n": 440,
+   "spearman": {
+    "net_pips ~ net_in_mean_daily_ranges": 0.987,
+    "net_pips ~ path_efficiency": -0.139,
+    "net_pips ~ range_width_pips": -0.171,
+    "net_pips ~ range_position": 0.815,
+    "net_pips ~ up_day_share": 0.801,
+    "net_in_mean_daily_ranges ~ path_efficiency": -0.142,
+    "net_in_mean_daily_ranges ~ range_width_pips": -0.146,
+    "net_in_mean_daily_ranges ~ range_position": 0.837,
+    "net_in_mean_daily_ranges ~ up_day_share": 0.817,
+    "path_efficiency ~ range_width_pips": 0.438,
+    "path_efficiency ~ range_position": -0.128,
+    "path_efficiency ~ up_day_share": -0.112,
+    "range_width_pips ~ range_position": -0.045,
+    "range_width_pips ~ up_day_share": -0.055,
+    "range_position ~ up_day_share": 0.69
+   }
+  },
+  "40": {
+   "n": 299,
+   "spearman": {
+    "net_pips ~ net_in_mean_daily_ranges": 0.985,
+    "net_pips ~ path_efficiency": -0.241,
+    "net_pips ~ range_width_pips": -0.234,
+    "net_pips ~ range_position": 0.76,
+    "net_pips ~ up_day_share": 0.897,
+    "net_in_mean_daily_ranges ~ path_efficiency": -0.252,
+    "net_in_mean_daily_ranges ~ range_width_pips": -0.188,
+    "net_in_mean_daily_ranges ~ range_position": 0.8,
+    "net_in_mean_daily_ranges ~ up_day_share": 0.883,
+    "path_efficiency ~ range_width_pips": 0.294,
+    "path_efficiency ~ range_position": -0.193,
+    "path_efficiency ~ up_day_share": -0.205,
+    "range_width_pips ~ range_position": 0.132,
+    "range_width_pips ~ up_day_share": -0.281,
+    "range_position ~ up_day_share": 0.663
+   }
+  }
+ },
+ "point_in_time": {
+  "end_dates_tested": 732,
+  "end_dates_that_changed_when_later_data_was_removed": 0
+ },
+ "reproducibility": {
+  "build_hash": "27bc7e0b186dd92d",
+  "rebuild_same_order_hash": "27bc7e0b186dd92d",
+  "rebuild_shuffled_input_hash": "27bc7e0b186dd92d",
+  "identical": true
+ },
+ "friday_floor_sensitivity": {
+  "19": {
+   "trading_days": 732,
+   "blocked_fridays": 16,
+   "valid_40d_windows": 299
+  },
+  "20": {
+   "trading_days": 721,
+   "blocked_fridays": 26,
+   "valid_40d_windows": 271
+  },
+  "21": {
+   "trading_days": 637,
+   "blocked_fridays": 110,
+   "valid_40d_windows": 49
+  },
+  "22": {
+   "trading_days": 595,
+   "blocked_fridays": 151,
+   "valid_40d_windows": 0
+  }
+ }
+}

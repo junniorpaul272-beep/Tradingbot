@@ -2,25 +2,25 @@
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
     "logged": 426,
-    "resolved": 401,
-    "wins": 208,
+    "resolved": 404,
+    "wins": 211,
     "losses": 193,
-    "timed_out": 327,
-    "sum_r": 28.766310622097773,
+    "timed_out": 330,
+    "sum_r": 30.22730169253866,
     "hit_1r": 56,
     "hit_2r": 16,
     "hit_3r": 5
   },
   "EXP2_FIB": {
     "logged": 7007,
-    "resolved": 6886,
-    "wins": 1861,
+    "resolved": 6905,
+    "wins": 1880,
     "losses": 5025,
-    "timed_out": 356,
-    "sum_r": 52.44538305328783,
-    "hit_1r": 4114,
-    "hit_2r": 2835,
-    "hit_3r": 2126
+    "timed_out": 359,
+    "sum_r": 107.20381367292669,
+    "hit_1r": 4133,
+    "hit_2r": 2854,
+    "hit_3r": 2142
   },
   "EXP3_POI": {
     "logged": 0,
@@ -45,14 +45,14 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 817,
-    "resolved": 691,
-    "wins": 322,
+    "logged": 818,
+    "resolved": 695,
+    "wins": 326,
     "losses": 369,
-    "timed_out": 542,
-    "sum_r": -4.4438914045096976,
-    "hit_1r": 108,
-    "hit_2r": 28,
+    "timed_out": 546,
+    "sum_r": -0.1844813617369634,
+    "hit_1r": 109,
+    "hit_2r": 29,
     "hit_3r": 6
   },
   "EXP6_ALT_BIAS": {
@@ -78,23 +78,23 @@
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 1053,
-    "resolved": 1028,
-    "wins": 409,
+    "logged": 1054,
+    "resolved": 1030,
+    "wins": 411,
     "losses": 619,
     "timed_out": 87,
-    "sum_r": 383.03312595644064,
-    "hit_1r": 726,
-    "hit_2r": 615,
-    "hit_3r": 544
+    "sum_r": 389.03312595644064,
+    "hit_1r": 728,
+    "hit_2r": 617,
+    "hit_3r": 546
   },
   "EXP8_CISD": {
     "logged": 188,
-    "resolved": 186,
+    "resolved": 188,
     "wins": 54,
-    "losses": 132,
+    "losses": 134,
     "timed_out": 48,
-    "sum_r": -31.163790821659163,
+    "sum_r": -33.16379082165916,
     "hit_1r": 74,
     "hit_2r": 44,
     "hit_3r": 19
@@ -121,5 +121,5 @@
     "hit_2r": 12,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-10-29T15:57:26.753989+00:00"
+  "_persisted_at": "2026-10-30T07:02:30.582218+00:00"
 }

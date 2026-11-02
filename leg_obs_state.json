@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BULLISH|1.34177|1.33792",
     "opened_at": "2026-11-02T08:07:16.648286+00:00",
-    "bars_open": 83,
-    "last_processed_candle": "2026-11-02T14:50:00+00:00",
+    "bars_open": 84,
+    "last_processed_candle": "2026-11-02T14:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -106,11 +106,21 @@
         "bar": 81,
         "kind": "phase_change",
         "detail": "Phase changed: manipulation \u2192 transition"
+      },
+      {
+        "bar": 84,
+        "kind": "break",
+        "detail": "New 15M break \u2014 count now 3"
+      },
+      {
+        "bar": 84,
+        "kind": "phase_change",
+        "detail": "Phase changed: transition \u2192 manipulation"
       }
     ],
-    "_tl_last_break_count": 2,
+    "_tl_last_break_count": 3,
     "_tl_choch_active": false,
-    "_tl_last_phase": "transition"
+    "_tl_last_phase": "manipulation"
   },
   "closed_ids": [
     "BULLISH|1.35498|1.34751",
@@ -124,5 +134,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-11-02T15:02:29.962071+00:00"
+  "_persisted_at": "2026-11-02T15:07:23.361799+00:00"
 }

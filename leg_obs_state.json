@@ -1,37 +1,37 @@
 {
   "open": {
-    "id": "50341e29577a",
+    "id": "2c464b476a6d",
     "methodology_version": 3,
-    "leg_id": "BULLISH|1.34324|1.32720",
-    "opened_at": "2026-10-30T10:07:26.854840+00:00",
-    "bars_open": 70,
-    "last_processed_candle": "2026-10-30T15:45:00+00:00",
+    "leg_id": "BEARISH|1.34344|1.33540",
+    "opened_at": "2026-11-02T07:02:31.235118+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-11-02T06:50:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": true,
-      "macro_leg_direction": "BULLISH",
-      "macro_leg_length_pips": 160.4,
-      "bos_15m_direction": null,
-      "bos_15m_break_count": null,
-      "bos_15m_was_choch": null,
-      "atr_pips": 3.65,
-      "atr_percentile_15m": 66.7,
+      "macro_leg_direction": "BEARISH",
+      "macro_leg_length_pips": 80.4,
+      "bos_15m_direction": "BULLISH",
+      "bos_15m_break_count": 1,
+      "bos_15m_was_choch": true,
+      "atr_pips": 3.52,
+      "atr_percentile_15m": 80.7,
       "market_phase": "expansion",
-      "market_phase_age_bars": 37,
+      "market_phase_age_bars": 0,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "CHOCH",
-      "campaign_extension_multiple": 1.18,
-      "campaign_continuation_count": 38,
-      "atr_bucket": "normal_vol",
+      "campaign_extension_multiple": 1.0,
+      "campaign_continuation_count": 1,
+      "atr_bucket": "high_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": null,
-      "volatility_state": "flat",
-      "compression_ratio": 5.06,
-      "pullback_depth_pct": null
+      "trend_strength_atr_mult": 5.12,
+      "volatility_state": "expanding",
+      "compression_ratio": 3.12,
+      "pullback_depth_pct": 15.5
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
@@ -40,11 +40,11 @@
       {
         "bar": 0,
         "kind": "formed",
-        "detail": "Leg formed \u2014 Bullish (via CHoCH)"
+        "detail": "Leg formed \u2014 Bearish (via CHoCH)"
       }
     ],
     "_tl_last_break_count": 1,
-    "_tl_choch_active": false,
+    "_tl_choch_active": true,
     "_tl_last_phase": "expansion"
   },
   "closed_ids": [
@@ -59,5 +59,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-10-30T15:57:27.570618+00:00"
+  "_persisted_at": "2026-11-02T07:02:34.306622+00:00"
 }

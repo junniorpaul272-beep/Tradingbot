@@ -1,16 +1,16 @@
 {
   "open": {
-    "id": "214504c72445",
+    "id": "543ed7c6189a",
     "methodology_version": 1,
-    "leg_id": "BULLISH|1.34177|1.33792",
-    "opened_at": "2026-11-02T08:05:26.336485+00:00",
-    "bars_open": 95,
-    "last_processed_candle": "2026-11-02T15:50:00+00:00",
+    "leg_id": "BULLISH|1.34793|1.33540",
+    "opened_at": "2026-11-04T07:00:30.964000+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-11-04T06:50:00+00:00",
     "macro_bias": "BULLISH",
-    "phase": "transition",
+    "phase": "expansion",
     "watch_codes": [
-      "PULLBACK_TO_FIB_POCKET",
-      "SWEEP_AND_RECLAIM"
+      "PULLBACK_TO_OB",
+      "PULLBACK_TO_FIB_POCKET"
     ],
     "caution_codes": [
       "UNSWEPT_CHOCH",
@@ -20,27 +20,26 @@
       "HTF bias: BULLISH",
       "Fresh 15M BOS aligned with bias",
       "15M CHoCH confirming direction",
-      "Low-ATR warning \u2014 4.2p, below the 6p floor"
+      "Order block confirmed, unmitigated",
+      "1H volatility expanding",
+      "Very-low-ATR warning \u2014 3.8p, below the 4p floor",
+      "2.8 ATR from EMA_100 \u2014 extended"
     ],
-    "materialized_codes": [
-      "SWEEP_AND_RECLAIM"
-    ],
-    "materialized_at_bar": {
-      "SWEEP_AND_RECLAIM": 6
-    },
+    "materialized_codes": [],
+    "materialized_at_bar": {},
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
     "tags": {
-      "phase": "transition",
-      "atr_5m_pips": 4.229366189893072,
-      "break_count": null,
+      "phase": "expansion",
+      "atr_5m_pips": 3.759517054865362,
+      "break_count": 2,
       "campaign_continuation_count": 1,
       "num_watch_codes": 2,
       "num_caution_codes": 2,
-      "very_low_atr_warning": false
+      "very_low_atr_warning": true
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-11-02T15:58:39.604457+00:00"
+  "_persisted_at": "2026-11-04T07:00:33.563205+00:00"
 }

@@ -2,25 +2,25 @@
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
     "logged": 443,
-    "resolved": 414,
-    "wins": 215,
+    "resolved": 415,
+    "wins": 216,
     "losses": 199,
-    "timed_out": 338,
-    "sum_r": 27.724029005764105,
+    "timed_out": 339,
+    "sum_r": 28.030056826475096,
     "hit_1r": 56,
     "hit_2r": 16,
     "hit_3r": 5
   },
   "EXP2_FIB": {
-    "logged": 7393,
-    "resolved": 7276,
+    "logged": 7396,
+    "resolved": 7279,
     "wins": 1959,
-    "losses": 5317,
+    "losses": 5320,
     "timed_out": 364,
-    "sum_r": 42.376262966512314,
-    "hit_1r": 4334,
-    "hit_2r": 2981,
-    "hit_3r": 2243
+    "sum_r": 39.376262966512314,
+    "hit_1r": 4337,
+    "hit_2r": 2984,
+    "hit_3r": 2246
   },
   "EXP3_POI": {
     "logged": 0,
@@ -46,11 +46,11 @@
   },
   "EXP5_ABLATION": {
     "logged": 847,
-    "resolved": 716,
-    "wins": 338,
+    "resolved": 717,
+    "wins": 339,
     "losses": 378,
-    "timed_out": 564,
-    "sum_r": -1.1609668786607648,
+    "timed_out": 565,
+    "sum_r": -0.8549390579497755,
     "hit_1r": 112,
     "hit_2r": 29,
     "hit_3r": 6
@@ -67,25 +67,25 @@
     "hit_3r": 0
   },
   "EXP7_TIER_ATR": {
-    "logged": 194,
-    "resolved": 150,
-    "wins": 71,
+    "logged": 195,
+    "resolved": 151,
+    "wins": 72,
     "losses": 79,
-    "timed_out": 102,
-    "sum_r": 4.072957484153088,
+    "timed_out": 103,
+    "sum_r": 4.339777681650041,
     "hit_1r": 30,
     "hit_2r": 10,
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 1072,
-    "resolved": 1045,
-    "wins": 415,
+    "logged": 1073,
+    "resolved": 1046,
+    "wins": 416,
     "losses": 630,
-    "timed_out": 89,
-    "sum_r": 388.39554674295385,
-    "hit_1r": 736,
-    "hit_2r": 621,
+    "timed_out": 90,
+    "sum_r": 390.47816223627035,
+    "hit_1r": 737,
+    "hit_2r": 622,
     "hit_3r": 549
   },
   "EXP8_CISD": {
@@ -121,5 +121,5 @@
     "hit_2r": 12,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-11-04T13:02:21.913841+00:00"
+  "_persisted_at": "2026-11-04T13:07:24.964086+00:00"
 }

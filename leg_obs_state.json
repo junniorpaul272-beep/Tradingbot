@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BULLISH|1.34883|1.33540",
     "opened_at": "2026-11-04T08:07:20.169126+00:00",
-    "bars_open": 8,
-    "last_processed_candle": "2026-11-04T08:35:00+00:00",
+    "bars_open": 9,
+    "last_processed_candle": "2026-11-04T08:40:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -48,8 +48,8 @@
         "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
       }
     ],
-    "_tl_last_break_count": 4,
-    "_tl_choch_active": true,
+    "_tl_last_break_count": 1,
+    "_tl_choch_active": false,
     "_tl_last_phase": "expansion"
   },
   "closed_ids": [
@@ -64,5 +64,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-11-04T08:47:24.704451+00:00"
+  "_persisted_at": "2026-11-04T08:52:25.300180+00:00"
 }

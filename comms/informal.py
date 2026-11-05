@@ -40,6 +40,11 @@ PHRASES = (
     (re.compile(r"\be don\b", re.I), "it has"),
     (re.compile(r"\bhow far\b", re.I), "hello"),
     (re.compile(r"\bwetin dey\b", re.I), "what is"),
+    (re.compile(r"\bwetin make (?:am|e|it|price|cable)?\s*dey\b", re.I), "why is it"),
+    (re.compile(r"\b(?:gimme|give me|show me|what'?s|whats|what is) (?:the )?(?:vibe|mood|feel|lowdown|picture|scene|sentiment)\b|\bwhat do you make of (?:it|this|things|the market)\b|\bwhat'?s (?:the )?(?:engine|bot) thinking\b|\bwhat is (?:the )?(?:engine|bot) thinking\b|\bwhat are you thinking\b|\bexplain (?:the )?(?:structure|market structure|setup)\b", re.I), "what is happening in the market"),
+    (re.compile(r"\bhow'?s (?:the )?(?:engine|bot|system|scanner) (?:doing|going|holding up|running)\b|\bare you (?:working|running|ok|okay|alive|up)\b|\bis (?:the )?(?:engine|bot|scanner|system) (?:ok|okay|working|running|alive|up)\b", re.I), "is everything working okay"),
+    (re.compile(r"\bwhat did (?:the market|price|cable|gbpusd|it) do (this week|today|yesterday|this morning|last week)\b", re.I), r"how far has price moved \1"),
+    (re.compile(r"\btell me about (?:the )?(?:last|past) (hour|\d+ hours?|day|\d+ days?)\b", re.I), r"how far has price moved in the last \1"),
 )
 
 # Words the router cares about; used ONLY to repair a near-miss spelling.

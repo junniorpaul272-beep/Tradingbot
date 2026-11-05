@@ -60,6 +60,8 @@ INVESTIGATION_OPENED = "INVESTIGATION_OPENED"  # an investigation started on a c
 KNOWLEDGE_STATED = "KNOWLEDGE_STATED"      # something the user SAID they know/do/see — an assertion, never demonstrated knowledge
 RESEARCH_QUESTION_CAPTURED = "RESEARCH_QUESTION_CAPTURED"      # stage 1: the user's question, verbatim. Nothing is run or answered.
 RESEARCH_DEFINITION_PROPOSED = "RESEARCH_DEFINITION_PROPOSED"  # stage 2: a PROPOSED definition for one part of the test (versioned, never overwritten)
+PHRASE_FORGOTTEN = "PHRASE_FORGOTTEN"
+PHRASE_TAUGHT = "PHRASE_TAUGHT"              # a whole phrase the user said means one of the bot's fixed questions (routing only; used when the bot would otherwise not understand)
 USER_SLANG = "USER_SLANG"                  # a word the user taught the bot to understand (routing only; never changes stored text)
 SIGNAL_RESPONDED = "SIGNAL_RESPONDED"      # the user's answer to a fired signal: TAKEN (with its case) or SKIPPED
 
@@ -550,6 +552,25 @@ class Catalog:
         if not (1 <= len(m) <= 60):
             raise LedgerError("say what it means in a few words")
         return self._append(USER_SLANG, {"variant": v, "meaning": m}, now=now)
+
+    def teach_phrase(self, phrase, key, canonical, now=None):
+        p = (phrase or "").strip().lower()
+        if not (1 <= len(p) <= 120):
+            raise LedgerError("a phrase should be between 1 and 120 characters")
+        return self._append(PHRASE_TAUGHT, {"phrase": p, "key": key, "canonical": canonical}, now=now)
+
+    def forget_phrases(self, now=None):
+        return self._append(PHRASE_FORGOTTEN, {}, now=now)
+
+    def phrase_map(self):
+        """normalised phrase -> {key, canonical}; the latest teaching wins, and every teaching stays on file."""
+        out = {}
+        for r in self._records():
+            if r["event_type"] == PHRASE_FORGOTTEN:
+                out = {}
+            elif r["event_type"] == PHRASE_TAUGHT:
+                out[r["payload"]["phrase"]] = {"key": r["payload"]["key"], "canonical": r["payload"]["canonical"]}
+        return out
 
     def slang_map(self, as_of=None):
         """word -> meaning, latest teaching wins (every teaching stays on file)."""

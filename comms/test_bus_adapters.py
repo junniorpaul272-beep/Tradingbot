@@ -221,7 +221,7 @@ class LogAdapters(unittest.TestCase):
         fn = next(n for n in t.body if isinstance(n, ast.FunctionDef) and n.name == "_record_undelivered_signal")
         tmp = tempfile.mkdtemp(); log = os.path.join(tmp, "s.jsonl")
         g = dict(uuid=uuid, PAIR="GBPUSD", SIGNAL_EVENT_LOG_FILE=log, SIGNAL_EVENT_STATUS_UNDELIVERED="FIRED_RISK_GATE_PASSED_UNDELIVERED",
-                 SIGNAL_EVENT_STATE_MIRROR_CAP=200, apply_leg_ownership=lambda s, d: None,
+                 SIGNAL_EVENT_STATE_MIRROR_CAP=200, apply_leg_ownership=lambda s, d: None, position_size_snapshot=lambda risk_pips: None,
                  append_permanent_jsonl=lambda p, r: open(p, "a").write(json.dumps(r, default=str) + "\n") or True)
         exec("\n".join(L[fn.lineno - 1:fn.end_lineno]), g)
         from types import SimpleNamespace as NS

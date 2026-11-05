@@ -26,13 +26,17 @@ CAUTIONS = [{"code": "OB_MITIGATED", "sentence": "Order block already mitigated"
             {"code": "LEG_AGING", "sentence": "3 breaks into this leg - getting old"}]
 
 
-def write_signal(path, cautions=CAUTIONS, risk_result=None, bias="BEARISH", fired=FIRED, **over):
+PS_OK = {"account": "live", "placeholder": False, "balance": 5000.0, "risk_pct": 0.005, "risk_pips": 30.0, "risk_dollars": 25.0, "lots": 0.08, "lots_raw": 0.0833,
+         "below_min_lot": False, "sanity_capped": False, "min_lot": 0.01}
+
+
+def write_signal(path, cautions=CAUTIONS, risk_result=None, bias="BEARISH", fired=FIRED, position_size=PS_OK, **over):
     """Writes a record with the REAL _record_undelivered_signal, so the BUS is tested against the real shape."""
     src = _rd(LIVE); L = src.splitlines()
     fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "_record_undelivered_signal")
     g = dict(uuid=uuid, PAIR="GBPUSD", SIGNAL_EVENT_LOG_FILE=path, SIGNAL_EVENT_STATUS_UNDELIVERED="FIRED_RISK_GATE_PASSED_UNDELIVERED",
              SIGNAL_EVENT_STATE_MIRROR_CAP=200, apply_leg_ownership=lambda s, d: None,
-             append_permanent_jsonl=_append)
+             append_permanent_jsonl=_append, position_size_snapshot=lambda risk_pips: position_size)
     exec("\n".join(L[fn.lineno - 1:fn.end_lineno]), g)
     res = NS(tier_label="TIER_2_FIB", direction="SELL", score=7, tier_rating="B", reason="Retest of the 0.618 zone after a 15m change of character",
              breakdown={}, conviction=None,
@@ -104,7 +108,46 @@ class Parity(Base):
     def test_what_the_record_cannot_support_is_said_not_invented(self):
         write_signal(self.log)
         t = self.text_of(self.claim()).text
-        self.assertIn("Position size in account terms and the signal timeline", t)         # legacy extras that are not recorded
+        self.assertIn("The signal timeline isn't in this record", t)                       # the one legacy extra that is still not recorded
+
+
+class LotSize(Base):
+    """30 Oct 2026: the BUS alert had no lot size at all. The engine now records what it recommended at firing; the BUS only repeats it."""
+    def line(self, **kw):
+        if os.path.exists(self.log): os.remove(self.log)
+        write_signal(self.log, **kw)
+        return [x for x in self.text_of(self.claim()).text.splitlines() if "Position size" in x]
+
+    def test_the_recorded_lot_size_is_shown_in_the_old_alerts_words(self):
+        l = self.line()
+        self.assertEqual(len(l), 1); self.assertIn("(live)", l[0]); self.assertIn("0.08", l[0]); self.assertIn("$25", l[0]); self.assertIn("0.50% of", l[0]); self.assertIn("$5000", l[0])
+
+    def test_a_signal_without_a_recorded_size_says_so_and_calculates_nothing(self):
+        l = self.line(position_size=None)
+        self.assertIn("wasn't recorded", l[0]); self.assertNotIn("lot", l[0].replace("wasn't", ""))
+
+    def test_a_failed_calculation_is_not_shown_as_a_size(self):
+        self.assertIn("wasn't recorded", self.line(position_size={"error": "ValueError: x"})[0])
+
+    def test_below_the_minimum_lot_and_implausibly_tight_stops_are_said_plainly(self):
+        self.assertIn("lot floor", self.line(position_size=dict(PS_OK, lots=0.0, below_min_lot=True))[0])
+        self.assertIn("implausibly tight", self.line(position_size=dict(PS_OK, sanity_capped=True, lots=5.0))[0])
+
+    def test_no_account_set_is_labelled_as_a_placeholder(self):
+        self.assertIn("placeholder", self.line(position_size=dict(PS_OK, account=None, placeholder=True, balance=10000.0))[0])
+
+    def test_the_real_engine_snapshot_has_every_field_the_alert_reads(self):
+        for k, v in (('TELEGRAM_CHAT_ID', '1'), ('TELEGRAM_TOKEN', 'dummy'), ('TWELVE_DATA_KEY', 'dummy')): os.environ.setdefault(k, v)
+        import min_scanner
+        ps = min_scanner.position_size_snapshot(9.4)
+        for k in ("account", "balance", "risk_pct", "risk_dollars", "lots", "below_min_lot", "sanity_capped", "min_lot"):
+            self.assertIn(k, ps)
+        self.assertEqual(min_scanner.position_size_snapshot(None).get("error") is not None, True)
+        write_signal(self.log, position_size=ps)
+        self.assertIn("Position size", self.text_of(self.claim()).text)
+
+    def test_the_engine_writes_position_size_into_the_signal_record(self):
+        src = _rd(LIVE); a = src.index("def _record_undelivered_signal"); self.assertIn('"position_size": position_size_snapshot(', src[a:a + 4500])
 
 
 class MissingEvidence(Base):

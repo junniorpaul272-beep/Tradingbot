@@ -20,14 +20,13 @@ _LEADS = {
     "clarify": ("Quick check before I do anything.", "Just so I get this right.", "One quick question."),
     "gap": ("There's a gap I should be upfront about.",),
 }
-_UNKNOWN = ("Hmm, I didn't quite catch that one. You can just ask me what I'm seeing, ask how a session went, tell me about a trade, "
-            "or tell me what you've noticed, in your own words. /help has the full list.",
-            "I'm not sure what you're after with that. Try asking what I'm seeing, how London or New York went, or an alert like "
-            "'alert me when price goes above' a level. /help lists everything.")
+_UNKNOWN = ("Hmm, I didn't quite catch that one. What are you trying to find out? Tell me in your own words.",
+            "I'm not sure what you're after with that. Say a bit more and I'll work it out with you.")
 
-_GREET = ("Hey! I'm here. Ask me what I'm seeing, how London or New York went, or tell me about a trade, in your own words. /help has the rest.",
-          "Hey, I'm listening. You can ask what I'm looking at, ask me to go back over a stretch of the market, or tell me what you're seeing. /help has the rest.",
-          "Hi! Just talk to me normally. For example: what are you looking at, how was the overlap, or I sold gbpusd at a price. /help has the rest.")
+_GREET = ("Hey! I'm here. What's on your mind: the market, a trade, something you noticed?",
+          "Hey, I'm listening. Want to look at what price is doing, go back over a session, or talk through a trade?",
+          "Hi! Good to hear from you. What are we looking at today?",
+          "Hey. Where do you want to start: what's moving now, how a session went, or a trade you're in?")
 _THANKS = ("Anytime.", "You're welcome.", "No problem.")
 
 

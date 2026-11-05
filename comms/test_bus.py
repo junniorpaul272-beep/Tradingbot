@@ -139,7 +139,7 @@ class SyntheticAnswers(unittest.TestCase):
 
     def test_help_and_unknown(self):
         self.assertIn("/now", bus.respond("/bushelp", [], [], T0).text)
-        self.assertIn("didn't catch that", bus.respond("blah", [], [], T0).text)
+        self.assertIn("didn't quite follow", bus.respond("blah", [], [], T0).text); self.assertNotIn("/help", bus.respond("blah", [], [], T0).text)
 
     def test_statement_round_trip_supports_correction(self):
         s, res, T = real()

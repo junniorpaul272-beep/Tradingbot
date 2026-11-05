@@ -52,6 +52,17 @@ class Flow(tbs.Base):
         r = self.of(uc.SIGNAL_RESPONDED)
         self.assertEqual(len(r), 1); self.assertEqual(r[0]["payload"]["response"], "TAKEN"); self.assertEqual(r[0]["payload"]["case_id"], "CASE-0001")
 
+    def test_the_reply_keeps_the_bots_signal_and_your_trade_visibly_separate(self):
+        tbs.write_signal(self.log); self.say("/taken"); self.go()
+        r = self.last()
+        self.assertIn("you took the bot's sell signal", r); self.assertIn("as YOUR trade", r)
+        self.assertIn("stays exactly as it fired and is kept separate from your trade", r)
+
+    def test_skip_says_nothing_was_logged_as_your_trade(self):
+        tbs.write_signal(self.log); self.say("/skip"); self.go()
+        self.assertIn("you skipped the bot's sell signal", self.last()); self.assertIn("nothing was logged as your trade", self.last())
+        self.assertEqual(self.of(uc.TRADE_LOGGED), [])
+
     def test_a_fill_price_is_stored_and_the_signals_own_entry_is_kept_on_the_bots_side(self):
         tbs.write_signal(self.log); self.say("/taken 1.31200"); self.go()
         c = self.cat().get_case("CASE-0001")

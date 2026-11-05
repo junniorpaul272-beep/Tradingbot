@@ -23,6 +23,9 @@ question with options, never silently down one path. Replies to those questions 
 """
 import re
 
+import chat
+import chat_policy
+import tradetalk
 import informal
 import timeref
 
@@ -45,7 +48,7 @@ _PRESENT = (
                 r"\bbullish or bearish\b|\bwhat('?s| is) (the )?(thesis|bias)\b", re.I), "/thesis"),
     (re.compile(r"\b(tell|give) me the (story|full|whole)\b|\bthe fuller read\b", re.I), "/story"),
     (re.compile(r"\bwhat changed\b|\banything (new|change|changed)\b|\bwhat'?s new\b", re.I), "/changed"),
-    (re.compile(r"\bwhat would (change|flip|break|invalidate)\b", re.I), "/flip"),
+    (re.compile(r"\bwhat would (change|flip|break|invalidate)\b|\bwhat would make you (change|flip|reconsider|wrong)\b|\bchange your mind\b|\bwhat (could|would) (prove|show) (you|it|this) wrong\b|\bwhen would you (flip|change)\b|\bwhat invalidates\b", re.I), "/flip"),
     (re.compile(r"\bwhat('?s| is| are)( the)?( price| market| gbpusd| cable| gbp)? ?(doing|happening|happen|up to)\b|"
                 r"\bhow('?s| is| are) (price|the market|gbpusd|cable|it|things)( looking| doing| going)?\b|"
                 r"\bwhat'?s happening\b|\bwhat is going on\b|\bhow does (it|price|the market) look\b|\bhow is price\b|\bwhat'?s up with (?:gbpusd|cable|price|the market|gbp)\b|\bwhat is up with (?:gbpusd|cable|price|the market|gbp)\b|"
@@ -74,6 +77,7 @@ _RES = (
     (re.compile(r"\b(lost|loss|losing|stopped out|stop(ped)? out|hit (my )?(sl|stop)|stop got hit|sl hit|got stopped)\b", re.I), "loss"),
     (re.compile(r"\b(won|win|winner|winning|profit|in profit|hit (my )?(tp|target)|tp hit|target hit|took profit|got tp|hit tp)\b", re.I), "win"),
 )
+_SHORT_RESULT = re.compile(r"^\W*(?:ok(?:ay)?\W+|well\W+|so\W+|damn\W+|yes\W+)?(?:i |i've |ive |i just |just |it |that one |that |my (?:stop|sl|tp|target) )?(?:got |was |been |have been |just got |just |is |has )?(?:stopped out|stop(?:ped)? out|stopped|hit (?:my )?(?:sl|stop|tp|target)|got tp|tp(?:'s)? hit|sl(?:'s)? hit|took profit|won|lost|winner|loser)(?: that one| it| again)?\W*$", re.I)
 _RR = re.compile(r"([+-]?\d+(?:\.\d+)?)\s*r\b", re.I)
 _REASON_FOR = re.compile(r"^(?:(?:for|on) )?(?:i took |i entered |i opened |why i took |my reason(?:ing|s)? (?:for|on) )?(?:trade|case|position)\s*(?:#|no\.?|number)?\s*(?:case-0*)?(\d+)\s*[,:\-]?\s*"
                          r"(?:i )?(?:(?:was thinking|thought|reasoned|reasoning(?: was)?|because|cos|coz|since|my reason(?: was)?|the reason(?: was)?|why)\b[: ]*)(.+)$", re.I | re.S)
@@ -100,7 +104,7 @@ def _act(raw, low):
         if missing:
             return {"kind": "act_missing", "act": "logtrade", "missing": missing}
         return {"kind": "act_offer", "act": "logtrade", "pair": pair, "side": side, "entry": en.group(1), "sl": sl.group(1), "tp": tp.group(1)}
-    if _MY_TRADE.search(raw) and not raw.strip().endswith("?"):
+    if (_MY_TRADE.search(raw) or _SHORT_RESULT.search(raw)) and not raw.strip().endswith("?"):
         res = next((r for rx, r in _RES if rx.search(raw)), None)
         if res:
             ref = _REF.search(raw)
@@ -110,7 +114,7 @@ def _act(raw, low):
     return None
 
 
-_GREET_RX = re.compile(r"^(?:hey+|hi+|hello+|helo|yo+|sup|howdy|hiya|heyy+|good (?:morning|afternoon|evening)|wassup|wass?up|what'?s up|whats up|how far(?: na| now| bot)?|how are you|how you dey|oya)"
+_GREET_RX = re.compile(r"^(?:hey+|hi+|hello+|helo|yo+|sup|howdy|hiya|heyy+|good (?:morning|afternoon|evening|day)|morning|afternoon|evening|gm|wassup|wass?up|what'?s up|whats up|how far(?: na| now| bot)?|how are you|how you dey|oya)"
                        r"(?:\s+(?:there|bot|valleybot|boss|man|abeg))?\s*[!.?]*$", re.I)
 _THANKS_RX = re.compile(r"^(?:thanks+|thank you|thank u|thx|ty|tnx|nice one|nice|cool|great|good job|well done|got it|noted|lol|lmao|ok thanks|okay thanks|alright thanks)\s*[!.]*$", re.I)
 _ALERT_ASK = re.compile(r"\b(alert|notify|ping|message|text|buzz|wake|warn|remind|tell|let) (me|us)\b|\balert\b|\bnotification\b", re.I)
@@ -489,14 +493,44 @@ def _strip_fillers(s):
     return re.sub(r"\s+\?", "?", out)
 
 
-def interpret(raw, now, extra=None):
+_SAFETY_KEYS = {"inject", "inject_talk", "hypo_size", "execute", "guarantee", "ignore_risk", "all_in", "emotional", "risk_math", "move_stop"}
+
+
+def interpret(raw, now, extra=None, ctx=None):
     raw = raw or ""
+    _nf = chat._FILLER.sub("", raw, count=1)                  # "hmm and since friday" is read as "and since friday"; the stored message stays as typed
+    if _nf != raw and len(_nf.split()) >= 3 and not raw.lstrip().startswith("/"):
+        raw = _nf
     n = informal.normalise(raw, extra)
     k = informal.kind_of(raw, extra)
     base = {"raw": raw, "normalised": n["text"], "changes": n["changes"], "uncertain": n["uncertain"]}
     if k in ("command", "empty"):
         return {**base, "kind": "command" if k == "command" else "unknown"}
     low = _strip_fillers(n["text"])
+    pol = chat_policy.detect(raw)
+    in_trade = isinstance(ctx, dict) and ctx.get("kind") == "chat" and ctx.get("flow") == "trade" and isinstance(ctx.get("draft"), dict)
+    if pol and (pol["key"] in _SAFETY_KEYS or pol["key"] == "position" or not (in_trade or (tradetalk.is_start(raw) and not tradetalk.has_all_three_prices(raw)))):
+        # a boundary test, a decision question about an open position, or general reasoning: handled before anything can mistake it for a trade report or a note.
+        # (While a trade is being talked through, or when a message starts that talk, only the safety keys pre-empt it: "NFP on friday" is an obstacle, not a reasoning question.)
+        return {**base, "kind": "chat", "chat": {"intent": "policy", "key": pol["key"], "also": pol["also"], "tf": None, "ema_len": None, "since": None}}
+    if in_trade and (raw or "").strip():                        # a trade is being talked through: a real question is answered, anything else is the trade story
+        asks = (raw or "").strip().endswith("?") or chat._ASKS.search(raw or "")
+        c0 = chat.understand(n["text"], now, None) if asks else None
+        if not c0 or c0["intent"] in ("greet", "level_start", "feeling_start", "wellbeing"):
+            return {**base, "kind": "chat", "chat": {"intent": "trade_turn", "flow_ctx": ctx, "tf": None, "ema_len": None, "since": None}}
+    elif tradetalk.is_check(raw) and not tradetalk.is_start(raw):
+        return {**base, "kind": "chat", "chat": {"intent": "trade_check", "tf": None, "ema_len": None, "since": None}}
+    elif tradetalk.is_start(raw) and not tradetalk.has_all_three_prices(raw):
+        return {**base, "kind": "chat", "chat": {"intent": "trade_start", "tf": None, "ema_len": None, "since": None}}
+    if isinstance(ctx, dict) and ctx.get("kind") == "chat" and ctx.get("flow") == "plan" and (raw or "").strip():
+        c0 = chat.understand(n["text"], now, None)
+        asking = (raw or "").strip().endswith("?") or chat._ASKS.search(raw or "")
+        if not c0 or c0["intent"] in ("greet", "level_start", "feeling_start") or not asking:
+            return {**base, "kind": "chat", "chat": {"intent": "plan_turn", "flow_ctx": ctx, "tf": None, "ema_len": None, "since": None}}
+    ctext = raw if re.search(r"\bhow far (is|are|has|have|did|was|price|it|we|cable|gu|gbpusd|away)\b", raw, re.I) else n["text"]       # the typo-cleaner reads "how far" as a Nigerian greeting; "how far is price from 1.34" is a distance question
+    ch = chat.understand(ctext, now, ctx)
+    if ch and ch["intent"] == "wellbeing":
+        return {**base, "kind": "chat", "chat": ch}
     if _GREET_RX.match(raw.strip()):
         return {**base, "kind": "smalltalk", "tone": "greet"}
     if _THANKS_RX.match(raw.strip()):
@@ -509,6 +543,8 @@ def interpret(raw, now, extra=None):
     ig = _integrity(low, strong=True)
     if ig:                                                      # "why does the integrity alarm say clear?" is about the inspector, not about an alert to set
         return {**base, **ig}
+    if ch and ch["intent"] in ("clock", "until", "ago_signal", "ago_scan", "ago_msg", "ago_trade", "ago_level", "ago_extreme", "duration_swing", "duration_side", "duration_leg", "duration_regime", "duration_band") and len(_clauses(low)) < 2:
+        return {**base, "kind": "chat", "chat": ch}                  # a question about time ("how long ago was price at 1.3300") is never a trade report
     a = _alert(raw) or _act(raw, low)
     if a:
         return {**base, **a}
@@ -535,6 +571,8 @@ def interpret(raw, now, extra=None):
     if _LAST.search(low):
         mode, w = _event_mode(low, now)
         return {**base, "kind": "last_event", "events": _events_in(low) or ["choch"], "mode": mode, "window": w}
+    if ch and ch.get("followup") and ch["intent"] in ("change", "range", "ema", "price"):      # "and since friday" right after a move is the same question over another stretch
+        return {**base, "kind": "chat", "chat": ch}
     if _FOLLOW.search(low.strip()):
         return {**base, "kind": "followup"}
     if _DETAILS.match(low.strip()):
@@ -553,8 +591,10 @@ def interpret(raw, now, extra=None):
     if _FOLLOW.search(low.strip()):
         return {**base, "kind": "followup"}
     canon = present_question(raw, extra)
-    if canon:
+    if canon and not (ch and ch["intent"] in ("change", "range", "distance", "pips_between") and not re.search(r"\b(engine|reading|bias|thesis|looking at|waiting)\b", low)):
         return {**base, "kind": "ask_bus", "canonical": canon}
+    if ch and ch["intent"] not in ("greet",):                  # everyday questions: price, direction, EMA, change, range, counts, lot size, feelings, a level to track
+        return {**base, "kind": "chat", "chat": ch}
     if k == "question":
         return {**base, "kind": "ask_bus", "canonical": n["text"]}            # BUS's own keyword router gets the cleaned wording
     if informal.looks_like_market_talk(raw, extra) and (informal.classify_stance(raw, extra) or len(low.split()) >= 4):
@@ -576,7 +616,7 @@ def resolve(options, raw, extra=None, strict=False):
     if m and 1 <= int(m.group(1)) <= len(options):
         return "option", options[int(m.group(1)) - 1]
     for w, i in _ORD.items():
-        if re.search(rf"\b{w}\b", n) and len(n.split()) <= 4:
+        if len(options) > 1 and re.search(rf"\b{w}\b", n) and len(n.split()) <= 4 and not re.search(r"\b(before|after|previous|earlier|ago|than)\b", n):
             idx = len(options) - 1 if i == -1 else i - 1
             if 0 <= idx < len(options):
                 return "option", options[idx]

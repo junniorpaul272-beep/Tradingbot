@@ -478,7 +478,7 @@ def _r_market_state(a):
             L.append("The engine checked and listed no cautions.")
     ts_ = _by(a, "market.data_timestamp")
     if ts_:
-        L.append(f"(From the engine's reading at {_lagos_hm(ts_.observed_at)} Lagos time. /story has the technical version.)")
+        L.append(f"(From the engine's reading at {_lagos_hm(ts_.observed_at)} Lagos time. Ask me for the technical side if you want it.)")
     return L
 
 
@@ -718,6 +718,24 @@ def _fmt_g(x):
     return f"{x:g}" if isinstance(x, (int, float)) and not isinstance(x, bool) else None
 
 
+def _size_line(ps):
+    """The engine's own lot-size recommendation for this signal, as it was recorded at firing. Same wording as the scanner's old alert. Never calculated here.
+    (Numbers are printed without thousands separators: the audit reads '5,000' as two numbers.)"""
+    ok = isinstance(ps, dict) and not ps.get("error") and isinstance(ps.get("lots"), (int, float)) and isinstance(ps.get("risk_percent"), (int, float))
+    if not ok:
+        return "\u2139\ufe0f *Position size:* wasn't recorded with this signal."
+    name = re.sub(r"[*_`\[\]]", "", str(ps.get("account") or "")).strip()
+    bal = ps.get("balance")
+    label = name if name else (f"${bal:.0f} placeholder \u2014 /setaccount for a real one" if isinstance(bal, (int, float)) else "no account set")
+    pct = f"{ps['risk_percent']:.2f}%"
+    if ps.get("sanity_capped"):
+        return f"\U0001F4B0 *Position size ({label}):* \u26A0\ufe0f stop is implausibly tight \u2014 sizing suppressed, check the setup before trading it"
+    if ps.get("below_min_lot"):
+        return (f"\U0001F4B0 *Position size ({label}):* risking `${ps['risk_dollars']:.0f}` at this stop needs less than the `{ps.get('min_lot', 0.01)}` lot floor "
+                f"\u2014 either skip it or accept risking more than {pct} at `{ps.get('min_lot', 0.01)}` lot")
+    return f"\U0001F4B0 *Position size ({label}):* `{ps['lots']}` lot \u2014 risking `${ps['risk_dollars']:.0f}` ({pct} of `${bal:.0f}`)"
+
+
 def _r_signal_alert(a):
     """ONE fired signal from its own log record, laid out like the scanner's own alert (header, emoji labels, a divider, entry / stop / target)
     so an alert looks like an alert. Every fact still comes from the record; anything the record does not carry is said to be missing rather than
@@ -763,6 +781,7 @@ def _r_signal_alert(a):
         L.append(f"\u2696\ufe0f *RR:* `1:{_fmt_g(v['target_r'])}`")
     if _fmt_g(v.get("size_mult")) is not None:
         L.append(f"\U0001F4CF *Suggested size:* `{_fmt_g(v['size_mult'])}x base risk`")
+    L.append(_size_line(v.get("position_size")))
     if v.get("very_low_atr_warning") is True:
         L.append("\U0001F534 *Very low ATR:* the engine flagged thin volatility for this signal")
     elif v.get("low_atr_warning") is True:
@@ -779,7 +798,7 @@ def _r_signal_alert(a):
         L += [f"\u2022 {E(x)}" for x in cautions]
     else:
         L.append("\u2705 _No cautions were recorded with it._")
-    L.append("_Position size in account terms and the signal timeline aren't in this record._")
+    L.append("_The signal timeline isn't in this record._")
     return L
 
 
@@ -809,11 +828,13 @@ def _integrity_split(a):
     med = [f for f in open_ if f.get("severity") == "MED"]
     if high:
         f = high[0]
-        return ["Important: the integrity check flagged a problem that may affect how far you can trust this: " + E(f["summary"]) +
-                (f" (and {len(open_) - 1} more; /health has them)" if len(open_) > 1 else " (/health has the details)") + "."], []
+        g = plainwords.probe_gloss(f["probe"]) or "something in the data"
+        return ["Heads up before the answer: my self-check flagged a problem that may affect how far you can trust this (" + g + ")" +
+                (f", and {len(open_) - 1} other thing{'s' if len(open_) > 2 else ''}" if len(open_) > 1 else "") + ". Ask me if you want the detail."], []
     if med:
-        return [], ["The integrity check also has a medium-priority note: " + E(med[0]["summary"]) + ". /health has the details."]
-    return [], ["(Housekeeping: the integrity check has a low-priority note. /health has the details.)"]
+        g = plainwords.probe_gloss(med[0]["probe"]) or "something in the data"
+        return [], ["Side note: my self-check also flagged something moderate (" + g + "). It doesn't change the reading above; ask me if you want the detail."]
+    return [], ["(Side note: my self-check has one minor thing open. Ask me if you're curious.)"]
 
 
 def render_prose(answer):
@@ -1230,7 +1251,7 @@ def respond(text, pool, gaps, as_of, catalog=None, last_subject=None, plan_facts
     if r.kind == "help":
         return Reply(HELP_TEXT, None)
     if r.kind == "unknown":
-        return Reply("I didn't catch that — I answer a fixed set of questions about the engine's recorded state. /help lists them.", None)
+        return Reply("I didn't quite follow that. What are you trying to find out?", None)
     note = ""
     if r.kind == "intent" and r.intent in ("trade_reconstruction", "bot_vs_user") and not (r.params or {}).get("case_id"):
         latest = catalog.latest_case_id() if catalog is not None else None

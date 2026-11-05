@@ -512,7 +512,7 @@ class Answer:
 # disagreement. audit_text() requires the wording to acknowledge each one.
 # ======================================================================
 NOTE_KEYWORDS = {
-    "INTEGRITY_ALERT": ("integrity", "inspector", "flagged by", "alarm"),
+    "INTEGRITY_ALERT": ("integrity", "inspector", "flagged by", "alarm", "self-check"),
     "DIRECTION_DISAGREEMENT": ("disagree", "differ", "mismatch", "conflict", "mid-transition",
                                "transitioning", "doesn't match", "not aligned", "out of step"),
 }

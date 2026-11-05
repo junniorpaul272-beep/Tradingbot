@@ -66,7 +66,7 @@ class Flow(Base):
     def test_unknown_message_gets_a_help_pointer(self):
         self.inbox((5, "good morning"))
         self.run_()
-        self.assertIn("/help", self.sent[0])
+        self.assertNotIn("/help", self.sent[0]); self.assertRegex(self.sent[0], r"Hi|Hey|Good|morning|here")
 
     def test_stale_state_is_reported_not_shown_as_current(self):
         self.inbox((7, "/now"))
@@ -259,7 +259,7 @@ class IntegrityThroughBus(Base):
         self.inbox((1, "/now"), (2, "/thesis"))
         s = self.run_()
         self.assertEqual(s.get("announced"), 1)
-        ans = [t for t in self.sent if "Integrity alarm" in t or "integrity check" in t]
+        ans = [t for t in self.sent if "Integrity alarm" in t or "integrity check" in t or "self-check" in t]
         self.assertGreaterEqual(len(ans), 3)                            # both answers (a short pointer or the serious finding) AND the announcement
         self.assertTrue(all(not t.startswith("Integrity alarm") for t in self.sent if "bigger picture" in t))       # a market answer is never led by a diagnostics block
         self.assertIn("Sources that should agree on direction disagree: BULLISH from the MIL thesis", "\n".join(self.sent))

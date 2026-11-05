@@ -431,8 +431,9 @@ def render_window_brief(rep, assumptions=()):
     out.append("")
     if pr:
         direction = "up" if pr["net"] > 0 else "down" if pr["net"] < 0 else "flat"
-        move = "didn't move net" if direction == "flat" else f"{direction} {abs(pr['net_pips'])} pips net"
-        out.append(f"Price (rebuilt now from my saved candles, not necessarily what I knew then) went from {_p(pr['open'])} to {_p(pr['close'])}, {move}. "
+        _np = abs(pr['net_pips']); _pt = f"{_np:.0f}" if abs(_np - round(_np)) < 0.05 else f"{_np:.1f}"
+        move = "didn't move net" if direction == "flat" else f"({_pt}p), {direction} net"
+        out.append(f"Price (rebuilt now from my saved candles, not necessarily what I knew then) went from {_p(pr['open'])} to {_p(pr['close'])} {move}. "
                    f"The high was {_p(pr['high'])} at {timeref.hm(pr['high_at'])} and the low {_p(pr['low'])} at {timeref.hm(pr['low_at'])}.")
     elif rep["archive_from"] is None:
         out.append("I don't have a candle archive to look in yet, so I can't tell you what price did.")

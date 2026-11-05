@@ -33,6 +33,11 @@ import bus
 import bus_adapters as ba
 import bus_contract as bc
 import case_reconstruct as cr
+import chat
+import chat_records
+import chat_policy
+import clarify
+import tradetalk
 import conversation_search as cs
 import converse
 import guard
@@ -548,7 +553,7 @@ def _integrity_text(root, ask, now, recs=None, uid=None, words=""):
         gloss = plainwords.probe_gloss(h["probe"]) or h["probe"]
         sev = plainwords.severity(h["severity"])[1].lower()
         close = f"; closed {mr._when(h['closed'], now)} because the condition it checks was no longer true" if (with_close and h["closed"]) else ""
-        return f"• {sev}: {gloss}, first seen {mr._when(h['opened'], now)}{close}. The inspector's words: ‹{h['summary']}›"
+        return f"• {sev}: {gloss}, first seen {mr._when(h['opened'], now)}{close}. "
     limits = "\n".join("• " + x for x in plainwords.inspector_limits())
     short_limit = "It can't see a believable-looking wrong number, an impossible value that isn't a zero, or every source being wrong together."
     new_said = set(said) | {ask}
@@ -583,7 +588,7 @@ def _integrity_text(root, ask, now, recs=None, uid=None, words=""):
     else:                                                          # why_clear / status / trust
         if openf:
             out.append(("It isn't saying clear. " if ask == "why_clear" else "") + (f"{len(openf)} findings are open right now:" if len(openf) != 1 else "One finding is open right now:"))
-            out.append("\n".join(one(h, False) for h in openf[:5]) + ("\n• …and more in the integrity ledger." if len(openf) > 5 else ""))
+            out.append("\n".join(one(h, False) for h in openf[:5]) + ("\n• …and more." if len(openf) > 5 else ""))
             out.append("Whether the market reading itself is right is not something it checks.")
         else:
             if ask == "why_clear":
@@ -632,7 +637,7 @@ def _concept_part(d, recs, now, root=None, catalog=None):
                     "it was asked for. Ask me what it recorded and I'll tell you plainly."), None
         if d.get("why") == "predict":
             return ("I don't predict where price will go, and I can't tell you whether to buy or sell. What I can do is tell you what the engine reads right now "
-                    "and what it says it is waiting for: ask 'what's happening' or send /watch."), None
+                    "and what it says it is waiting for. Want me to go through that?"), None
         if d.get("why") == "cause":
             return _cause_text(root, d.get("words", ""), now), None
         return ("I won't call it real or fake. The engine saves what it detected, and when, but it doesn't save a verdict on whether a "
@@ -846,6 +851,20 @@ def _run_option(root, catalog, opt, now, uid, recs, slang, sent_at=None):
         if len(reps) == 1:
             return reps[0], None
         return bus.Reply("\n\n".join(r.text for r in reps), None), None
+    if t == "say":
+        rep, extra = _handle_plain(root, catalog, a["text"], now, uid, recs, sent_at)
+        extra = dict(extra or {})
+        extra.setdefault("context", {"kind": "chat", "topic": "clarified"})
+        if a.get("learn") and a["learn"] != clarify.norm_phrase(a["text"]):
+            q = f"\n\nWant me to remember that when you say \u201c{a['learn']}\u201d you mean \u201c{a['text']}\u201d? (yes or no) I only use it when I wouldn't otherwise understand you."
+            extra["pending"] = {"kind": "learn", "options": [{"id": "1", "label": "remember it", "action": {"type": "learn", "phrase": a["learn"], "key": a["key"], "canonical": a["text"]}}]}
+            return bus.Reply(rep.text + q, rep.answer, rep.used_fallback, rep.violations), extra
+        return rep, extra
+    if t == "learn":
+        catalog.teach_phrase(a["phrase"], a["key"], a["canonical"], now=now)
+        return bus.Reply(f"Done. From now on, if I don't otherwise understand \u201c{a['phrase']}\u201d, I'll take it as \u201c{a['canonical']}\u201d. If you ever want to clear what you've taught me, say 'forget the phrases I taught you'.", None), None
+    if t == "trade_story":
+        return _log_trade_story(root, catalog, a, now, uid, recs, slang, sent_at)
     if t == "ask_capture":
         return bus.Reply(bus.research_question_reply(catalog, "/ask", a["text"], now), None), None
     if t == "convo":
@@ -858,28 +877,375 @@ def _run_option(root, catalog, opt, now, uid, recs, slang, sent_at=None):
     return bus.Reply(voice.unknown(uid), None), None
 
 
+
+# ----------------------------------------------------------------------
+# EVERYDAY QUESTIONS (chat.py understands them; this is the I/O edge that hands it recorded facts)
+# ----------------------------------------------------------------------
+def _policy_reply(root, catalog, c, text, now, uid, recs, sent_at, cs, price_now, out):
+    """Boundary tests and general-reasoning questions (chat_policy). Facts come from the records; nothing in the user's message is ever taken as an instruction."""
+    P = chat_policy
+    seed = uid
+    if c["intent"] == "plan_turn":
+        return out(*P.a_plan_turn(text, c["flow_ctx"], seed))
+    key, also = c["key"], c.get("also") or []
+    profile = chat_records.load_profile(root)
+    sig = chat_records.last_signal_record(root, now)
+
+    def size_line():
+        try:
+            sigs = sorted(chat_records.load_counts_source(root, [])["signals"], key=lambda s: s["t"])
+            return chat.a_lot(profile, chat.parse_lot_args(""), sigs[-1] if sigs else None, seed)[0] if profile else ""
+        except Exception:
+            return ""
+    if key == "inject":
+        return out(*P.a_inject(text, also, profile, seed))
+    if key == "inject_talk":
+        return out(*P.a_inject_talk(text, seed))
+    if key == "hypo_size":
+        return out(*P.a_hypo_size(text, profile, seed))
+    if key == "execute":
+        return out(*P.a_execute(text, seed))
+    if key == "guarantee":
+        return out(*P.a_guarantee(seed))
+    if key == "ignore_risk":
+        return out(*P.a_ignore_risk(size_line(), profile, seed))
+    if key == "all_in":
+        return out(*P.a_all_in(size_line(), profile, seed))
+    if key == "advice":
+        return out(*P.a_advice(seed))
+    if key == "rules":
+        return out(*P.a_rules(seed))
+    if key == "emotional":
+        lc = _last_context(recs or [], now)
+        again = bool(isinstance(lc, dict) and lc.get("flow") == "feeling" and lc.get("theme") == "revenge")
+        return out(*P.a_emotional(profile, seed, again))
+    if key == "risk_math":
+        return out(*P.a_risk_math(text, profile, seed))
+    if key == "move_stop":
+        return out(*P.a_move_stop(seed))
+    if key == "leverage":
+        lots = None
+        m = re.search(r"(\d+(?:\.\d+)?)\s*lots?", text or "", re.I)
+        src = "the size you gave" if m else None
+        if m:
+            lots = float(m.group(1))
+        return out(*P.a_leverage(text, price_now, lots, src, seed))
+    if key == "plan":
+        return out(*P.a_plan_start(seed))
+    if key == "position":
+        return out(*P.a_position(text, price_now, profile, seed))
+    if key == "missed":
+        return out(P.a_missed_signal(sig, plainwords.tier(sig.get("tier_label")) if sig else None, seed), {"kind": "chat", "topic": "missed"})
+    if key == "risk_at_hand":
+        return out(P.a_risk_at_hand(sig, seed), {"kind": "chat", "topic": "explain"})
+    if key == "signal_outcome":
+        return out(P.a_signal_outcome(sig, chat_records.load_candles(root, "5m"), now), {"kind": "chat", "topic": "missed"})
+    if key == "explain_signal":
+        level = "beginner" if re.search(r"beginner|newbie|no jargon|without jargon|simple|eli5|\bplain\b|i'?m new|i am new|im new|like i'?m (5|five)", text or "", re.I) else "experienced"
+        return out(P.a_explain_signal(sig, plainwords.tier(sig.get("tier_label")) if sig else None, level, seed), {"kind": "chat", "topic": "explain"})
+    if key == "recall":
+        try:
+            notes = [r["payload"].get("text") for r in catalog.statements() if r["payload"].get("text")]
+        except Exception:
+            notes = []
+        if not notes:
+            return out("I haven't saved anything of yours yet. Tell me 'remember this: ...' and, once you say yes, I'll keep it word for word.", {"kind": "chat", "topic": "recall"})
+        return out("Here is what you've asked me to keep, in your own words: " + " | ".join(f"\u201c{n[:160]}\u201d" for n in notes[-5:]), {"kind": "chat", "topic": "recall"})
+    if key == "remember":
+        body = re.sub(r"^\W*(please\s+)?(remember|keep in mind|take note|don'?t forget|note down|make a note|note that)\b[\s:,-]*((this|that)\b[\s:,-]*)?", "", text or "", flags=re.I).strip() or (text or "")
+        opt = [{"id": "1", "label": "save it as a note of yours",
+                "action": {"type": "know", "text": body, "at": ledger._iso(sent_at) if sent_at is not None else None}}]
+        return bus.Reply(f"You want me to keep this: \u201c{cs_quote(body)}\u201d. Should I save it as a note of yours, word for word? (yes or no) Nothing is saved until you say yes.", None), {"pending": {"kind": "save", "options": opt}}
+    if key in ("spike", "friday", "htf_ltf", "scenarios", "spread", "gap_stop", "indicators"):
+        body, ctx = P.a_reasoning(key, seed)
+        if key == "scenarios":
+            body += " (If you want, ask me what would change the engine's mind and I'll show you what it says would invalidate its read.)"
+        return out(body, ctx)
+    return bus.Reply(voice.unknown(uid), None), {}
+
+
+def cs_quote(t, n=160):
+    t = " ".join((t or "").split())
+    return t if len(t) <= n else t[:n - 1] + "\u2026"
+
+
+def _trade_check_reply(root, catalog, text, now, cs, price_now, out):
+    ref = converse._REF.search(text or "")
+    no = next((int(g) for g in ref.groups() if g), None) if ref else None
+    cid = f"CASE-{no:04d}" if no else None
+    if cid is None:                                                    # the newest trade that has no recorded outcome, else the newest
+        recs, _ = ledger.read(catalog.path)
+        trades = [r for r in recs if r["event_type"] == "TRADE_LOGGED"]
+        done = {r["payload"].get("case_id") for r in recs if r["event_type"] == "OUTCOME_RECORDED"}
+        open_ = [r for r in trades if r["payload"]["case_id"] not in done]
+        pick_ = (open_ or trades or [None])[-1]
+        cid = pick_["payload"]["case_id"] if pick_ else None
+    if cid is None:
+        return out("You haven't logged a trade yet, so there's nothing to check. Tell me about one, in your own words, and I'll go through it with you.", {"kind": "chat", "topic": "trade"})
+    case = catalog.get_case(cid)
+    if not case:
+        return out(f"I have no {cid}.", {"kind": "chat", "topic": "trade"})
+    tp_ = case["trade"]["payload"]
+    since = ledger.to_utc(tp_.get("reported_at") or case["trade"]["ts"])
+    story = tradetalk.parse_story(" | ".join(r["payload"].get("text", "") for r in case["user_reasoning"]))
+    tf = "5m" if cs["5m"] else ("15m" if cs["15m"] else "1h")
+    candles = [c for c in cs[tf] if c["t"] + timedelta(minutes=chat.TF_MIN[tf]) > since and c["t"] <= now + timedelta(minutes=5)]
+    note = ""
+    if case["outcome"]:
+        note = f" (You recorded an outcome for it: {case['outcome']['payload'].get('result')}.)"
+    body = tradetalk.check({**tp_, "since": since}, story, candles, now, lambda t: chat.lagos_when(t, now), price_now)
+    return out(body + note, {"kind": "chat", "topic": "trade"})
+
+
+def _trade_reply(root, catalog, c, text, now, uid, recs, sent_at, cs, price_now, out):
+    """Talking a trade through (tradetalk). Nothing is logged here: when she says 'log it' the full story is shown and a yes is asked for."""
+    T = tradetalk
+    flow = c.get("flow_ctx") if c["intent"] == "trade_turn" else None
+    draft = dict(flow["draft"]) if flow else T.new_draft()
+    for k in ("milestones", "reasons", "failure", "failure_px", "obstacles", "obstacle_px", "skipped", "asked", "shown", "milestone_notes"):
+        draft[k] = list(draft.get(k) or [])
+    draft["pip_inputs"] = dict(draft.get("pip_inputs") or {})
+    profile = chat_records.load_profile(root)
+    st = chat_records.load_state_times(root)
+    engine = None
+    if st and st.get("direction") and st.get("ts") and timedelta(0) <= now - st["ts"] <= timedelta(hours=6):          # an old engine reading is not mentioned at all
+        engine = {"direction": st["direction"], "when": f" (recorded {chat.humanize(now - st['ts'])} ago)"}
+    body, draft, action = T.turn(draft, text, price_now, profile, engine, chat.lot_for, seed=uid)
+    ctx = {"kind": "chat", "flow": "trade", "draft": draft, "topic": "trade"}
+    if action and action.get("confirm"):
+        opt = [{"id": "1", "label": "go ahead", "action": {"type": "trade_story", "draft": draft}}]
+        return bus.Reply(body, None), {"context": ctx, "pending": {"kind": "trade_story", "options": opt}}
+    return bus.Reply(body, None), {"context": ctx}
+
+
+def _log_trade_story(root, catalog, a, now, uid, recs, slang, sent_at):
+    d = a["draft"]
+    before = catalog.latest_case_id()
+    cmd = f"/logtrade {d.get('pair') or 'GBPUSD'} {d['side']} {d['entry']:.5f} sl {d['stop']:.5f} tp {d['target']:.5f}"
+    rep, _ = _run_option(root, catalog, {"action": {"type": "act", "commands": [cmd]}}, now, uid, recs, slang, sent_at)
+    after = catalog.latest_case_id()
+    if after is None or after == before:
+        return bus.Reply(rep.text + "\n\nThe trade was not logged, so I have not saved your reasoning either.", None), None
+    story = tradetalk.story_text(d)
+    note = ""
+    if story:
+        try:
+            catalog.add_reasoning(after, story, now=now)
+            have = [w for k, w in (("reasons", "why you took it"), ("milestones", "your checkpoints"), ("failure", "where you're wrong"), ("obstacles", "what could get in the way")) if d.get(k)]
+            note = f"\n\nI also saved your reasoning with {after}, in your own words" + (": " + ", ".join(have[:-1]) + (" and " if len(have) > 1 else "") + have[-1] if have else "") + "."
+        except Exception as e:
+            print(f"[BUS TRADE STORY] {type(e).__name__}: {e}")
+            note = f"\n\nThe trade is logged as {after}, but I couldn't save your reasoning with it. Tell me again in a moment and I'll try once more."
+    return bus.Reply(rep.text + note, rep.answer, rep.used_fallback, rep.violations), {"context": {"kind": "chat", "topic": "trade_logged", "case": after}}
+
+
+def _chat_reply(root, catalog, d, text, now, uid, recs, sent_at, ictx=None):
+    c = d.get("chat") or {"intent": "greet", "tf": None, "ema_len": None, "since": None}
+    intent = c["intent"]
+    seed = uid
+    cs = {tf: chat_records.load_candles(root, tf) for tf in chat.TF_MIN}
+    price_now = next((cs[tf][-1]["c"] for tf in ("5m", "15m", "1h") if cs[tf]), None)
+
+    def out(body, ctx=None):
+        if intent in ("ema", "change", "range", "price") and chat._PRICE_RX.search(text or ""):
+            body += (f" (You mentioned {chat._PRICE_RX.search(text).group(1)}; I only use the candles I've recorded, so I haven't used that number.)")
+        bad = max((getattr(cs[t], "dropped", 0) for t in cs), default=0)
+        if bad and intent in ("price", "ema", "change", "range", "direction", "distance", "predict"):
+            body += f" (I left out {bad} damaged candle row{'s' if bad != 1 else ''} from my records when working this out.)"
+        return bus.Reply(body, None), ({"context": ctx} if ctx else {})
+
+    if intent == "trade_check":
+        return _trade_check_reply(root, catalog, text, now, cs, price_now, out)
+    if intent in ("trade_start", "trade_turn"):
+        return _trade_reply(root, catalog, c, text, now, uid, recs, sent_at, cs, price_now, out)
+    if intent in ("policy", "plan_turn"):
+        return _policy_reply(root, catalog, c, text, now, uid, recs, sent_at, cs, price_now, out)
+    if intent in ("greet", "wellbeing"):
+        src = chat_records.load_counts_source(root, recs)
+        scans = [t for t in src["scans"] if t]
+        nl = now.astimezone(chat.LAGOS).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(chat.UTC)
+        body, ctx = chat.a_greet({"now": now, "last_scan": max(scans) if scans else None,
+                                  "signals_today": len([s for s in src["signals"] if s["t"] >= nl])}, seed, wellbeing=(intent == "wellbeing"))
+        return out(body, ctx)
+    if intent == "price":
+        return out(*chat.a_price(cs, now, seed))
+    if intent == "ema":
+        return out(*chat.a_ema(cs, now, seed, tf=c.get("tf"), span=c.get("ema_len"), reclaim=c.get("reclaim"), holding=c.get("holding")))
+    if intent == "change":
+        return out(*chat.a_change(cs, now, seed, c.get("since"), tf=c.get("tf"), report=c.get("report")))
+    if intent == "range":
+        return out(*chat.a_range(cs, now, seed, c.get("since"), tf=c.get("tf")))
+    if intent == "count":
+        src = chat_records.load_counts_source(root, recs)
+        return out(*chat.a_count(src, now, seed, c.get("things") or [], c.get("since"), asks_bot=c.get("asks_bot", False)))
+    if intent == "lot":
+        sigs = sorted(chat_records.load_counts_source(root, [])["signals"], key=lambda s: s["t"])
+        return out(*chat.a_lot(chat_records.load_profile(root), chat.parse_lot_args(text), sigs[-1] if sigs else None, seed))
+    if intent == "move_size":
+        return out(*chat.a_move_size(cs, c["flow_ctx"], now, seed))
+    if intent == "news":
+        return out(*chat.a_news(seed))
+    if intent == "no_files":
+        return out(*chat.a_no_files(seed))
+    if intent == "worry":
+        return out(*chat.a_worry(seed))
+    if intent == "compare_days":
+        return out(*chat.a_compare_days(cs, now, seed))
+    if intent == "why_quiet":
+        return out(*chat.a_why_quiet(chat_records._ts((chat_records.last_signal_record(root, now) or {}).get("fired_at")), now, seed))
+    if intent == "farewell":
+        return out(*chat.a_farewell(seed))
+    if intent == "ema_since":
+        return out(*chat.a_ema_since(c["flow_ctx"], now, seed))
+    if intent == "swing_pips":
+        return out(*chat.a_swing_pips(c["flow_ctx"], now))
+    if intent == "normal":
+        return out(*chat.a_normal(cs, now, c.get("session")))
+    if intent == "pips_between":
+        return out(*chat.a_pips_between(c.get("prices") or [], seed))
+    if intent == "distance":
+        return out(*chat.a_distance(cs, now, c.get("prices") or [], seed))
+    if intent == "predict":
+        return out(*chat.a_predict(cs, now, c.get("prices") or [], seed))
+    if intent in ("clock", "until", "ago_signal", "ago_scan", "ago_msg", "ago_trade", "ago_level", "ago_extreme", "duration_swing", "duration_side", "duration_leg", "duration_regime", "duration_band", "ago_event"):
+        src = chat_records.load_counts_source(root, recs)
+        last_scan = max([t for t in src["scans"] if t], default=None)
+        low = (text or "").lower()
+        if intent != "clock" and re.search(r"\btomorrow\b|\bnext (week|month|hour|session|monday|tuesday|wednesday|thursday|friday)\b|\bin the future\b", low) and re.search(r"\bago\b|\bsince\b", low):
+            return out("That's in the future, so it can't have been 'ago'. I only know what's been recorded up to now. If you mean something already recorded, name it without 'tomorrow' or 'next', and if you want a countdown to something coming, ask 'how long until' it.", {"kind": "chat", "topic": "ago"})
+        if intent == "clock":
+            return out(*chat.a_clock(now, last_scan))
+        if intent == "until":
+            return out(*chat.a_until(low, now, last_scan))
+        if intent == "ago_signal":
+            return out(*chat.a_ago_signal(src, now, c.get("which", "last")))
+        if intent == "ago_scan":
+            return out(*chat.a_ago_scan(cs, src, now))
+        if intent == "ago_msg":
+            return out(*chat.a_ago_msg(src, now, c.get("mine", False)))
+        if intent == "ago_trade":
+            return out(*chat.a_ago_trade(src, now))
+        if intent == "ago_level":
+            return out(*chat.a_ago_level(cs, now, c.get("level")))
+        if intent == "ago_extreme":
+            return out(*chat.a_ago_extreme(cs, now, c.get("since"), c.get("which", "high"), tf=c.get("tf")))
+        if intent == "duration_swing":
+            since = c.get("since")
+            if since is None:
+                w = timeref.parse(low, now)
+                if w is not None and w.start is not None and w.end is not None and w.kind != "day":
+                    since = (w.start, w.assumptions and "the stretch you named" or "the stretch you named", list(w.assumptions))
+            return out(*chat.a_duration_swing(cs, now, since, tf=c.get("tf")))
+        if intent == "duration_side":
+            return out(*chat.a_duration_side(cs, now, c.get("level"), c.get("side"), tf=c.get("tf")))
+        if intent == "duration_leg":
+            return out(*chat.a_duration_leg(chat_records.load_state_times(root), now))
+        if intent == "duration_regime":
+            return out(*chat.a_duration_regime(cs, now, chat_records.load_state_times(root)))
+        if intent == "duration_band":
+            return out(*chat.a_duration_band(cs, now, c.get("band")))
+        if intent == "ago_event":
+            evs = converse._events_in(low) or ["choch"]
+            body, ctx = _last_event_text(root, catalog, evs, now)
+            at = (ctx or {}).get("at")
+            if at:
+                try:
+                    body += f"\n\nThe newest of those was first seen {chat.rel(chat_records._ts(at), now)}."
+                except Exception:
+                    pass
+            return out(body, ctx)
+    if intent == "meta_watching":
+        return out(*chat.a_meta_watching(c.get("prices") or [], ictx, seed))
+    if intent == "meta_saved":
+        return out(*chat.a_meta_saved(ictx, seed))
+    if intent == "meta_source":
+        return out(*chat.a_meta_source(ictx, seed))
+    if intent == "direction":
+        rep = _ask_bus(root, catalog, "/thesis", now, uid, recs, sent_at)
+        line = ""
+        if cs["1h"] and len(cs["1h"]) >= chat.DEFAULT_EMA:
+            cl = [x["c"] for x in cs["1h"]]
+            dd = chat.pips(cl[-1] - chat.ema_series(cl, chat.DEFAULT_EMA)[-1])
+            line = (f"\n\nFor context, separate from that: price is {chat.pp(abs(dd))} pips {'above' if dd > 0 else 'below'} the hourly 100 EMA (my own calculation from recorded candles, not an engine reading). "
+                    "The engine's bias and where price sits against an EMA measure different things, so they don't always agree. Want the EMA picture in more detail?")
+        return bus.Reply(rep.text + line, rep.answer, rep.used_fallback, rep.violations), {"context": {"kind": "chat", "topic": "ema", "tf": "1h", "ema_len": chat.DEFAULT_EMA}}
+    if intent == "which_market":
+        rep = _ask_bus(root, catalog, "/watch", now, uid, recs, sent_at, lead=False)
+        return bus.Reply(chat.pick(chat.GLUE["which"], seed) + "\n\n" + rep.text, rep.answer, rep.used_fallback, rep.violations), {}
+    if intent == "feeling_start":
+        return out(*chat.a_feeling_start(c.get("text") or text, seed))
+    if intent == "level_start":
+        return out(*chat.a_level_start(c.get("text") or text, c.get("prices"), price_now, seed))
+    if intent == "feeling_turn":
+        return out(*chat.a_feeling_turn(text, c["flow_ctx"], seed))
+    if intent == "level_turn":
+        return out(*chat.a_level_turn(text, c["flow_ctx"], price_now, seed))
+    return bus.Reply(voice.unknown(uid), None), {}
+
+
+_ACK = re.compile(r"^\W*(?:(?:yes|yeah|yep|yup|no|nope|nah|ok|okay|k|sure|fine|cool|alright|aight|thanks|thank you|thx|lol|lmao|haha|hmm+|hm+|oh|ah|wow|nice|good|great|true|right|fair|interesting|i see|got it|makes sense|noted|sha|abeg|well)\W*){1,3}$", re.I)
+
+
 def handle_plain(root, catalog, text, now, uid, recs, sent_at=None):
+    """A message that is not a /command. When nothing understands it, the bot asks what was meant (and can learn the phrasing) instead of a generic line."""
+    if re.match(r"^\W*forget (?:all )?(?:the )?(?:phrases|what) (?:i )?(?:taught|told) you\W*$", text or "", re.I):
+        n = len(catalog.phrase_map()); catalog.forget_phrases(now=now)
+        return bus.Reply(f"Done. I've forgotten the {n} phrase{'s' if n != 1 else ''} you taught me." if n else "You haven't taught me any phrases, so there's nothing to forget.", None), {}
+    rep, extra = _handle_plain(root, catalog, text, now, uid, recs, sent_at)
+    if rep.text in voice._UNKNOWN and _ACK.match(text or "") and not (extra or {}).get("pending"):
+        return bus.Reply(voice.pick(("Alright. Anything else you want to look at?", "Okay. I'm here if you want to dig into anything.", "Sure. Tell me what's next whenever you're ready.", "Mm. Want to look at the market, or talk through something?"), uid), None), {}
+    if rep.text in voice._UNKNOWN and (text or "").strip() and not _ACK.match(text or "") and not (text or "").lstrip().startswith("/") and not (extra or {}).get("pending"):
+        ph = clarify.norm_phrase(informal.normalise(text, catalog.slang_map())["text"])
+        taught = catalog.phrase_map().get(ph) if ph else None
+        if taught:                                                   # a phrase she taught me: answer the question it points to, and say so
+            r2, e2 = _handle_plain(root, catalog, taught["canonical"], now, uid, recs, sent_at)
+            return bus.Reply(f"(I took that as \u201c{taught['canonical']}\u201d, the way you taught me.)\n" + r2.text, r2.answer, r2.used_fallback, r2.violations), e2
+        picks = clarify.candidates(informal.normalise(text, catalog.slang_map())["text"])
+        if not picks:
+            return bus.Reply(clarify.question(text, picks, uid), None), {}
+        return bus.Reply(clarify.question(text, picks, uid), None), {"pending": {"kind": "clarify", "options": clarify.options(ph, picks)}}
+    return rep, extra
+
+
+def _handle_plain(root, catalog, text, now, uid, recs, sent_at=None):
     """A message that is not a /command. -> (bus.Reply, extra payload for the stored BUS_REPLY)."""
     slang = catalog.slang_map()
     pending = _open_pending(recs, now)
     if pending:
-        fresh = converse.interpret(text, now, slang)["kind"] in ("ask_bus", "market_recon", "convo_recon", "followup", "need_time", "act_offer", "act_missing", "alert_unsupported", "last_event", "multi", "explain", "explain_prev", "capability", "compare_prev", "cannot_say", "zone_state", "details", "prev_event", "integrity")
+        fresh = converse.interpret(text, now, slang)["kind"] in ("chat", "ask_bus", "market_recon", "convo_recon", "followup", "need_time", "act_offer", "act_missing", "alert_unsupported", "last_event", "multi", "explain", "explain_prev", "capability", "compare_prev", "cannot_say", "zone_state", "details", "prev_event", "integrity")
         how, opt = converse.resolve(pending["options"], text, slang, strict=fresh)
         if how == "option":
             rep, ctx = _run_option(root, catalog, opt, now, uid, recs, slang, sent_at)
             return rep, {"resolves": pending["uid"], **({"context": ctx} if ctx and "context" not in ctx else (ctx or {}))}
         if how == "cancel":
+            if pending.get("kind") == "trade_story":
+                dr = dict(pending["options"][0]["action"]["draft"]); dr["asking"] = None
+                return bus.Reply("Okay, I haven't logged it. What should I change?", None), {"resolves": pending["uid"], "context": {"kind": "chat", "flow": "trade", "draft": dr, "topic": "trade"}}
+            if pending.get("kind") == "clarify":
+                return bus.Reply(voice.pick(("Okay, scrap that. What did you want to know?", "Alright. Tell me more about what you're after.", "No worries, say it differently and I'll try again."), uid), None), {"resolves": pending["uid"]}
             return bus.Reply("No problem, I've left it.", None), {"resolves": pending["uid"]}
         if how == "ambiguous":
-            labels = "; ".join(f"{o['id']}. {o['label']}" for o in pending["options"])
-            return bus.Reply(f"Which one do you mean? {labels}. Just say the number.", None), {"pending": {k: v for k, v in pending.items() if k != "uid"}}
-    d = converse.interpret(text, now, slang)
-    k = d["kind"]
+            labels = " or ".join(o["label"] for o in pending["options"])
+            return bus.Reply(f"Which one do you mean: {labels}? You can say the first or the second.", None), {"pending": {k: v for k, v in pending.items() if k != "uid"}}
     ictx = _last_context(recs, now)
+    d = converse.interpret(text, now, slang, ctx=ictx)
+    k = d["kind"]
     h0 = ictx.get("h") if isinstance(ictx, dict) and ictx.get("kind") == "idea" and isinstance(ictx.get("h"), dict) else None
     if h0 and _SAVE_IDEA.match(text or ""):
         return _idea_save(catalog, h0, now, sent_at)
     itext = informal.normalise(text, slang)["text"] or text          # the message itself, not the part left after a correction was stripped
+    in_flow = k == "chat" and (d["chat"]["intent"].endswith("_turn") or d["chat"]["intent"] == "trade_start")
+    idea_wins = k == "chat" and not in_flow and any(ir.is_idea(itext, kk, h0) for kk in ("ask_bus", "unknown", "offer_save"))      # in the middle of discussing an idea, idea talk stays idea talk
+    if idea_wins:
+        k = d["kind"] = "ask_bus"                  # downstream treats it exactly as it did before the conversation basics existed
+        d["canonical"] = itext
+    if (k == "chat" and not idea_wins) or (k == "smalltalk" and d.get("tone") == "greet"):
+        rep, extra = _chat_reply(root, catalog, d, text, now, uid, recs, sent_at, ictx)
+        if isinstance(ictx, dict) and ictx.get("flow") == "trade" and d.get("chat", {}).get("intent") not in ("trade_turn", "trade_start"):
+            c2 = (extra or {}).get("context")                       # an interjection ("how many pips is...") must not make the trade conversation forget itself
+            if isinstance(c2, dict) or c2 is None:
+                extra = {**(extra or {}), "context": {**(c2 or {"kind": "chat"}), "flow": "trade", "draft": ictx.get("draft")}}
+        return rep, extra
     parts = re.split(r"(?<=[.?!])\s+", (text or "").strip())
     if len(parts) >= 2 and not (text or "").lstrip().startswith("/") and k not in ("command", "smalltalk"):
         lead = []
@@ -924,6 +1290,11 @@ def handle_plain(root, catalog, text, now, uid, recs, sent_at=None):
         return rep, extra
     if k == "last_event":
         body, ctx = _last_event_text(root, catalog, d["events"], now, d.get("mode", "last"), d.get("window"))
+        if ctx and ctx.get("at") and chat._AGO.search(text or ""):               # "how long ago was the last choch": the same record, plus the elapsed time
+            try:
+                body += f"\n\nThe newest of those was first seen {chat.rel(chat_records._ts(ctx['at']), now)}."
+            except Exception:
+                pass
         return bus.Reply(body, None), {"context": ctx}
     if k in ("explain", "explain_prev", "capability", "compare_prev", "cannot_say"):
         body, _c = _concept_part(d, recs, now, root, catalog)
@@ -972,7 +1343,7 @@ def handle_plain(root, catalog, text, now, uid, recs, sent_at=None):
         nz = "No zone has been fixed in this conversation yet, so I'd also need to know which one you mean. " if h0 else ""
         return bus.Reply(nz + "I can't yet alert you when price enters a fair value gap or order block: the engine saves each zone when it first sees it, but there's no saved "
                          "record of price entering one, so I'd be guessing. What I can do: alert you when a NEW one forms (say 'alert me at the next bullish FVG'), or, if you "
-                         "give me the zone's prices, alert you when price trades into them (/alert zone 1.3380 1.3400). Nothing was saved.", None), {}
+                         "give me the zone's prices, alert you when price trades into them. Nothing was saved.", None), {}
     if k == "alert_unsupported" and d.get("why") == "zone_tf":
         return bus.Reply(f"The engine only records fair value gaps and order blocks on the 15-minute, not the {d.get('tf')}, so I can't watch the {d.get('tf')} one. "
                          "I can alert you when a new 15-minute one forms. Nothing was saved.", None), {}
@@ -1136,7 +1507,7 @@ def handle_ask_clarify(text, uid, slang, sent_at=None):
     opts = [{"id": "1", "label": "answer it now", "action": {"type": "answer", "canonical": canon,
                                                               "sent_at": ledger._iso(sent_at) if sent_at is not None else None}},
             {"id": "2", "label": "save it as a research question", "action": {"type": "ask_capture", "text": rest}}]
-    return (bus.Reply(f"{voice.lead('clarify', uid)} That reads like you want an answer right now, but /ask saves research questions to study later. "
+    return (bus.Reply(f"{voice.lead('clarify', uid)} That reads like you want an answer right now, but I can also keep it as a research question to study later. "
                       "Which do you want?\n1. Answer it now\n2. Save it as a research question", None),
             {"pending": {"kind": "ask", "options": opts}})
 
@@ -1329,11 +1700,11 @@ def handle_signal_response(catalog, adapted, text, received_at, now):
     others = f" ({len(open_) - 1} older unanswered one(s) remain; they are not touched.)" if len(open_) > 1 else ""
     if cmd == "/skip":
         catalog.respond_to_signal(v["event_id"], "SKIPPED", note=rest, signal_fired_at=ledger._iso(ledger.to_utc(c.observed_at)), now=now)
-        return f"Noted: you skipped the {v.get('direction', '').lower()} signal from {when}." + (" Your note is stored word for word." if rest else "") + others
+        return f"Noted: you skipped the bot's {v.get('direction', '').lower()} signal from {when}. It stays on the bot's record as fired; nothing was logged as your trade." + (" Your note is stored word for word." if rest else "") + others
     # /taken
     if v.get("entry") is None or v.get("sl") is None or v.get("tp") is None:
         return ("That signal's record doesn't carry an entry, stop and target, so I can't log it for you. "
-                "Use /logtrade with your own numbers, then /skip to close this one.")
+                "Tell me your own entry, stop and target and I'll log it, then tell me you skipped this one to close it.")
     entry = v["entry"]
     if rest:
         try:
@@ -1360,8 +1731,9 @@ def handle_signal_response(catalog, adapted, text, received_at, now):
     catalog.respond_to_signal(v["event_id"], "TAKEN", case_id=case_id, note=("" if entry == v["entry"] else f"filled at {entry} (signal entry {v['entry']})"),
                               signal_fired_at=ledger._iso(fired), now=now)
     fill = "" if entry == v["entry"] else f" You filled at {_price(entry)}; the signal's own entry {_price(v['entry'])} is kept on the bot's side."
-    return (f"Logged {case_id} from the {v['direction'].lower()} signal of {when}: entry {_price(entry)}, stop {_price(v['sl'])}, "
-            f"target {_price(v['tp'])}.{fill} The bot's side is the signal as it fired, not today's market.{others}")
+    return (f"Got it: you took the bot's {v['direction'].lower()} signal of {when}. Logged {case_id} as YOUR trade: entry {_price(entry)}, stop {_price(v['sl'])}, "
+            f"target {_price(v['tp'])}.{fill} The bot's own signal stays exactly as it fired and is kept separate from your trade; "
+            f"{case_id} only holds what you did with it.{others}")
 
 
 # ----------------------------------------------------------------------
@@ -1497,7 +1869,7 @@ def quiet_summary(root, catalog, now, send, summary):
     text = "\n".join(lines) + ("\n\n" + "\n\n".join(parts) if parts else "")
     if len(text) > TELEGRAM_LIMIT - 200:                       # too long for one message: counts plus each signal's first line
         short = [r["payload"]["text"].split("\n", 1)[0] for r in sig[:5]]
-        text = "\n".join(lines) + ("\n" + "\n".join(short) if short else "") + "\nThe full detail is in the ledger; /health shows the integrity state."
+        text = "\n".join(lines) + ("\n" + "\n".join(short) if short else "") + "\nAsk me about any of these for the detail."
     for r in sig:                                               # what BUS said is only now said: log it as stated
         st = r["payload"].get("statement")
         if st:

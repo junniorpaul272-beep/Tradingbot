@@ -389,15 +389,29 @@ def probe_time(state, now=None):
 _ID_FLOAT = re.compile(r"-?\d+\.\d{3,}")
 
 
+LEG_ID_DRIFT_PIPS = 5            # mirror of the engine's LEG_MATCH_TOLERANCE_PIPS (scanner_common.py). test_inspector checks the two stay equal.
+PIP = 0.0001
+# Paths that hold a RECORD of something that already happened ("the leg this signal fired on, as it was then"). Such an id is a fact about the past,
+# so it is never expected to match today's live fields and must not be reported as stale.
+_HISTORICAL_ID_PATHS = re.compile(r"^(undelivered_signal_events\[\d+\]|engine_only_fired_leg)\.")
+
+
 def probe_identity(state):
-    """A string id of the form 'A|1.33093|1.31933' embeds numbers. Each must still equal some
-    live numeric field; an id describing a different leg than the fields next to it is stale."""
+    """A string id of the form 'A|1.33093|1.31933' embeds numbers. Each must still equal some live numeric field; an id describing a different leg than
+    the fields next to it is stale.
+    Two things are NOT stale (found 30 Oct 2026, when the alert fired right after a signal because the leg had grown 2 pips since it was claimed):
+      * a leg id trails its leg by design (scanner_observation.compute_leg_id contract): its extreme drifts as the leg extends, and the engine treats
+        ids within LEG_ID_DRIFT_PIPS as the same leg. So for a path ending in leg_id a number within that tolerance of a live field still matches.
+      * ids inside records of past events (a fired signal's own leg) describe the past, not the live state, and are skipped."""
     nums = [v for _p, v in walk(state) if _num(v)]
     out = []
     for p, v in walk(state):
         if isinstance(v, str) and "|" in v:
+            if _HISTORICAL_ID_PATHS.match(p):
+                continue
+            tol = LEG_ID_DRIFT_PIPS * PIP + 1e-9 if p.split(".")[-1].endswith("leg_id") else 1e-9
             toks = [float(t) for t in _ID_FLOAT.findall(v)]
-            missing = [t for t in toks if not any(abs(t - n) < 1e-9 for n in nums)]
+            missing = [t for t in toks if not any(abs(t - n) < tol for n in nums)]
             if toks and missing:
                 out.append(finding("identity", "MED", f"{p} embeds {missing} which match no live field", [p],
                                    {"id": v, "unmatched": missing}))

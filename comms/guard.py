@@ -32,8 +32,8 @@ Result = namedtuple("Result", "text violations blocked repaired")
 CAPS = {"answer": 1500, "report": 3600, "short": 900, "other": 3900}
 HARD_CAP = 3900                   # Telegram refuses more than 4096 characters; stay clear of it
 SAFE = ("I have the information but couldn't put it into words I trust, so I won't guess. "
-        "Try asking it a simpler way, or send /story for the full technical read.")
-SAFE_EMPTY = "I don't have anything to say to that yet. Try asking it another way, or send /help."
+        "Could you ask it a simpler way, or tell me which part you care about most?")
+SAFE_EMPTY = "I don't have anything to say to that yet. Could you put it another way?"
 
 _CODE = re.compile(r"\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b")
 _DOTTED = re.compile(r"\b(?:htf|thesis|leg|case|system|market|volatility|momentum|watch|story|campaign|event|signal|user|research|alerts|engine)"
@@ -72,7 +72,7 @@ def _move_integrity(text):
         return text, False
     moved = lines[:i]
     rest = lines[i:]
-    note = "(Housekeeping: the integrity check has " + ("a note" if len(moved) <= 2 else "some notes") + " for you. Send /health to see it.)"
+    note = "(Housekeeping: the integrity check has " + ("a note" if len(moved) <= 2 else "some notes") + " for you. Ask me about it if you want the detail.)"
     return "\n".join(rest + ["", note]), True
 
 

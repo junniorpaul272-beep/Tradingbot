@@ -264,6 +264,31 @@ class MutationTests(unittest.TestCase):
         got = self.hit(s, "identity")
         self.assertIn("1.33093", json.dumps(got[0]["evidence"]))
 
+    def test_M4b_a_leg_id_that_trails_its_leg_is_not_stale_but_a_different_leg_is(self):
+        # a leg grows after its id was claimed: the id keeps the old extreme (engine contract), within the engine's own tolerance
+        s = self.clean(); s["leg_owner"] = {"leg_id": "BEARISH|1.33093|1.31933"}
+        live_extreme = [v for _p, v in ins.walk(s) if isinstance(v, float) and abs(v - 1.33093) < 1e-12]
+        self.assertTrue(live_extreme)
+        def with_extreme(o, new):
+            if isinstance(o, dict): return {k: with_extreme(v, new) for k, v in o.items()}
+            if isinstance(o, list): return [with_extreme(v, new) for v in o]
+            return new if isinstance(o, float) and abs(o - 1.33093) < 1e-12 else o
+        near = with_extreme(s, 1.33093 + 0.0002); near["leg_owner"] = {"leg_id": "BEARISH|1.33093|1.31933"}      # 2 pips of drift
+        f, _ = ins.inspect_state(near); self.assertEqual([x for x in f if x["probe"] == "identity" and "leg_owner" in x["paths"][0]], [])
+        far = with_extreme(s, 1.33093 + 0.0008); far["leg_owner"] = {"leg_id": "BEARISH|1.33093|1.31933"}        # 8 pips: a different leg
+        f, _ = ins.inspect_state(far); self.assertTrue([x for x in f if x["probe"] == "identity" and "leg_owner" in x["paths"][0]])
+
+    def test_M4c_the_record_of_a_fired_signal_describes_the_past_and_is_not_checked_against_live_fields(self):
+        s = self.clean(); s["engine_only_fired_leg"] = {"leg_id": "BULLISH|1.99999|1.11111"}; s["undelivered_signal_events"] = [{"leg_id": "BULLISH|1.99999|1.11111"}]
+        f, _ = ins.inspect_state(s); self.assertEqual([x for x in f if x["probe"] == "identity" and ("engine_only" in x["paths"][0] or "undelivered" in x["paths"][0])], [])
+        s["something_else"] = {"leg_id": "BULLISH|1.99999|1.11111"}               # a live pointer that matches nothing IS still reported
+        f, _ = ins.inspect_state(s); self.assertTrue([x for x in f if x["probe"] == "identity" and "something_else" in x["paths"][0]])
+
+    def test_M4d_drift_tolerance_matches_the_engine(self):
+        import re as _re
+        src = open(os.path.join(ROOT, "scanner_common.py")).read()
+        self.assertEqual(int(_re.search(r"^LEG_MATCH_TOLERANCE_PIPS\s*=\s*(\d+)", src, _re.M).group(1)), ins.LEG_ID_DRIFT_PIPS)
+
     def test_M5_collection_that_only_grows(self):
         s = self.clean(); mem = None
         for i in range(20):

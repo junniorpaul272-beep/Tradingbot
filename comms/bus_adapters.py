@@ -497,6 +497,17 @@ def _line_ref(name, rec, key):
     return f"{name}#{rec.get(key)}"
 
 
+def _position_size(ps):
+    """The engine's recorded lot-size snapshot, passed through untouched except for one unit conversion so the alert can print the percentage the engine used
+    (0.005 as 0.5): the audit only lets a number appear in text if the same number is in a claim."""
+    if not isinstance(ps, dict):
+        return None
+    out = dict(ps)
+    if isinstance(ps.get("risk_pct"), (int, float)):
+        out["risk_percent"] = round(ps["risk_pct"] * 100, 4)
+    return out
+
+
 def adapt_signal_events(records):
     """signal_event_log.jsonl lines written by scanner_live._record_undelivered_signal."""
     out = Adapted()
@@ -514,6 +525,8 @@ def adapt_signal_events(records):
                      "fired_at": r.get("fired_at"), "pair": r.get("pair"), "macro_bias": r.get("macro_bias"),
                      "macro_bias_stale": (r.get("snapshot") or {}).get("macro_bias_stale"),
                      "risk_pips": rr.get("risk_pips"), "reward_pips": rr.get("reward_pips"), "size_mult": rr.get("size_mult"),
+                     # lot size the ENGINE recommended at firing (absent on signals fired before 30 Oct 2026 -> None, never computed here)
+                     "position_size": _position_size(r.get("position_size")),
                      "risk_band": (r.get("risk_at_hand") or {}).get("band"),
                      "risk_reasons": list((r.get("risk_at_hand") or {}).get("reasons") or []),
                      "risk_recommendation": (r.get("risk_at_hand") or {}).get("recommendation"),

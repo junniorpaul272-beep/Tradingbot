@@ -110,7 +110,8 @@ class Times(unittest.TestCase):
         d = converse.interpret("i sold gbpusd at 1.3240, stop 1.3270, target 1.3180", NOW)
         self.assertEqual((d["kind"], d["act"], d["side"], d["entry"], d["sl"], d["tp"]), ("act_offer", "logtrade", "sell", "1.3240", "1.3270", "1.3180"))
         self.assertEqual(converse.interpret("i bought at 1.3300 sl 1.3270 tp 1.3380", NOW)["side"], "buy")
-        self.assertEqual(converse.interpret("i sold gbpusd at 1.3240", NOW)["kind"], "act_missing")
+        d0 = converse.interpret("i sold gbpusd at 1.3240", NOW)             # a trade told without all three prices starts a conversation about it (tradetalk), it is not bounced back as "missing"
+        self.assertEqual((d0["kind"], d0["chat"]["intent"]), ("chat", "trade_start"))
         self.assertNotEqual(converse.interpret("should i sell at 1.3240 sl 1.3270 tp 1.3180", NOW)["kind"], "act_offer")
         d = converse.interpret("my trade hit tp, 2R", NOW)
         self.assertEqual((d["act"], d["result"], d["r"], d["case_no"]), ("outcome", "win", "2", None))
@@ -277,7 +278,8 @@ class Flow(Base):
         self.talk("buh it broke the high tho, im looking for a retracement to support")
         self.assertIn("left it", self.talk("nah"))
         self.assertEqual(self.types("KNOWLEDGE_STATED"), [])
-        self.assertIn("/help", self.talk("yes") or "")                 # a later "yes" is not an answer to anything
+        later = self.talk("yes") or ""                                 # a later "yes" is not an answer to anything
+        self.assertNotIn("/help", later); self.assertEqual(self.types("KNOWLEDGE_STATED"), [])
 
     def test_a_stale_question_is_not_answered_by_a_much_later_yes(self):
         self.talk("buh it broke the high tho, im looking for a retracement to support")
@@ -747,6 +749,61 @@ class Flow(Base):
         self.talk("/logtrade GBPUSD sell 1.3200 sl 1.3260 tp 1.3100")
         self.assertNotIn("so this is how things look", self.talk("/review 1", at=self.now, now=self.now + timedelta(hours=2)))
 
+    # ---- no commands, no internals in conversation (round 4) ----
+    def test_no_reply_to_everyday_talk_tells_her_to_type_a_command_or_names_internal_files(self):
+        import re
+        bad = re.compile(r"(?<![\w/])/[a-z]{3,}\b|ledger|inspector's words|engine_only|\.jsonl?\b|state\.json|payload|Traceback|\bNone\b", re.I)
+        msgs = ["morning", "gimme the vibe", "blah blah", "any news", "show me your log", "how's the engine doing", "why did the bot stay quiet", "what is the engine thinking",
+                "do you think i should worry", "ok", "hmm not sure about this", "where do you think it goes next", "explain the structure", "tell me about the last hour",
+                "what did the market do this week", "compare today and yesterday", "is everything working ok", "what can you do", "asdkj qwe", "can you watch 1.3450 for me", "did you see that candle"]
+        for m in msgs:
+            out = self.talk(m) or ""
+            self.assertFalse(bad.search(out), (m, out[:200]))
+
+    def test_the_same_puzzling_message_does_not_get_the_same_canned_line_every_time(self):
+        outs = {self.talk("zzz qqq wxyz") for _ in range(6)}
+        self.assertGreaterEqual(len(outs), 3)
+
+    def test_a_move_is_told_price_first_with_the_pips_in_brackets_and_a_plain_size_word(self):
+        self.candles(self.now - timedelta(hours=3), 40)
+        out = self.talk("how far has price moved today")
+        self.assertRegex(out, r"1\.\d{5}.*\(\d+(\.\d)?p\)"); self.assertNotRegex(out, r"\d pips net")
+
+    def test_a_level_conversation_does_not_swallow_a_new_question(self):
+        self.talk("can you watch 1.3450 for me")
+        out = self.talk("why did the bot stay quiet")
+        self.assertNotIn("watching that one", out); self.assertNotIn("haven't saved or started watching", out)
+
+    # ---- found by talking to it like a person (stress conversation, round 3) ----
+    def test_a_losing_streak_and_the_urge_to_size_up_is_met_as_a_feeling_and_never_repeats_itself(self):
+        a = self.talk("I lost 3 in a row this week and I'm tempted to size up")
+        self.assertIn("urge", a); self.assertNotIn("Since Monday", a)
+        b = self.talk("yeah i just want it back")
+        self.assertNotEqual(a, b); self.assertIn("normal feeling", b)
+
+    def test_risk_percentage_questions_get_arithmetic_not_a_verdict(self):
+        a = self.talk("so if i take 3 stops in a row at 2% how much is gone")
+        self.assertIn("94.1%", a); self.assertIn("5.9%", a); self.assertIn("your call", a)
+        b = self.talk("is 2% too much per trade"); self.assertIn("2% risk means", b)
+
+    def test_moving_a_stop_is_answered_with_the_principle_and_the_bot_says_it_does_not_manage_trades(self):
+        a = self.talk("can i move my stop if it goes against me")
+        self.assertIn("I don't place or manage trades", a)
+
+    def test_a_goodbye_is_answered_warmly_and_never_offered_as_a_note(self):
+        a = self.talk("thanks, i'll take a break")
+        self.assertNotIn("save it as a note", a); self.assertNotIn("(yes or no)", a)
+
+    def test_an_unrelated_question_is_never_taken_as_a_yes(self):
+        self.talk("i feel the market will drop tomorrow")                      # offers to save a note
+        before = len(self.types("KNOWLEDGE_STATED"))
+        self.talk("and the one before?")
+        self.assertEqual(len(self.types("KNOWLEDGE_STATED")), before)
+
+    def test_normal_for_a_session_says_when_a_session_has_not_opened(self):
+        a = self.talk("is today's range normal for london")
+        self.assertNotIn("/", a); self.assertRegex(a, r"(?i)enough|hasn't opened|pips")
+
     # help ----------------------------------------------------------------------------------------
     def test_help_mentions_the_new_ways_to_talk(self):
         h = bus.HELP_TEXT
@@ -757,7 +814,6 @@ class Flow(Base):
 def ledger_t(v):
     import ledger
     return ledger.to_utc(v)
-
 
 class StructureAlerts(unittest.TestCase):
     T0 = datetime(2026, 10, 20, 8, 0, tzinfo=timezone.utc)
@@ -899,7 +955,8 @@ class Boundary(unittest.TestCase):
     def test_the_readers_see_only_what_they_are_handed(self):
         self.assertLessEqual(self.imports("market_reconstruct"), {"datetime", "ledger", "timeref", "voice", "re"})
         self.assertLessEqual(self.imports("conversation_search"), {"re", "datetime", "ledger", "timeref", "voice"})
-        self.assertLessEqual(self.imports("converse"), {"re", "informal", "timeref", "voice"})
+        self.assertLessEqual(self.imports("converse"), {"re", "informal", "timeref", "voice", "chat", "chat_policy", "tradetalk"})
+        self.assertLessEqual(self.imports("chat"), {"re", "difflib", "datetime", "zoneinfo", "collections", "timeref"})      # the conversation basics read no files and import no engine code
 
 
 if __name__ == "__main__":

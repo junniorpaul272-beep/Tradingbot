@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.35023|1.33958",
     "opened_at": "2026-11-06T08:07:20.399463+00:00",
-    "bars_open": 0,
-    "last_processed_candle": "2026-11-06T07:55:00+00:00",
+    "bars_open": 1,
+    "last_processed_candle": "2026-11-06T08:00:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -35,12 +35,17 @@
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
-    "tier3_touched_bar": null,
+    "tier3_touched_bar": 1,
     "timeline": [
       {
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bearish (via CHoCH)"
+      },
+      {
+        "bar": 1,
+        "kind": "zone_touch",
+        "detail": "Tier 3 zone touched (CHoCH/BOS aligned)"
       }
     ],
     "_tl_last_break_count": 3,
@@ -59,5 +64,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-11-06T08:07:20.957175+00:00"
+  "_persisted_at": "2026-11-06T08:12:23.685029+00:00"
 }

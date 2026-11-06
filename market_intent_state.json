@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "0b3468833fa4",
+    "id": "991e8458a50c",
     "methodology_version": 1,
-    "leg_id": "BEARISH|1.35023|1.33617",
-    "opened_at": "2026-11-06T14:02:27.409057+00:00",
-    "bars_open": 11,
-    "last_processed_candle": "2026-11-06T14:50:00+00:00",
+    "leg_id": "BEARISH|1.35023|1.33440",
+    "opened_at": "2026-11-06T15:02:32.824729+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-11-06T14:55:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "expansion",
     "watch_codes": [
@@ -16,7 +16,7 @@
       "HTF bias: BEARISH",
       "Fresh 15M BOS aligned with bias",
       "1H volatility expanding",
-      "4.5 ATR from EMA_100 \u2014 extended"
+      "4.2 ATR from EMA_100 \u2014 extended"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -25,14 +25,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "expansion",
-      "atr_5m_pips": 8.064215285680389,
+      "atr_5m_pips": 6.563150641203006,
       "break_count": 2,
-      "campaign_continuation_count": 87,
+      "campaign_continuation_count": 99,
       "num_watch_codes": 1,
       "num_caution_codes": 0,
       "very_low_atr_warning": false
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-11-06T14:57:33.556522+00:00"
+  "_persisted_at": "2026-11-06T15:02:35.833607+00:00"
 }

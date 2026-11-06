@@ -67,7 +67,7 @@
     "hit_3r": 0
   },
   "EXP7_TIER_ATR": {
-    "logged": 197,
+    "logged": 198,
     "resolved": 155,
     "wins": 73,
     "losses": 82,
@@ -78,7 +78,7 @@
     "hit_3r": 2
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 1081,
+    "logged": 1082,
     "resolved": 1056,
     "wins": 419,
     "losses": 637,
@@ -121,5 +121,5 @@
     "hit_2r": 12,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-11-06T08:02:25.694929+00:00"
+  "_persisted_at": "2026-11-06T08:07:21.078068+00:00"
 }

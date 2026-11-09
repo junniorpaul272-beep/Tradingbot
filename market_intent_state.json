@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BEARISH|1.35023|1.33377",
     "opened_at": "2026-11-09T07:00:34.295158+00:00",
-    "bars_open": 102,
-    "last_processed_candle": "2026-11-09T15:20:00+00:00",
+    "bars_open": 103,
+    "last_processed_candle": "2026-11-09T15:25:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -25,11 +25,13 @@
     ],
     "materialized_codes": [
       "PULLBACK_TO_FIB_POCKET",
-      "FIVE_M_ALIGNMENT"
+      "FIVE_M_ALIGNMENT",
+      "FRESH_DISPLACEMENT"
     ],
     "materialized_at_bar": {
       "PULLBACK_TO_FIB_POCKET": 17,
-      "FIVE_M_ALIGNMENT": 98
+      "FIVE_M_ALIGNMENT": 98,
+      "FRESH_DISPLACEMENT": 103
     },
     "fate": null,
     "leg_fate": null,
@@ -45,5 +47,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-11-09T15:30:31.701010+00:00"
+  "_persisted_at": "2026-11-09T15:35:34.114696+00:00"
 }

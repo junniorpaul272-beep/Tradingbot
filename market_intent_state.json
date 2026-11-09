@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BEARISH|1.35023|1.33377",
     "opened_at": "2026-11-09T07:00:34.295158+00:00",
-    "bars_open": 97,
-    "last_processed_candle": "2026-11-09T14:55:00+00:00",
+    "bars_open": 98,
+    "last_processed_candle": "2026-11-09T15:00:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -24,10 +24,12 @@
       "6 breaks into this leg \u2014 getting old"
     ],
     "materialized_codes": [
-      "PULLBACK_TO_FIB_POCKET"
+      "PULLBACK_TO_FIB_POCKET",
+      "FIVE_M_ALIGNMENT"
     ],
     "materialized_at_bar": {
-      "PULLBACK_TO_FIB_POCKET": 17
+      "PULLBACK_TO_FIB_POCKET": 17,
+      "FIVE_M_ALIGNMENT": 98
     },
     "fate": null,
     "leg_fate": null,
@@ -43,5 +45,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-11-09T15:03:35.121895+00:00"
+  "_persisted_at": "2026-11-09T15:08:33.422090+00:00"
 }

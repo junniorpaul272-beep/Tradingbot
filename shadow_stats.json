@@ -12,12 +12,12 @@
     "hit_3r": 5
   },
   "EXP2_FIB": {
-    "logged": 7782,
-    "resolved": 7660,
+    "logged": 7783,
+    "resolved": 7661,
     "wins": 2085,
-    "losses": 5575,
+    "losses": 5576,
     "timed_out": 377,
-    "sum_r": 153.7884914318234,
+    "sum_r": 152.7884914318234,
     "hit_1r": 4581,
     "hit_2r": 3150,
     "hit_3r": 2379
@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 896,
+    "logged": 897,
     "resolved": 763,
     "wins": 358,
     "losses": 405,
@@ -121,5 +121,5 @@
     "hit_2r": 12,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-11-09T10:17:18.230984+00:00"
+  "_persisted_at": "2026-11-09T10:22:20.222930+00:00"
 }

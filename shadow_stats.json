@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 889,
+    "logged": 890,
     "resolved": 763,
     "wins": 358,
     "losses": 405,
@@ -121,5 +121,5 @@
     "hit_2r": 12,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-11-09T07:47:18.435746+00:00"
+  "_persisted_at": "2026-11-09T07:52:20.276004+00:00"
 }

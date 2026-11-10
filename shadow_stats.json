@@ -100,7 +100,7 @@
     "hit_3r": 28
   },
   "EXP4_POLICY_LAB": {
-    "logged": 40,
+    "logged": 42,
     "resolved": 40,
     "wins": 13,
     "losses": 27,
@@ -121,5 +121,5 @@
     "hit_2r": 12,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-11-10T14:27:29.104433+00:00"
+  "_persisted_at": "2026-11-10T14:32:25.957407+00:00"
 }

@@ -1,5 +1,5 @@
 {
-  "total_scans": 9974,
+  "total_scans": 9975,
   "consolidation_skip": 528,
   "atr_invalid": 0,
   "signals_very_low_atr": 4,
@@ -16,8 +16,8 @@
   "wins": 4,
   "losses": 8,
   "first_scan": "2026-07-01",
-  "last_scan": "2026-11-10 09:15",
-  "last_update_id": 628997696,
+  "last_scan": "2026-11-10 09:20",
+  "last_update_id": 628997697,
   "result_logged_for_signal": "2026-09-28 10:35 UTC",
   "last_closed_trade": {
     "direction": "BUY",
@@ -236,7 +236,7 @@
     "3-4p": 2013,
     "4-5p": 1728,
     "5-6p": 742,
-    "6-7p": 328,
+    "6-7p": 329,
     "7-8p": 191,
     "8-9p": 65,
     "9-10p": 29,

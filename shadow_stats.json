@@ -45,7 +45,7 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 918,
+    "logged": 919,
     "resolved": 791,
     "wins": 371,
     "losses": 420,
@@ -90,12 +90,12 @@
   },
   "EXP8_CISD": {
     "logged": 209,
-    "resolved": 208,
-    "wins": 65,
+    "resolved": 209,
+    "wins": 66,
     "losses": 143,
-    "timed_out": 50,
-    "sum_r": -14.744090124652281,
-    "hit_1r": 86,
+    "timed_out": 51,
+    "sum_r": -13.37837583893793,
+    "hit_1r": 87,
     "hit_2r": 53,
     "hit_3r": 28
   },
@@ -121,5 +121,5 @@
     "hit_2r": 12,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-11-10T15:02:24.624680+00:00"
+  "_persisted_at": "2026-11-10T15:07:21.758865+00:00"
 }

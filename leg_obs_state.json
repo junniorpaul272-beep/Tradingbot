@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BULLISH|1.34587|1.33377",
     "opened_at": "2026-11-10T08:07:21.646734+00:00",
-    "bars_open": 66,
-    "last_processed_candle": "2026-11-10T13:25:00+00:00",
+    "bars_open": 67,
+    "last_processed_candle": "2026-11-10T13:30:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -34,7 +34,7 @@
       "pullback_depth_pct": 22.1
     },
     "tier1_touched_bar": null,
-    "tier2_touched_bar": null,
+    "tier2_touched_bar": 67,
     "tier3_touched_bar": 1,
     "timeline": [
       {
@@ -56,6 +56,11 @@
         "bar": 63,
         "kind": "choch",
         "detail": "15M CHoCH confirmed"
+      },
+      {
+        "bar": 67,
+        "kind": "zone_touch",
+        "detail": "Tier 2 zone touched (Fib pocket)"
       }
     ],
     "_tl_last_break_count": 1,
@@ -74,5 +79,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-11-10T13:37:25.103340+00:00"
+  "_persisted_at": "2026-11-10T13:42:29.473470+00:00"
 }

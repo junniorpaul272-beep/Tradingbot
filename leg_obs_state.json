@@ -1,37 +1,37 @@
 {
   "open": {
-    "id": "e0aae6c0e6e6",
+    "id": "e5a5ddee079f",
     "methodology_version": 3,
-    "leg_id": "BEARISH|1.34604|1.33077",
-    "opened_at": "2026-11-11T12:07:27.000296+00:00",
-    "bars_open": 23,
-    "last_processed_candle": "2026-11-11T13:50:00+00:00",
+    "leg_id": "BEARISH|1.34604|1.32859",
+    "opened_at": "2026-11-11T14:07:20.822467+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-11-11T13:55:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": true,
       "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 152.7,
+      "macro_leg_length_pips": 174.5,
       "bos_15m_direction": "BEARISH",
-      "bos_15m_break_count": 4,
+      "bos_15m_break_count": 3,
       "bos_15m_was_choch": false,
-      "atr_pips": 4.35,
-      "atr_percentile_15m": 63.2,
+      "atr_pips": 4.58,
+      "atr_percentile_15m": 98.2,
       "market_phase": "expansion",
-      "market_phase_age_bars": 1,
+      "market_phase_age_bars": 25,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "CHOCH",
-      "campaign_extension_multiple": 1.0,
-      "campaign_continuation_count": 2,
-      "atr_bucket": "normal_vol",
+      "campaign_extension_multiple": 1.14,
+      "campaign_continuation_count": 26,
+      "atr_bucket": "high_vol",
       "session": "london_ny_overlap",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 6.96,
-      "volatility_state": "flat",
-      "compression_ratio": 3.28,
-      "pullback_depth_pct": 0.6
+      "trend_strength_atr_mult": 8.57,
+      "volatility_state": "expanding",
+      "compression_ratio": 4.15,
+      "pullback_depth_pct": 4.1
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
@@ -41,11 +41,6 @@
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bearish (via CHoCH)"
-      },
-      {
-        "bar": 12,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 4"
       }
     ],
     "_tl_last_break_count": 3,
@@ -64,5 +59,5 @@
     "BEARISH|1.34198|1.33310"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-11-11T14:02:25.295937+00:00"
+  "_persisted_at": "2026-11-11T14:07:22.078959+00:00"
 }

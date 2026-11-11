@@ -14,7 +14,7 @@
       "BULLISH_FRESH": 1
     },
     "BEARISH_STALE": {
-      "BEARISH_STALE": 333,
+      "BEARISH_STALE": 334,
       "CONSOLIDATION": 2,
       "BEARISH_FRESH": 5
     },
@@ -32,36 +32,6 @@
     }
   },
   "calibration_predictions": [
-    {
-      "stated_prob": 0.9935,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": true,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0027,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0016,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0005,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
-    {
-      "stated_prob": 0.0016,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BULLISH_FRESH"
-    },
     {
       "stated_prob": 0.9935,
       "predicted_state": "BULLISH_FRESH",
@@ -60022,6 +59992,36 @@
     },
     {
       "stated_prob": 0.968,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": true,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0087,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0029,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0029,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.0174,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_STALE"
+    },
+    {
+      "stated_prob": 0.9681,
       "predicted_state": "BEARISH_STALE",
       "actual_happened": true,
       "from_state": "BEARISH_STALE"

@@ -1,9 +1,9 @@
 {
   "open": {
-    "id": "7fb71e31db26",
+    "id": "5dc48192e502",
     "methodology_version": 1,
     "leg_id": "BEARISH|1.32246|1.31968",
-    "opened_at": "2026-11-16T12:09:26.241833+00:00",
+    "opened_at": "2026-11-16T12:10:27.655704+00:00",
     "bars_open": 0,
     "last_processed_candle": "2026-11-16T12:00:00+00:00",
     "macro_bias": "BEARISH",
@@ -39,5 +39,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-11-16T12:09:28.851516+00:00"
+  "_persisted_at": "2026-11-16T12:10:30.894698+00:00"
 }

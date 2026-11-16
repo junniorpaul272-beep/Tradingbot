@@ -12,7 +12,7 @@
     "hit_3r": 8
   },
   "EXP2_FIB": {
-    "logged": 8344,
+    "logged": 8347,
     "resolved": 8238,
     "wins": 2266,
     "losses": 5972,
@@ -78,7 +78,7 @@
     "hit_3r": 3
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 1117,
+    "logged": 1118,
     "resolved": 1094,
     "wins": 430,
     "losses": 664,
@@ -121,5 +121,5 @@
     "hit_2r": 13,
     "hit_3r": 6
   },
-  "_persisted_at": "2026-11-16T08:02:22.645688+00:00"
+  "_persisted_at": "2026-11-16T08:07:21.860335+00:00"
 }

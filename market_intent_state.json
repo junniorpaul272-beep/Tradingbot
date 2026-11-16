@@ -1,11 +1,11 @@
 {
   "open": {
-    "id": "dac699e5500c",
+    "id": "7711d4ce680f",
     "methodology_version": 1,
     "leg_id": "BEARISH|1.32246|1.31968",
-    "opened_at": "2026-11-16T10:59:12.220476+00:00",
+    "opened_at": "2026-11-16T11:04:36.412537+00:00",
     "bars_open": 0,
-    "last_processed_candle": "2026-11-16T10:50:00+00:00",
+    "last_processed_candle": "2026-11-16T10:55:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "exhaustion",
     "watch_codes": [
@@ -21,7 +21,7 @@
       "HTF bias: BEARISH",
       "1H volatility expanding",
       "Bias marked stale \u2014 founding leg already invalidated",
-      "Low-ATR warning \u2014 4.2p, below the 6p floor"
+      "Very-low-ATR warning \u2014 3.9p, below the 4p floor"
     ],
     "materialized_codes": [],
     "materialized_at_bar": {},
@@ -30,14 +30,14 @@
     "resolved_at": null,
     "tags": {
       "phase": "exhaustion",
-      "atr_5m_pips": 4.242060765138176,
+      "atr_5m_pips": 3.8897857853577404,
       "break_count": null,
       "campaign_continuation_count": 25,
       "num_watch_codes": 3,
       "num_caution_codes": 2,
-      "very_low_atr_warning": false
+      "very_low_atr_warning": true
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-11-16T10:59:14.897351+00:00"
+  "_persisted_at": "2026-11-16T11:04:38.995116+00:00"
 }

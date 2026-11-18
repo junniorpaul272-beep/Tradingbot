@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.32283|1.31519",
     "opened_at": "2026-11-18T09:07:19.656845+00:00",
-    "bars_open": 80,
-    "last_processed_candle": "2026-11-18T15:35:00+00:00",
+    "bars_open": 81,
+    "last_processed_candle": "2026-11-18T15:40:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -61,9 +61,14 @@
         "bar": 48,
         "kind": "break",
         "detail": "New 15M break \u2014 count now 6"
+      },
+      {
+        "bar": 81,
+        "kind": "break",
+        "detail": "New 15M break \u2014 count now 5"
       }
     ],
-    "_tl_last_break_count": 4,
+    "_tl_last_break_count": 5,
     "_tl_choch_active": false,
     "_tl_last_phase": "expansion"
   },
@@ -80,5 +85,5 @@
     "BEARISH|1.32246|1.31970"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-11-18T15:42:27.780444+00:00"
+  "_persisted_at": "2026-11-18T15:47:30.447962+00:00"
 }

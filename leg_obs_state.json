@@ -1,37 +1,37 @@
 {
   "open": {
-    "id": "0a6e910ab180",
+    "id": "4cf224504174",
     "methodology_version": 3,
-    "leg_id": "BEARISH|1.32283|1.31519",
-    "opened_at": "2026-11-18T09:07:19.656845+00:00",
-    "bars_open": 83,
-    "last_processed_candle": "2026-11-18T15:50:00+00:00",
+    "leg_id": "BEARISH|1.32283|1.31211",
+    "opened_at": "2026-11-19T07:02:19.097359+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-11-19T06:50:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
       "macro_was_choch": false,
       "macro_leg_direction": "BEARISH",
-      "macro_leg_length_pips": 76.4,
+      "macro_leg_length_pips": 107.2,
       "bos_15m_direction": "BEARISH",
-      "bos_15m_break_count": 5,
+      "bos_15m_break_count": 2,
       "bos_15m_was_choch": false,
-      "atr_pips": 4.75,
-      "atr_percentile_15m": 98.2,
+      "atr_pips": 2.52,
+      "atr_percentile_15m": 31.6,
       "market_phase": "expansion",
-      "market_phase_age_bars": 12,
+      "market_phase_age_bars": 0,
       "measured_move_ratio": null,
       "measured_move_bucket": null,
       "transition_cause": "FRESH_BOS",
-      "campaign_extension_multiple": 1.35,
-      "campaign_continuation_count": 13,
-      "atr_bucket": "high_vol",
+      "campaign_extension_multiple": 1.0,
+      "campaign_continuation_count": 1,
+      "atr_bucket": "normal_vol",
       "session": "london_early",
       "bias_state": "fresh",
       "spike_state": "normal",
-      "trend_strength_atr_mult": 7.4,
-      "volatility_state": "expanding",
-      "compression_ratio": 5.54,
-      "pullback_depth_pct": 0.5
+      "trend_strength_atr_mult": 7.46,
+      "volatility_state": "contracting",
+      "compression_ratio": 2.87,
+      "pullback_depth_pct": 55.8
     },
     "tier1_touched_bar": null,
     "tier2_touched_bar": null,
@@ -41,34 +41,9 @@
         "bar": 0,
         "kind": "formed",
         "detail": "Leg formed \u2014 Bearish (as continuation)"
-      },
-      {
-        "bar": 12,
-        "kind": "phase_change",
-        "detail": "Phase changed: expansion \u2192 exhaustion"
-      },
-      {
-        "bar": 33,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 5"
-      },
-      {
-        "bar": 36,
-        "kind": "phase_change",
-        "detail": "Phase changed: exhaustion \u2192 expansion"
-      },
-      {
-        "bar": 48,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 6"
-      },
-      {
-        "bar": 81,
-        "kind": "break",
-        "detail": "New 15M break \u2014 count now 5"
       }
     ],
-    "_tl_last_break_count": 5,
+    "_tl_last_break_count": 2,
     "_tl_choch_active": false,
     "_tl_last_phase": "expansion"
   },
@@ -85,5 +60,5 @@
     "BEARISH|1.32246|1.31970"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-11-18T15:57:26.907227+00:00"
+  "_persisted_at": "2026-11-19T07:02:28.765028+00:00"
 }

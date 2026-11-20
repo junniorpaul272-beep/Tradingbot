@@ -1,48 +1,45 @@
 {
   "open": {
-    "id": "af83e1bfea21",
+    "id": "2d996d8f0dd7",
     "methodology_version": 1,
-    "leg_id": "BEARISH|1.32283|1.31211",
-    "opened_at": "2026-11-19T07:00:32.283372+00:00",
-    "bars_open": 107,
-    "last_processed_candle": "2026-11-19T15:45:00+00:00",
+    "leg_id": "BEARISH|1.32283|1.30798",
+    "opened_at": "2026-11-20T07:00:33.340446+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-11-20T06:50:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "expansion",
     "watch_codes": [
+      "PULLBACK_TO_OB",
       "PULLBACK_TO_FIB_POCKET",
       "FIVE_M_ALIGNMENT"
     ],
     "caution_codes": [
+      "UNSWEPT_CHOCH",
       "ATR_INCOMPATIBLE"
     ],
     "reasons": [
       "HTF bias: BEARISH",
-      "Fresh 15M BOS aligned with bias",
-      "Order block already mitigated",
-      "Very-low-ATR warning \u2014 2.5p, below the 4p floor",
-      "4.3 ATR from EMA_100 \u2014 extended"
+      "15M CHoCH confirming direction",
+      "Order block confirmed, unmitigated",
+      "Very-low-ATR warning \u2014 2.7p, below the 4p floor",
+      "3 breaks into this leg \u2014 getting old",
+      "4.1 ATR from EMA_100 \u2014 extended"
     ],
-    "materialized_codes": [
-      "FIVE_M_ALIGNMENT",
-      "PULLBACK_TO_FIB_POCKET"
-    ],
-    "materialized_at_bar": {
-      "FIVE_M_ALIGNMENT": 37,
-      "PULLBACK_TO_FIB_POCKET": 47
-    },
+    "materialized_codes": [],
+    "materialized_at_bar": {},
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
     "tags": {
       "phase": "expansion",
-      "atr_5m_pips": 2.5249818584800914,
-      "break_count": 2,
+      "atr_5m_pips": 2.6533792185245617,
+      "break_count": 3,
       "campaign_continuation_count": 1,
-      "num_watch_codes": 2,
-      "num_caution_codes": 1,
+      "num_watch_codes": 3,
+      "num_caution_codes": 2,
       "very_low_atr_warning": true
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-11-19T15:55:37.911528+00:00"
+  "_persisted_at": "2026-11-20T07:00:36.167902+00:00"
 }

@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BEARISH|1.32283|1.30460",
     "opened_at": "2026-11-23T15:04:36.370682+00:00",
-    "bars_open": 2,
-    "last_processed_candle": "2026-11-23T15:05:00+00:00",
+    "bars_open": 3,
+    "last_processed_candle": "2026-11-23T15:10:00+00:00",
     "macro_bias": "BEARISH",
     "phase": "transition",
     "watch_codes": [
@@ -21,8 +21,12 @@
       "15M CHoCH confirming direction",
       "1H volatility expanding"
     ],
-    "materialized_codes": [],
-    "materialized_at_bar": {},
+    "materialized_codes": [
+      "SWEEP_AND_RECLAIM"
+    ],
+    "materialized_at_bar": {
+      "SWEEP_AND_RECLAIM": 3
+    },
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
@@ -37,5 +41,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-11-23T15:14:29.917267+00:00"
+  "_persisted_at": "2026-11-23T15:19:34.237587+00:00"
 }

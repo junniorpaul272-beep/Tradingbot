@@ -4,8 +4,8 @@
     "methodology_version": 3,
     "leg_id": "BEARISH|1.32283|1.30798",
     "opened_at": "2026-11-20T07:02:22.056074+00:00",
-    "bars_open": 227,
-    "last_processed_candle": "2026-11-23T08:35:00+00:00",
+    "bars_open": 228,
+    "last_processed_candle": "2026-11-23T08:40:00+00:00",
     "fate": null,
     "resolved_at": null,
     "formation_state": {
@@ -34,7 +34,7 @@
       "pullback_depth_pct": 0.5
     },
     "tier1_touched_bar": 14,
-    "tier2_touched_bar": null,
+    "tier2_touched_bar": 228,
     "tier3_touched_bar": null,
     "timeline": [
       {
@@ -71,9 +71,19 @@
         "bar": 206,
         "kind": "choch",
         "detail": "15M CHoCH confirmed"
+      },
+      {
+        "bar": 228,
+        "kind": "break",
+        "detail": "New 15M break \u2014 count now 2"
+      },
+      {
+        "bar": 228,
+        "kind": "zone_touch",
+        "detail": "Tier 2 zone touched (Fib pocket)"
       }
     ],
-    "_tl_last_break_count": 1,
+    "_tl_last_break_count": 2,
     "_tl_choch_active": true,
     "_tl_last_phase": "exhaustion"
   },
@@ -90,5 +100,5 @@
     "BEARISH|1.32246|1.31970"
   ],
   "methodology_version": 3,
-  "_persisted_at": "2026-11-23T08:47:22.633921+00:00"
+  "_persisted_at": "2026-11-23T08:52:25.538105+00:00"
 }

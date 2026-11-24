@@ -2,24 +2,24 @@
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
     "logged": 519,
-    "resolved": 490,
-    "wins": 250,
-    "losses": 240,
-    "timed_out": 390,
-    "sum_r": 26.352336743355558,
-    "hit_1r": 64,
+    "resolved": 497,
+    "wins": 256,
+    "losses": 241,
+    "timed_out": 397,
+    "sum_r": 30.851870421863172,
+    "hit_1r": 67,
     "hit_2r": 21,
     "hit_3r": 8
   },
   "EXP2_FIB": {
     "logged": 9235,
-    "resolved": 9126,
-    "wins": 2532,
+    "resolved": 9133,
+    "wins": 2539,
     "losses": 6594,
-    "timed_out": 465,
-    "sum_r": 360.77806415237933,
-    "hit_1r": 5444,
-    "hit_2r": 3752,
+    "timed_out": 472,
+    "sum_r": 364.9392376028422,
+    "hit_1r": 5451,
+    "hit_2r": 3755,
     "hit_3r": 2837
   },
   "EXP3_POI": {
@@ -46,12 +46,12 @@
   },
   "EXP5_ABLATION": {
     "logged": 997,
-    "resolved": 866,
-    "wins": 402,
-    "losses": 464,
-    "timed_out": 667,
-    "sum_r": -11.701574437250212,
-    "hit_1r": 125,
+    "resolved": 875,
+    "wins": 410,
+    "losses": 465,
+    "timed_out": 676,
+    "sum_r": -4.371205640969551,
+    "hit_1r": 130,
     "hit_2r": 37,
     "hit_3r": 11
   },
@@ -68,23 +68,23 @@
   },
   "EXP7_TIER_ATR": {
     "logged": 216,
-    "resolved": 171,
-    "wins": 81,
+    "resolved": 175,
+    "wins": 85,
     "losses": 90,
-    "timed_out": 115,
-    "sum_r": 3.5822730462753425,
-    "hit_1r": 34,
+    "timed_out": 119,
+    "sum_r": 5.802396989732612,
+    "hit_1r": 35,
     "hit_2r": 12,
     "hit_3r": 3
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 1138,
-    "resolved": 1110,
-    "wins": 435,
+    "logged": 1139,
+    "resolved": 1115,
+    "wins": 440,
     "losses": 675,
-    "timed_out": 105,
-    "sum_r": 388.45117289565604,
-    "hit_1r": 760,
+    "timed_out": 110,
+    "sum_r": 391.66673159236444,
+    "hit_1r": 762,
     "hit_2r": 642,
     "hit_3r": 560
   },
@@ -121,5 +121,5 @@
     "hit_2r": 15,
     "hit_3r": 8
   },
-  "_persisted_at": "2026-11-23T15:57:24.224226+00:00"
+  "_persisted_at": "2026-11-24T07:02:36.728610+00:00"
 }

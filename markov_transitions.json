@@ -19,7 +19,7 @@
       "BEARISH_FRESH": 9
     },
     "BEARISH_FRESH": {
-      "BEARISH_FRESH": 3749,
+      "BEARISH_FRESH": 3750,
       "CONSOLIDATION": 11,
       "BULLISH_FRESH": 4,
       "BEARISH_STALE": 5
@@ -32,36 +32,6 @@
     }
   },
   "calibration_predictions": [
-    {
-      "stated_prob": 0.0036,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "CONSOLIDATION"
-    },
-    {
-      "stated_prob": 0.0144,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": false,
-      "from_state": "CONSOLIDATION"
-    },
-    {
-      "stated_prob": 0.0252,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": false,
-      "from_state": "CONSOLIDATION"
-    },
-    {
-      "stated_prob": 0.0072,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "CONSOLIDATION"
-    },
-    {
-      "stated_prob": 0.9496,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": true,
-      "from_state": "CONSOLIDATION"
-    },
     {
       "stated_prob": 0.0036,
       "predicted_state": "BULLISH_FRESH",
@@ -58426,6 +58396,36 @@
     },
     {
       "stated_prob": 0.9935,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": true,
+      "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0016,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0032,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0013,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.0003,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": false,
+      "from_state": "BEARISH_FRESH"
+    },
+    {
+      "stated_prob": 0.9936,
       "predicted_state": "BEARISH_FRESH",
       "actual_happened": true,
       "from_state": "BEARISH_FRESH"

@@ -60,6 +60,12 @@ MAX_DELIVERY_ATTEMPTS = 3
 PLAN_SNAPSHOT_MAX_AGE_S = 600       # only attach "what the engine had" to a logged trade if the state is this fresh
 TELEGRAM_LIMIT = 4000
 
+# Stage B (plain-words reports, package reports/): the commands below are answered by reports.build_from_repo instead of the old path.
+# OFF by default. With REPORTS_V2 = False the condition in run() is False, nothing below is called and `reports` is never imported:
+# behaviour is identical to before (proved by stage_b_equivalence.py). To roll back after switching on, set it back to False.
+REPORTS_V2 = False
+REPORTS_V2_COMMANDS = {"/now": "now"}          # the exact command (nothing after it) -> the report kind. Stage C trials /now only.
+
 
 def _read_jsonl(path):
     rows = []
@@ -142,17 +148,45 @@ def _read_json(path):
         return None
 
 
+def _reports_v2_kind(text):
+    """The report kind when the whole message is exactly one of the routed commands (an optional @botname is allowed), else None."""
+    parts = (text or "").strip().split()
+    if len(parts) != 1:
+        return None
+    return REPORTS_V2_COMMANDS.get(parts[0].lower().split("@")[0])
+
+
+def _reports_v2_reply(root, kind, now):
+    """-> (bus.Reply, extra). The report text, or the report's own plain refusal. Reads state.json and the candle logs; writes nothing.
+    The text is Telegram HTML (the report's formatting), so the stored reply is marked reports_v2 and sent with parse_mode HTML."""
+    import importlib
+    absroot = os.path.abspath(root)
+    if absroot not in sys.path:
+        sys.path.append(absroot)                                   # appended, never first: it cannot shadow a comms/ module
+    reports = importlib.import_module("reports")
+    rep = reports.build_from_repo(kind, now, _read_json(os.path.join(root, "state.json")), root)
+    return bus.Reply("\n\n".join(rep.messages), None, False, ()), {"reports_v2": {"kind": kind, "status": str(rep.status)[:40]}}
+
+
+def _strip_html(text):
+    return re.sub(r"<[^>]+>", "", text or "").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+
+
 def telegram_sender(token, chat_id):
     """Returns send(text) -> bool. `requests` is imported here so everything else
     in this module stays testable without it."""
-    def send(text):
+    def send(text, html=False):
         import requests
         ok = True
         for i in range(0, max(len(text), 1), TELEGRAM_LIMIT):
             try:
-                r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
-                                  json={"chat_id": chat_id, "text": text[i:i + TELEGRAM_LIMIT],
-                                        "disable_web_page_preview": True}, timeout=20)
+                body = {"chat_id": chat_id, "text": text[i:i + TELEGRAM_LIMIT], "disable_web_page_preview": True}
+                if html:
+                    body["parse_mode"] = "HTML"
+                r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=body, timeout=20)
+                if html and r.status_code == 400:                  # Telegram could not read the formatting: send the same words without it
+                    body.pop("parse_mode"); body["text"] = _strip_html(body["text"])
+                    r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=body, timeout=20)
                 ok = ok and r.status_code == 200 and bool(r.json().get("ok"))
             except Exception as e:                                 # network weather, not a bug
                 print(f"[BUS SEND ERROR] {type(e).__name__}: {e}")
@@ -1968,9 +2002,9 @@ def run(root=".", now=None, send=None, signals=False):
     inbox = _read_jsonl(os.path.join(root, INBOX_NAME))
     seen_this_run = set()
 
-    def deliver(update_id, text):
+    def deliver(update_id, text, html=False):
         text = guard.final(text).text                              # the last gate for EVERYTHING that leaves: no raw codes, no placeholders, no dumps
-        ok = bool(send(text)) if send else False
+        ok = (bool(send(text, html=True)) if html else bool(send(text))) if send else False
         if ok:
             ledger.append(catalog.path, BUS_DELIVERED, {"update_id": update_id}, now=now)
             summary["delivered"] += 1
@@ -1987,7 +2021,10 @@ def run(root=".", now=None, send=None, signals=False):
             uid = r["payload"]["update_id"]
             if uid not in delivered and failures.get(uid, 0) < MAX_DELIVERY_ATTEMPTS and send:
                 summary["resent"] += 1
-                deliver(uid, r["payload"]["text"])
+                if r["payload"].get("reports_v2"):
+                    deliver(uid, r["payload"]["text"], html=True)
+                else:
+                    deliver(uid, r["payload"]["text"])
 
     # 2) answer new messages, oldest first
     for msg in sorted(inbox, key=lambda m: m.get("update_id", 0)):
@@ -2015,6 +2052,8 @@ def run(root=".", now=None, send=None, signals=False):
                 reply = bus.Reply(handle_signal_response(catalog, adapted, text, msg.get("received_at"), now), None)
             elif first == "/ask" and handle_ask_clarify(text, uid, catalog.slang_map(), _sent_at(msg, now)):
                 reply, extra = handle_ask_clarify(text, uid, catalog.slang_map(), _sent_at(msg, now))
+            elif REPORTS_V2 and _reports_v2_kind(text):               # Stage B: the new plain-words report (off by default)
+                reply, extra = _reports_v2_reply(root, _reports_v2_kind(text), now)
             elif not text.startswith("/"):                            # plain talk: slang understood, questions answered, doubts asked
                 reply, extra = handle_plain(root, catalog, text, now, uid, recs, _sent_at(msg, now))
             else:
@@ -2047,7 +2086,10 @@ def run(root=".", now=None, send=None, signals=False):
             summary["answered"] += 1
             if reply.used_fallback:
                 print(f"[BUS] audit fallback for update {uid}: {list(reply.violations)}")
-            deliver(uid, reply.text)
+            if (extra or {}).get("reports_v2"):
+                deliver(uid, reply.text, html=True)
+            else:
+                deliver(uid, reply.text)
         except Exception as e:
             summary["errors"] += 1
             err = "Something went wrong on my side while handling that, and nothing was changed. It's logged so it can be fixed. Try again, or ask it another way."

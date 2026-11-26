@@ -4,8 +4,8 @@
     "methodology_version": 1,
     "leg_id": "BULLISH|1.31305|1.30119",
     "opened_at": "2026-11-26T07:00:35.868807+00:00",
-    "bars_open": 23,
-    "last_processed_candle": "2026-11-26T08:45:00+00:00",
+    "bars_open": 24,
+    "last_processed_candle": "2026-11-26T08:50:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "expansion",
     "watch_codes": [
@@ -20,8 +20,12 @@
       "Order block already mitigated",
       "Very-low-ATR warning \u2014 2.8p, below the 4p floor"
     ],
-    "materialized_codes": [],
-    "materialized_at_bar": {},
+    "materialized_codes": [
+      "FIVE_M_ALIGNMENT"
+    ],
+    "materialized_at_bar": {
+      "FIVE_M_ALIGNMENT": 24
+    },
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
@@ -36,5 +40,5 @@
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-11-26T08:55:40.826488+00:00"
+  "_persisted_at": "2026-11-26T09:00:36.130917+00:00"
 }

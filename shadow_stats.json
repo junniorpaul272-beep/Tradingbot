@@ -12,12 +12,12 @@
     "hit_3r": 8
   },
   "EXP2_FIB": {
-    "logged": 9852,
-    "resolved": 9731,
+    "logged": 9854,
+    "resolved": 9733,
     "wins": 2683,
-    "losses": 7048,
+    "losses": 7050,
     "timed_out": 489,
-    "sum_r": 303.3782801617051,
+    "sum_r": 301.3782801617051,
     "hit_1r": 5768,
     "hit_2r": 3971,
     "hit_3r": 3002
@@ -67,7 +67,7 @@
     "hit_3r": 0
   },
   "EXP7_TIER_ATR": {
-    "logged": 217,
+    "logged": 218,
     "resolved": 176,
     "wins": 86,
     "losses": 90,
@@ -100,7 +100,7 @@
     "hit_3r": 37
   },
   "EXP4_POLICY_LAB": {
-    "logged": 50,
+    "logged": 52,
     "resolved": 50,
     "wins": 19,
     "losses": 31,
@@ -121,5 +121,5 @@
     "hit_2r": 16,
     "hit_3r": 8
   },
-  "_persisted_at": "2026-11-27T13:47:23.966958+00:00"
+  "_persisted_at": "2026-11-27T13:52:27.731741+00:00"
 }

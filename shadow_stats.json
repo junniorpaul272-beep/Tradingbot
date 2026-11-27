@@ -2,25 +2,25 @@
   "_methodology_version": 2,
   "EXP1_STRUCTURE": {
     "logged": 536,
-    "resolved": 513,
+    "resolved": 514,
     "wins": 266,
-    "losses": 247,
+    "losses": 248,
     "timed_out": 408,
-    "sum_r": 27.039368351957332,
+    "sum_r": 26.039368351957332,
     "hit_1r": 67,
     "hit_2r": 21,
     "hit_3r": 8
   },
   "EXP2_FIB": {
-    "logged": 9834,
-    "resolved": 9722,
-    "wins": 2677,
+    "logged": 9842,
+    "resolved": 9724,
+    "wins": 2679,
     "losses": 7045,
     "timed_out": 489,
-    "sum_r": 288.3782801617051,
-    "hit_1r": 5759,
-    "hit_2r": 3964,
-    "hit_3r": 2995
+    "sum_r": 294.3782801617051,
+    "hit_1r": 5761,
+    "hit_2r": 3966,
+    "hit_3r": 2997
   },
   "EXP3_POI": {
     "logged": 0,
@@ -45,12 +45,12 @@
     "hit_3r": 0
   },
   "EXP5_ABLATION": {
-    "logged": 1032,
-    "resolved": 909,
+    "logged": 1033,
+    "resolved": 910,
     "wins": 434,
-    "losses": 475,
+    "losses": 476,
     "timed_out": 702,
-    "sum_r": 0.7669891746684461,
+    "sum_r": -0.23301082533155393,
     "hit_1r": 134,
     "hit_2r": 39,
     "hit_3r": 12
@@ -78,7 +78,7 @@
     "hit_3r": 3
   },
   "EXPE_REJECTED_LIVE": {
-    "logged": 1143,
+    "logged": 1144,
     "resolved": 1120,
     "wins": 442,
     "losses": 678,
@@ -121,5 +121,5 @@
     "hit_2r": 16,
     "hit_3r": 8
   },
-  "_persisted_at": "2026-11-27T13:12:29.338433+00:00"
+  "_persisted_at": "2026-11-27T13:17:21.506049+00:00"
 }

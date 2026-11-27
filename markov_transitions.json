@@ -2,7 +2,7 @@
   "transitions": {
     "BULLISH_STALE": {
       "CONSOLIDATION": 2,
-      "BULLISH_STALE": 535,
+      "BULLISH_STALE": 536,
       "BEARISH_FRESH": 2,
       "BULLISH_FRESH": 9
     },
@@ -32,36 +32,6 @@
     }
   },
   "calibration_predictions": [
-    {
-      "stated_prob": 0.0245,
-      "predicted_state": "BULLISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BULLISH_STALE"
-    },
-    {
-      "stated_prob": 0.9583,
-      "predicted_state": "BULLISH_STALE",
-      "actual_happened": true,
-      "from_state": "BULLISH_STALE"
-    },
-    {
-      "stated_prob": 0.0074,
-      "predicted_state": "BEARISH_FRESH",
-      "actual_happened": false,
-      "from_state": "BULLISH_STALE"
-    },
-    {
-      "stated_prob": 0.0025,
-      "predicted_state": "BEARISH_STALE",
-      "actual_happened": false,
-      "from_state": "BULLISH_STALE"
-    },
-    {
-      "stated_prob": 0.0074,
-      "predicted_state": "CONSOLIDATION",
-      "actual_happened": false,
-      "from_state": "BULLISH_STALE"
-    },
     {
       "stated_prob": 0.0244,
       "predicted_state": "BULLISH_FRESH",
@@ -60010,6 +59980,36 @@
     },
     {
       "stated_prob": 0.9692,
+      "predicted_state": "BULLISH_STALE",
+      "actual_happened": true,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0054,
+      "predicted_state": "BEARISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0018,
+      "predicted_state": "BEARISH_STALE",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0054,
+      "predicted_state": "CONSOLIDATION",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.0181,
+      "predicted_state": "BULLISH_FRESH",
+      "actual_happened": false,
+      "from_state": "BULLISH_STALE"
+    },
+    {
+      "stated_prob": 0.9693,
       "predicted_state": "BULLISH_STALE",
       "actual_happened": true,
       "from_state": "BULLISH_STALE"

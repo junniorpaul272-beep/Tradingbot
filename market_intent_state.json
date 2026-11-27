@@ -1,44 +1,41 @@
 {
   "open": {
-    "id": "a6ec9318258f",
+    "id": "35ee100947b8",
     "methodology_version": 1,
-    "leg_id": "BULLISH|1.31305|1.30119",
-    "opened_at": "2026-11-26T07:00:35.868807+00:00",
-    "bars_open": 107,
-    "last_processed_candle": "2026-11-26T15:45:00+00:00",
+    "leg_id": "BULLISH|1.31365|1.30938",
+    "opened_at": "2026-11-27T13:01:29.164461+00:00",
+    "bars_open": 0,
+    "last_processed_candle": "2026-11-27T12:55:00+00:00",
     "macro_bias": "BULLISH",
     "phase": "expansion",
     "watch_codes": [
-      "PULLBACK_TO_FIB_POCKET",
-      "FIVE_M_ALIGNMENT"
+      "PULLBACK_TO_FIB_POCKET"
     ],
     "caution_codes": [
       "ATR_INCOMPATIBLE"
     ],
     "reasons": [
       "HTF bias: BULLISH",
+      "Fresh 15M BOS aligned with bias",
       "Order block already mitigated",
-      "Very-low-ATR warning \u2014 2.8p, below the 4p floor"
+      "Very-low-ATR warning \u2014 3.2p, below the 4p floor",
+      "2.8 ATR from EMA_100 \u2014 extended"
     ],
-    "materialized_codes": [
-      "FIVE_M_ALIGNMENT"
-    ],
-    "materialized_at_bar": {
-      "FIVE_M_ALIGNMENT": 24
-    },
+    "materialized_codes": [],
+    "materialized_at_bar": {},
     "fate": null,
     "leg_fate": null,
     "resolved_at": null,
     "tags": {
       "phase": "expansion",
-      "atr_5m_pips": 2.7640303245491618,
-      "break_count": 2,
+      "atr_5m_pips": 3.201777762416091,
+      "break_count": 1,
       "campaign_continuation_count": 1,
-      "num_watch_codes": 2,
+      "num_watch_codes": 1,
       "num_caution_codes": 1,
       "very_low_atr_warning": true
     }
   },
   "methodology_version": 1,
-  "_persisted_at": "2026-11-26T15:55:33.931811+00:00"
+  "_persisted_at": "2026-11-27T13:01:32.216181+00:00"
 }

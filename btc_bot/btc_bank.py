@@ -315,9 +315,10 @@ class Bank:
                         "open": [p for (nm, _), p in self.open.items() if nm == n]})
         return out
 
-    def warnings(self, price, atr, atr_mult=2.0):
-        """Plain-language warnings for accounts that could not open a trade at today's price and a typical exit
-        (2 ATR away). Information only; nothing is changed. Empty when everything can trade or data is missing."""
+    def warnings(self, price, atr, atr_mult=1.0):
+        """Plain-language warnings for accounts that would skip even a TIGHT exit (1 ATR away), i.e. accounts that will
+        skip almost every signal. Accounts that only skip the signals with far-away exits are not warned: their
+        partial skipping is reported in the stats ('could only take N of M'). Information only; nothing changes."""
         if not price or not atr:
             return []
         out = []
@@ -331,9 +332,9 @@ class Bank:
                 r = size_position(a, bal, side, price, price - dist if side == "LONG" else price + dist)
                 if r["status"] == "BELOW_MIN":
                     need = r["fmt"]["min_risk_pct"]
-                    head = (f"WARNING {a['name']}: will not open BTC trades right now. The smallest lot "
-                            f"({a['min_lot']:g}) would risk {need:.1f}% of {bal:,.0f} USD at a typical exit, but "
-                            f"risk_pct is {a['risk_pct']:g}%, so every signal is skipped for it. ")
+                    head = (f"WARNING {a['name']}: will skip almost every BTC signal. The smallest lot "
+                            f"({a['min_lot']:g}) would risk {need:.1f}% of {bal:,.0f} USD even with a tight exit, but "
+                            f"risk_pct is {a['risk_pct']:g}%. ")
                     if need > MAX_RISK_PCT:
                         out.append(head + f"No risk setting can fix this (the limit is {MAX_RISK_PCT:g}%). In "
                                    f"accounts.json, set min_lot (and contract_size) to what your broker really offers "
@@ -341,7 +342,7 @@ class Bank:
                     else:
                         out.append(head + f"In accounts.json, raise risk_pct to about {need:.1f}%, or lower min_lot.")
                 elif r["status"] == "MARGIN_TOO_SMALL":
-                    out.append(f"WARNING {a['name']}: will not open BTC trades right now. The margin cap "
+                    out.append(f"WARNING {a['name']}: will skip almost every BTC signal. The margin cap "
                                f"({a['max_margin_pct']:g}% at {a['leverage']:g}x) leaves less than the minimum lot "
                                f"({a['min_lot']:g}). Raise leverage or max_margin_pct, or lower min_lot, in accounts.json.")
         return out
@@ -356,3 +357,4 @@ class Bank:
             lines.append(f"{s['name']}{off}: {s['balance']:,.0f} USD ({s['return_pct']:+.1f}%), "
                          f"{s['trades']} closed, {s['skips']} skipped" + (f", open: {pos}" if pos else ""))
         return lines
+        

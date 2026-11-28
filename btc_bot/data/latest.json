@@ -1,0 +1,44 @@
+{
+ "asof": 1795847400,
+ "cfg": {
+  "n": 20,
+  "m": 10,
+  "atr_len": 20,
+  "atr_mult": 2.0,
+  "day_trading": true,
+  "close_h": 16,
+  "close_min": 30,
+  "open_h": 18,
+  "open_min": 0,
+  "interval_min": 30
+ },
+ "statuses": {
+  "LONG": {
+   "side": "LONG",
+   "ready": true,
+   "signal_on": false,
+   "held": false,
+   "entry_level": 76200.0,
+   "exit_level": 55130.0,
+   "atr": 2856.904944726743,
+   "stop": null,
+   "active_stop": null,
+   "last_close": 59855.94,
+   "completed_days": 20
+  },
+  "SHORT": {
+   "side": "SHORT",
+   "ready": true,
+   "signal_on": true,
+   "held": false,
+   "entry_level": 55130.0,
+   "exit_level": 65268.0,
+   "atr": 2856.904944726743,
+   "stop": 84110.84975023146,
+   "active_stop": 65268.0,
+   "last_close": 59855.94,
+   "completed_days": 20
+  }
+ },
+ "updated_utc": "2026-11-28T06:32:17+00:00"
+}

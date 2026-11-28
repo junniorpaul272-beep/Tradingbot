@@ -1,0 +1,55 @@
+# One-off side test: save as .github/workflows/btc_sweep.yml
+# Tries different entry/exit day windows on the stored candles (btc_bot/data/history_30m.csv) and sends you the
+# comparison on Telegram. It never touches the live bot's state, trades, ledger or alerts. You can delete this file
+# when you are done. Run it from the Actions tab: BTC window test -> Run workflow.
+name: BTC window test
+
+on:
+  workflow_dispatch:
+    inputs:
+      pairs:
+        description: "Entry days:exit days pairs, first one is the baseline"
+        required: false
+        default: "20:10,15:10,15:5,10:5"
+      cost_pct:
+        description: "Assumed round-trip trading cost, percent of price"
+        required: false
+        default: "0.10"
+
+concurrency:
+  group: btc-bot-state
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run the window test
+        env:
+          PAIRS: ${{ github.event.inputs.pairs }}
+          COST: ${{ github.event.inputs.cost_pct }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python btc_bot/sweep_btc.py --pairs "${PAIRS:-20:10,15:10,15:5,10:5}" --cost-pct "${COST:-0.10}" --send
+
+      - name: Save the result files
+        run: |
+          git config user.name "btc-bot"
+          git config user.email "btc-bot@users.noreply.github.com"
+          [ -d btc_bot/data/sweep ] && git add btc_bot/data/sweep
+          if ! git diff --cached --quiet; then
+            git commit -m "btc window test results"
+            for attempt in 1 2 3; do
+              git pull --rebase && git push && break
+              sleep 5
+            done
+          fi

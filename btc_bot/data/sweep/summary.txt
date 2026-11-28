@@ -2,38 +2,22 @@ BTC window test (a side test, the live bot is unchanged)
 365 days of candles, 2025-11-28 to 2026-11-28 UTC
 Entry days / exit days. Everything else as the live bot: 20-day ATR, 2 ATR stop, day-trading rules.
 
-20/15  (current logic)
-Trades 218 (106 long, 112 short) · won 50% · typical hold 21h
-Idealised: total +5.7R · average +0.03R · profit factor 1.20 · worst drawdown 6.0R
-After 0.1% round-trip cost: total +1.9R · average +0.01R · profit factor 1.06 · worst drawdown 6.8R
-Typical exit distance 7.4% of price (the tighter, the more a cost weighs)
-Long -0.5R · Short +6.2R (idealised)
-Demo accounts (no costs): Acct-5k +2.4% (98 trades) · Acct-2k +1.3% (66 trades) · Acct-10k +1.5% (95 trades) · Acct-25k-Long -1.0% (106 trades) · Acct-50usd no trades
+5/2  (current logic)
+Trades 206 (99 long, 107 short) · won 43% · typical hold 17h
+Idealised: total +4.9R · average +0.02R · profit factor 1.08 · worst drawdown 10.8R
+After 0.1% round-trip cost: total -4.0R · average -0.02R · profit factor 0.94 · worst drawdown 13.1R
+Typical exit distance 3.3% of price (the tighter, the more a cost weighs)
+Long -1.2R · Short +6.2R (idealised)
+Demo accounts (no costs): Acct-5k +5.3% (186 trades) · Acct-2k +11.8% (167 trades) · Acct-10k +2.4% (186 trades) · Acct-25k-Long -1.3% (99 trades) · Acct-50usd no trades
 
-15/10
-Trades 210 (97 long, 113 short) · won 49% · typical hold 21h
-Idealised: total +12.2R · average +0.06R · profit factor 1.43 · worst drawdown 4.6R
-After 0.1% round-trip cost: total +7.8R · average +0.04R · profit factor 1.25 · worst drawdown 5.7R
-Typical exit distance 6.4% of price (the tighter, the more a cost weighs)
-Long +6.4R · Short +5.8R (idealised)
-Demo accounts (no costs): Acct-5k +10.1% (125 trades) · Acct-2k +17.4% (90 trades) · Acct-10k +5.4% (123 trades) · Acct-25k-Long +6.1% (97 trades) · Acct-50usd no trades
+6/3
+Trades 211 (104 long, 107 short) · won 42% · typical hold 18h
+Idealised: total -5.2R · average -0.02R · profit factor 0.91 · worst drawdown 13.0R
+After 0.1% round-trip cost: total -13.8R · average -0.07R · profit factor 0.79 · worst drawdown 19.4R
+Typical exit distance 3.9% of price (the tighter, the more a cost weighs)
+Long -7.1R · Short +1.9R (idealised)
+Demo accounts (no costs): Acct-5k -4.3% (180 trades) · Acct-2k -9.7% (147 trades) · Acct-10k -1.9% (180 trades) · Acct-25k-Long -6.8% (104 trades) · Acct-50usd no trades
 
-15/5
-Trades 172 (73 long, 99 short) · won 46% · typical hold 20h
-Idealised: total +4.7R · average +0.03R · profit factor 1.13 · worst drawdown 6.9R
-After 0.1% round-trip cost: total -1.2R · average -0.01R · profit factor 0.97 · worst drawdown 10.0R
-Typical exit distance 5.3% of price (the tighter, the more a cost weighs)
-Long -4.0R · Short +8.6R (idealised)
-Demo accounts (no costs): Acct-5k +3.3% (133 trades) · Acct-2k +2.6% (95 trades) · Acct-10k +1.7% (133 trades) · Acct-25k-Long -3.9% (73 trades) · Acct-50usd no trades
-
-10/5
-Trades 201 (92 long, 109 short) · won 47% · typical hold 20h
-Idealised: total +10.3R · average +0.05R · profit factor 1.23 · worst drawdown 6.7R
-After 0.1% round-trip cost: total +3.4R · average +0.02R · profit factor 1.07 · worst drawdown 9.5R
-Typical exit distance 5.0% of price (the tighter, the more a cost weighs)
-Long +1.0R · Short +9.4R (idealised)
-Demo accounts (no costs): Acct-5k +9.4% (160 trades) · Acct-2k +11.4% (129 trades) · Acct-10k +4.3% (157 trades) · Acct-25k-Long +0.2% (92 trades) · Acct-50usd no trades
-
-Ranked by total R after cost: 15/10 (+7.8R) > 10/5 (+3.4R) > 20/15 (+1.9R) > 15/5 (-1.2R)
+Ranked by total R after cost: 5/2 (-4.0R) > 6/3 (-13.8R)
 
 How to read this: all variants trade the same candles over the same period. R is one unit of risk, so totals compare fairly across windows. The cost line is an assumption, not your broker's real spread. One year is one market regime; choosing the best of several variants on the same year tends to look better than it will trade live, so treat a winner as a candidate to forward-test on the demo, not as a result. A window that wins only by trading more often is the first one a real cost will hurt.

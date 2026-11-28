@@ -2,13 +2,13 @@ BTC window test (a side test, the live bot is unchanged)
 365 days of candles, 2025-11-28 to 2026-11-28 UTC
 Entry days / exit days. Everything else as the live bot: 20-day ATR, 2 ATR stop, day-trading rules.
 
-20/10  (current logic)
-Trades 191 (97 long, 94 short) · won 50% · typical hold 21h
-Idealised: total +12.3R · average +0.06R · profit factor 1.47 · worst drawdown 6.1R
-After 0.1% round-trip cost: total +8.6R · average +0.04R · profit factor 1.31 · worst drawdown 7.1R
-Typical exit distance 6.4% of price (the tighter, the more a cost weighs)
-Long +6.3R · Short +6.0R (idealised)
-Demo accounts (no costs): Acct-5k +9.0% (114 trades) · Acct-2k +18.9% (86 trades) · Acct-10k +5.1% (112 trades) · Acct-25k-Long +6.1% (97 trades) · Acct-50usd no trades
+20/15  (current logic)
+Trades 218 (106 long, 112 short) · won 50% · typical hold 21h
+Idealised: total +5.7R · average +0.03R · profit factor 1.20 · worst drawdown 6.0R
+After 0.1% round-trip cost: total +1.9R · average +0.01R · profit factor 1.06 · worst drawdown 6.8R
+Typical exit distance 7.4% of price (the tighter, the more a cost weighs)
+Long -0.5R · Short +6.2R (idealised)
+Demo accounts (no costs): Acct-5k +2.4% (98 trades) · Acct-2k +1.3% (66 trades) · Acct-10k +1.5% (95 trades) · Acct-25k-Long -1.0% (106 trades) · Acct-50usd no trades
 
 15/10
 Trades 210 (97 long, 113 short) · won 49% · typical hold 21h
@@ -34,6 +34,6 @@ Typical exit distance 5.0% of price (the tighter, the more a cost weighs)
 Long +1.0R · Short +9.4R (idealised)
 Demo accounts (no costs): Acct-5k +9.4% (160 trades) · Acct-2k +11.4% (129 trades) · Acct-10k +4.3% (157 trades) · Acct-25k-Long +0.2% (92 trades) · Acct-50usd no trades
 
-Ranked by total R after cost: 20/10 (+8.6R) > 15/10 (+7.8R) > 10/5 (+3.4R) > 15/5 (-1.2R)
+Ranked by total R after cost: 15/10 (+7.8R) > 10/5 (+3.4R) > 20/15 (+1.9R) > 15/5 (-1.2R)
 
 How to read this: all variants trade the same candles over the same period. R is one unit of risk, so totals compare fairly across windows. The cost line is an assumption, not your broker's real spread. One year is one market regime; choosing the best of several variants on the same year tends to look better than it will trade live, so treat a winner as a candidate to forward-test on the demo, not as a result. A window that wins only by trading more often is the first one a real cost will hurt.

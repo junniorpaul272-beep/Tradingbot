@@ -1,0 +1,30 @@
+{
+  "accounts": [
+    {
+      "name": "Acct-5k",
+      "starting_balance": 5000,
+      "risk_pct": 1.0
+    },
+    {
+      "name": "Acct-2k",
+      "starting_balance": 2000,
+      "risk_pct": 2.0
+    },
+    {
+      "name": "Acct-10k",
+      "starting_balance": 10000,
+      "risk_pct": 0.5
+    },
+    {
+      "name": "Acct-25k-Long",
+      "starting_balance": 25000,
+      "risk_pct": 1.0,
+      "sides": "long"
+    },
+    {
+      "name": "Acct-50usd",
+      "starting_balance": 50,
+      "risk_pct": 1.0
+    }
+  ]
+}

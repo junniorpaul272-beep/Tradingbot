@@ -62,7 +62,13 @@ def download(fetch_page, days, now=None, max_pages=40, pause=8, sleep=None):
     want_from = now - int(days * 86400)
     got_by_t, end, pages, why = {}, None, 0, "reached the number of days asked for"
     for _ in range(max_pages):
-        page = fetch_page(end, PAGE)
+        try:
+            page = fetch_page(end, PAGE)
+        except Exception as e:  # noqa: BLE001  (a provider that has nothing older answers with an error, not a page)
+            if pages == 0:
+                raise
+            why = f"the data provider has nothing older ({e})"
+            break
         pages += 1
         if not page:
             why = "the data provider returned nothing older"
@@ -75,7 +81,8 @@ def download(fetch_page, days, now=None, max_pages=40, pause=8, sleep=None):
         earliest = min(b.t for b in page)
         if earliest <= want_from:
             break
-        if new == 0 or len(page) < PAGE:
+        # NOT "page shorter than PAGE": the live fetch drops the still-forming candle, so a full page can be 4999.
+        if new == 0:
             why = "the data provider has no candles older than this"
             break
         end = datetime.fromtimestamp(earliest - 1, timezone.utc).strftime(_FMT)
@@ -85,3 +92,4 @@ def download(fetch_page, days, now=None, max_pages=40, pause=8, sleep=None):
     bars = [got_by_t[t] for t in sorted(got_by_t) if t >= want_from]
     covered = (bars[-1].t - bars[0].t) / 86400 if len(bars) > 1 else 0.0
     return bars, {"pages": pages, "candles": len(bars), "days_covered": covered, "why": why}
+    

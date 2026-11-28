@@ -1,5 +1,5 @@
 {
- "asof": 1795854600,
+ "asof": 1795856400,
  "cfg": {
   "n": 20,
   "m": 10,
@@ -23,7 +23,7 @@
    "atr": 2856.904944726743,
    "stop": null,
    "active_stop": null,
-   "last_close": 59686.46,
+   "last_close": 59572.34,
    "completed_days": 20
   },
   "SHORT": {
@@ -36,9 +36,9 @@
    "atr": 2856.904944726743,
    "stop": 84110.84975023146,
    "active_stop": 65268.0,
-   "last_close": 59686.46,
+   "last_close": 59572.34,
    "completed_days": 20
   }
  },
- "updated_utc": "2026-11-28T08:30:15+00:00"
+ "updated_utc": "2026-11-28T09:01:12+00:00"
 }
